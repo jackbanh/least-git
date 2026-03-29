@@ -4,14 +4,18 @@ export interface Tab {
   id: string;
   path: string;
   name: string;
+  selectedOid: string | null;
+  listKey: number;
 }
 
 interface TabStore {
   tabs: Tab[];
   activeTabId: string | null;
-  openTab: (tab: Tab) => void;
+  openTab: (tab: Omit<Tab, "selectedOid" | "listKey">) => void;
   closeTab: (id: string) => void;
   setActiveTab: (id: string) => void;
+  selectCommit: (tabId: string, oid: string | null) => void;
+  bumpListKey: (tabId: string) => void;
 }
 
 export const useTabStore = create<TabStore>((set) => ({
@@ -23,7 +27,10 @@ export const useTabStore = create<TabStore>((set) => ({
       if (state.tabs.find((t) => t.id === tab.id)) {
         return { activeTabId: tab.id };
       }
-      return { tabs: [...state.tabs, tab], activeTabId: tab.id };
+      return {
+        tabs: [...state.tabs, { ...tab, selectedOid: null, listKey: 0 }],
+        activeTabId: tab.id,
+      };
     }),
 
   closeTab: (id) =>
@@ -37,4 +44,18 @@ export const useTabStore = create<TabStore>((set) => ({
     }),
 
   setActiveTab: (id) => set({ activeTabId: id }),
+
+  selectCommit: (tabId, oid) =>
+    set((state) => ({
+      tabs: state.tabs.map((t) =>
+        t.id === tabId ? { ...t, selectedOid: oid } : t
+      ),
+    })),
+
+  bumpListKey: (tabId) =>
+    set((state) => ({
+      tabs: state.tabs.map((t) =>
+        t.id === tabId ? { ...t, listKey: t.listKey + 1, selectedOid: null } : t
+      ),
+    })),
 }));

@@ -14,7 +14,8 @@
       "Bash(lsof -ti:1420)",
       "Bash(xargs kill:*)",
       "Bash(pkill -f 'tauri dev')",
-      "Bash(pkill -f 'cargo run')"
+      "Bash(pkill -f 'cargo run')",
+      "Bash(npm run:*)"
     ]
   }
 }

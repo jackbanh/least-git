@@ -1,12 +1,18 @@
+import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { Tabs, Button, ActionIcon, Group, Text } from "@mantine/core";
 import { useTabStore, Tab } from "./store";
+import BranchSwitcher from "./components/BranchSwitcher";
 import CommitList from "./components/CommitList";
+import CommitDetail from "./components/CommitDetail";
 import "./App.css";
 
 export default function App() {
   const { tabs, activeTabId, openTab, closeTab, setActiveTab } = useTabStore();
+  const [sidebarWidth, setSidebarWidth] = useState(220);
+
+  const activeTab = tabs.find((t) => t.id === activeTabId) ?? null;
 
   async function handleOpenFolder() {
     const selected = await open({ directory: true, multiple: false });
@@ -18,6 +24,22 @@ export default function App() {
     } catch (e) {
       console.error("Failed to open repo:", e);
     }
+  }
+
+  function startResize(e: React.MouseEvent) {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = sidebarWidth;
+
+    function onMove(e: MouseEvent) {
+      setSidebarWidth(Math.max(150, Math.min(500, startWidth + e.clientX - startX)));
+    }
+    function onUp() {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    }
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
   }
 
   return (
@@ -65,9 +87,25 @@ export default function App() {
         </Tabs>
       </div>
 
-      <div className="tab-content">
+      <div className="workspace">
         {activeTabId ? (
-          <CommitList key={activeTabId} tabId={activeTabId} />
+          <>
+            <div className="sidebar" style={{ width: sidebarWidth }}>
+              <BranchSwitcher tabId={activeTabId} />
+            </div>
+            <div className="resize-handle" onMouseDown={startResize} />
+            <div className="main-area">
+              <div className="commit-list-pane">
+                <CommitList
+                  key={`${activeTabId}-${activeTab?.listKey ?? 0}`}
+                  tabId={activeTabId}
+                />
+              </div>
+              <div className="detail-pane">
+                <CommitDetail tabId={activeTabId} />
+              </div>
+            </div>
+          </>
         ) : (
           <div className="empty-state">
             <Text c="dimmed" mb="md">
