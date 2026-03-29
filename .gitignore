@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Override global gitignore rules that would swallow the components directory
+!src/components/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

@@ -1,0 +1,40 @@
+.diff-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: auto;
+}
+
+.diff-line {
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  font-size: 12px;
+  font-family: var(--mantine-font-family-monospace), monospace;
+  white-space: pre;
+  tab-size: 4;
+}
+
+.diff-line--add {
+  background: var(--mantine-color-green-light);
+  color: var(--mantine-color-green-9);
+}
+
+.diff-line--remove {
+  background: var(--mantine-color-red-light);
+  color: var(--mantine-color-red-9);
+}
+
+.diff-line--hunk {
+  background: var(--mantine-color-blue-light);
+  color: var(--mantine-color-blue-7);
+  font-weight: 600;
+}
+
+.diff-line--header {
+  color: var(--mantine-color-dimmed);
+}
+
+.diff-line--context {
+  color: var(--mantine-color-text);
+}

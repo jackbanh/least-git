@@ -1,0 +1,142 @@
+.commit-detail {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.detail-empty {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  color: var(--mantine-color-dimmed);
+  font-style: italic;
+}
+
+/* ── Metadata bar ─────────────────────────────────────────────────────────── */
+
+.detail-meta {
+  flex-shrink: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--mantine-color-default-border);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.detail-oid {
+  flex-shrink: 0;
+  font-family: var(--mantine-font-family-monospace), monospace;
+  color: var(--mantine-color-orange-6);
+  font-weight: 600;
+}
+
+.detail-author {
+  flex-shrink: 0;
+  font-weight: 500;
+}
+
+.detail-email {
+  font-weight: 400;
+  color: var(--mantine-color-dimmed);
+}
+
+.detail-date {
+  flex-shrink: 0;
+  color: var(--mantine-color-dimmed);
+}
+
+.detail-summary {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-style: italic;
+}
+
+/* ── Body: file list + diff ───────────────────────────────────────────────── */
+
+.detail-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+
+/* File list */
+.detail-files {
+  flex-shrink: 0;
+  width: 220px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  border-right: 1px solid var(--mantine-color-default-border);
+}
+
+.file-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.file-row:hover {
+  background: var(--mantine-color-default-hover);
+}
+
+.file-row--selected {
+  background: var(--mantine-color-blue-light);
+}
+
+.file-row--selected:hover {
+  background: var(--mantine-color-blue-light-hover);
+}
+
+.file-status {
+  flex-shrink: 0;
+  width: 16px;
+  font-weight: 700;
+  font-size: 11px;
+  font-family: var(--mantine-font-family-monospace), monospace;
+}
+
+.file-status--m { color: var(--mantine-color-blue-6); }
+.file-status--a { color: var(--mantine-color-green-6); }
+.file-status--d { color: var(--mantine-color-red-6); }
+.file-status--r { color: var(--mantine-color-violet-6); }
+.file-status--c { color: var(--mantine-color-cyan-6); }
+
+.file-path {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--mantine-font-family-monospace), monospace;
+}
+
+/* Diff viewer */
+.detail-diff {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.diff-loading {
+  padding: 12px;
+  font-size: 12px;
+  color: var(--mantine-color-dimmed);
+  font-style: italic;
+}
+
+/* .file-status--? for untracked */
+.file-status--\? { color: var(--mantine-color-gray-6); }

@@ -1,0 +1,35 @@
+.working-tree-detail {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.wt-title {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.wt-counts {
+  font-size: 12px;
+  color: var(--mantine-color-dimmed);
+}
+
+.wt-section-header {
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--mantine-color-dimmed);
+  background: var(--mantine-color-default-hover);
+  border-bottom: 1px solid var(--mantine-color-default-border);
+  user-select: none;
+}
+
+.wt-section-empty {
+  padding: 10px 12px;
+  font-size: 12px;
+  color: var(--mantine-color-dimmed);
+  font-style: italic;
+}
