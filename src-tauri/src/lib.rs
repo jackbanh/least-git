@@ -3,7 +3,8 @@ use gix::bstr::ByteSlice;
 use serde::Serialize;
 use std::path::PathBuf;
 use std::process::Command;
-use tauri::State;
+use tauri::menu::{Menu, MenuItem, Submenu};
+use tauri::{Emitter, State};
 
 // ── Shared state ────────────────────────────────────────────────────────────
 
@@ -406,8 +407,33 @@ pub fn run() {
     let state: AppState = DashMap::new();
     tauri::Builder::default()
         .manage(state)
+        .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .setup(|app| {
+            let menu = Menu::with_items(
+                app,
+                &[&Submenu::with_items(
+                    app,
+                    "Repository",
+                    true,
+                    &[&MenuItem::with_id(
+                        app,
+                        "refresh",
+                        "Refresh",
+                        true,
+                        if cfg!(target_os = "macos") { Some("Cmd+R") } else { Some("F5") },
+                    )?],
+                )?],
+            )?;
+            app.set_menu(menu)?;
+            app.on_menu_event(|app, event| {
+                if event.id() == "refresh" {
+                    let _ = app.emit("menu:refresh", ());
+                }
+            });
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             open_repo,
             close_tab,

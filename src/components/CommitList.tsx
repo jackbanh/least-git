@@ -16,6 +16,14 @@ interface CommitInfo {
 
 const PAGE_SIZE = 100;
 
+function formatDate(ts: number): string {
+  return new Date(ts * 1000).toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
 export default function CommitList({ tabId }: { tabId: string }) {
   const [commits, setCommits] = useState<CommitInfo[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -51,7 +59,8 @@ export default function CommitList({ tabId }: { tabId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const count = hasMore ? commits.length + 1 : commits.length;
+  // index 0 = uncommitted row, 1..N = commits[index-1], +1 more if hasMore
+  const count = 1 + commits.length + (hasMore ? 1 : 0);
 
   const virtualizer = useVirtualizer({
     count,
@@ -65,24 +74,37 @@ export default function CommitList({ tabId }: { tabId: string }) {
   useEffect(() => {
     const last = items[items.length - 1];
     if (!last) return;
-    if (last.index >= commits.length - 20 && hasMore && !isLoading) {
+    // subtract 1 for the uncommitted row when checking proximity to end
+    if (last.index - 1 >= commits.length - 20 && hasMore && !isLoading) {
       loadMore();
     }
   }, [items, commits.length, hasMore, isLoading, loadMore]);
 
   return (
-    <>
-      <div
-        className={`commit-row${selectedOid === UNCOMMITTED ? " commit-row--selected" : ""}`}
-        onClick={() => selectCommit(tabId, UNCOMMITTED)}
-      >
-        <span className="commit-oid">●</span>
-        <span className="commit-summary">Uncommitted changes</span>
-      </div>
-      <div ref={parentRef} className="commit-list">
+    <div ref={parentRef} className="commit-list">
       <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
         {items.map((vItem) => {
-          const commit = commits[vItem.index];
+          if (vItem.index === 0) {
+            return (
+              <div
+                key={vItem.key}
+                className={`commit-row${selectedOid === UNCOMMITTED ? " commit-row--selected" : ""}`}
+                style={{
+                  position: "absolute",
+                  top: vItem.start,
+                  left: 0,
+                  right: 0,
+                  height: vItem.size,
+                }}
+                onClick={() => selectCommit(tabId, UNCOMMITTED)}
+              >
+                <span className="commit-oid">●</span>
+                <span className="commit-summary">Uncommitted changes</span>
+              </div>
+            );
+          }
+
+          const commit = commits[vItem.index - 1];
           const isSelected = commit?.oid === selectedOid;
           return (
             <div
@@ -102,6 +124,7 @@ export default function CommitList({ tabId }: { tabId: string }) {
                   <span className="commit-oid">{commit.short_oid}</span>
                   <span className="commit-summary">{commit.summary}</span>
                   <span className="commit-author">{commit.author_name}</span>
+                  <span className="commit-date">{formatDate(commit.timestamp)}</span>
                 </>
               ) : (
                 <span className="commit-loading">Loading…</span>
@@ -111,6 +134,5 @@ export default function CommitList({ tabId }: { tabId: string }) {
         })}
       </div>
     </div>
-    </>
   );
 }

@@ -27,4 +27,5 @@ tokio = { version = "1", features = ["full"] }
 gix = { version = "0.70", features = ["revision"] }
 notify = "8"
 dashmap = "6"
+tauri-plugin-window-state = "2.4.1"
 

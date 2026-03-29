@@ -44,14 +44,22 @@ body,
 
 .resize-handle {
   flex-shrink: 0;
-  width: 4px;
-  cursor: col-resize;
   background: transparent;
   transition: background 120ms;
 }
 
 .resize-handle:hover {
   background: var(--mantine-color-blue-5);
+}
+
+.resize-handle--vertical {
+  width: 4px;
+  cursor: col-resize;
+}
+
+.resize-handle--horizontal {
+  height: 4px;
+  cursor: row-resize;
 }
 
 /* main area: commit list (top) + detail pane (bottom) */
@@ -74,7 +82,6 @@ body,
 
 .detail-pane {
   flex-shrink: 0;
-  height: 320px;
   border-top: 1px solid var(--mantine-color-default-border);
   display: flex;
   flex-direction: column;

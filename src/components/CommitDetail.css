@@ -1,6 +1,6 @@
 .commit-detail {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   height: 100%;
   overflow: hidden;
 }
@@ -15,29 +15,55 @@
   font-style: italic;
 }
 
-/* ── Metadata bar ─────────────────────────────────────────────────────────── */
+/* ── Left column: file list (top) + meta (bottom) ────────────────────────── */
+
+.detail-left {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.detail-files {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
 
 .detail-meta {
   flex-shrink: 0;
   display: flex;
-  align-items: baseline;
-  gap: 12px;
-  padding: 6px 12px;
-  border-bottom: 1px solid var(--mantine-color-default-border);
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
   font-size: 12px;
-  white-space: nowrap;
   overflow: hidden;
+  border-top: 1px solid var(--mantine-color-default-border);
+}
+
+/* Resize handles inside commit detail reuse the app-level classes */
+.commit-detail .resize-handle--vertical {
+  border-right: 1px solid var(--mantine-color-default-border);
 }
 
 .detail-oid {
-  flex-shrink: 0;
   font-family: var(--mantine-font-family-monospace), monospace;
   color: var(--mantine-color-orange-6);
   font-weight: 600;
 }
 
+.detail-summary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-style: italic;
+}
+
 .detail-author {
-  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-weight: 500;
 }
 
@@ -47,34 +73,11 @@
 }
 
 .detail-date {
-  flex-shrink: 0;
   color: var(--mantine-color-dimmed);
+  white-space: nowrap;
 }
 
-.detail-summary {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-style: italic;
-}
-
-/* ── Body: file list + diff ───────────────────────────────────────────────── */
-
-.detail-body {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  overflow: hidden;
-}
-
-/* File list */
-.detail-files {
-  flex-shrink: 0;
-  width: 220px;
-  overflow-y: auto;
-  overflow-x: hidden;
-  border-right: 1px solid var(--mantine-color-default-border);
-}
+/* ── File rows ────────────────────────────────────────────────────────────── */
 
 .file-row {
   display: flex;
@@ -113,6 +116,7 @@
 .file-status--d { color: var(--mantine-color-red-6); }
 .file-status--r { color: var(--mantine-color-violet-6); }
 .file-status--c { color: var(--mantine-color-cyan-6); }
+.file-status--\? { color: var(--mantine-color-gray-6); }
 
 .file-path {
   flex: 1;
@@ -121,7 +125,8 @@
   font-family: var(--mantine-font-family-monospace), monospace;
 }
 
-/* Diff viewer */
+/* ── Right column: diff ───────────────────────────────────────────────────── */
+
 .detail-diff {
   flex: 1;
   min-width: 0;
@@ -137,6 +142,3 @@
   color: var(--mantine-color-dimmed);
   font-style: italic;
 }
-
-/* .file-status--? for untracked */
-.file-status--\? { color: var(--mantine-color-gray-6); }

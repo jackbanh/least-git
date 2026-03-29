@@ -1,18 +1,41 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { Tabs, Button, ActionIcon, Group, Text } from "@mantine/core";
+import { listen } from "@tauri-apps/api/event";
 import { useTabStore, Tab } from "./store";
+import { useResize } from "./hooks/useResize";
 import BranchSwitcher from "./components/BranchSwitcher";
 import CommitList from "./components/CommitList";
 import CommitDetail from "./components/CommitDetail";
 import "./App.css";
 
 export default function App() {
-  const { tabs, activeTabId, openTab, closeTab, setActiveTab } = useTabStore();
+  const { tabs, activeTabId, openTab, closeTab, setActiveTab, bumpListKey } = useTabStore();
   const [sidebarWidth, setSidebarWidth] = useState(220);
+  const [detailHeight, setDetailHeight] = useState(320);
+
+  // Re-register persisted tabs with Rust on startup.
+  // Drops any tab whose path no longer resolves to a valid git repo.
+  useEffect(() => {
+    tabs.forEach((tab) => {
+      invoke<Tab>("open_repo", { path: tab.path }).catch(() => closeTab(tab.id));
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Listen for the native macOS menu Refresh event.
+  useEffect(() => {
+    const unlisten = listen("menu:refresh", () => {
+      if (activeTabId) bumpListKey(activeTabId);
+    });
+    return () => { unlisten.then((fn) => fn()); };
+  }, [activeTabId, bumpListKey]);
 
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? null;
+
+  const startSidebarResize = useResize(sidebarWidth, setSidebarWidth, "horizontal", 150, 500);
+  const startDetailResize = useResize(detailHeight, setDetailHeight, "vertical", 120, 600, true);
 
   async function handleOpenFolder() {
     const selected = await open({ directory: true, multiple: false });
@@ -24,22 +47,6 @@ export default function App() {
     } catch (e) {
       console.error("Failed to open repo:", e);
     }
-  }
-
-  function startResize(e: React.MouseEvent) {
-    e.preventDefault();
-    const startX = e.clientX;
-    const startWidth = sidebarWidth;
-
-    function onMove(e: MouseEvent) {
-      setSidebarWidth(Math.max(150, Math.min(500, startWidth + e.clientX - startX)));
-    }
-    function onUp() {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-    }
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
   }
 
   return (
@@ -93,7 +100,7 @@ export default function App() {
             <div className="sidebar" style={{ width: sidebarWidth }}>
               <BranchSwitcher tabId={activeTabId} />
             </div>
-            <div className="resize-handle" onMouseDown={startResize} />
+            <div className="resize-handle resize-handle--vertical" onMouseDown={startSidebarResize} />
             <div className="main-area">
               <div className="commit-list-pane">
                 <CommitList
@@ -101,7 +108,8 @@ export default function App() {
                   tabId={activeTabId}
                 />
               </div>
-              <div className="detail-pane">
+              <div className="resize-handle resize-handle--horizontal" onMouseDown={startDetailResize} />
+              <div className="detail-pane" style={{ height: detailHeight }}>
                 <CommitDetail tabId={activeTabId} />
               </div>
             </div>
