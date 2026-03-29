@@ -1,0 +1,61 @@
+.commit-list {
+  flex: 1;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  font-size: 13px;
+  font-family: var(--mantine-font-family-monospace), monospace;
+}
+
+.commit-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--mantine-color-default-border);
+  white-space: nowrap;
+  overflow: hidden;
+  cursor: pointer;
+  user-select: none;
+}
+
+.commit-row:hover {
+  background: var(--mantine-color-default-hover);
+}
+
+.commit-row--selected {
+  background: var(--mantine-color-blue-light);
+}
+
+.commit-row--selected:hover {
+  background: var(--mantine-color-blue-light-hover);
+}
+
+.commit-oid {
+  flex-shrink: 0;
+  width: 56px;
+  color: var(--mantine-color-orange-6);
+  font-size: 12px;
+}
+
+.commit-summary {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--mantine-color-text);
+}
+
+.commit-author {
+  flex-shrink: 0;
+  width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--mantine-color-dimmed);
+  font-size: 12px;
+}
+
+
+.commit-loading {
+  color: var(--mantine-color-dimmed);
+  font-style: italic;
+}
