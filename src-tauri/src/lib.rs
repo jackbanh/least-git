@@ -161,7 +161,7 @@ fn list_branches(tab_id: String, state: State<'_, AppState>) -> Result<Vec<Branc
 
     let current = String::from_utf8_lossy(&head_out.stdout).trim().to_string();
 
-    let branches = String::from_utf8_lossy(&branch_out.stdout)
+    let mut branches: Vec<BranchInfo> = String::from_utf8_lossy(&branch_out.stdout)
         .lines()
         .filter(|l| !l.is_empty())
         .map(|name| BranchInfo {
@@ -169,6 +169,7 @@ fn list_branches(tab_id: String, state: State<'_, AppState>) -> Result<Vec<Branc
             is_head: name == current,
         })
         .collect();
+    branches.sort_unstable_by(|a, b| a.name.cmp(&b.name));
 
     Ok(branches)
 }
@@ -279,6 +280,125 @@ fn get_file_diff(
     Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
+// ── Working tree ─────────────────────────────────────────────────────────────
+
+#[derive(Serialize, Clone)]
+pub struct StatusEntry {
+    pub path: String,
+    pub old_path: Option<String>,
+    pub status: String, // "M", "A", "D", "R", "?"
+}
+
+#[derive(Serialize, Clone)]
+pub struct WorkingTreeStatus {
+    pub staged: Vec<StatusEntry>,
+    pub unstaged: Vec<StatusEntry>,
+}
+
+fn parse_name_status(output: &str) -> Vec<StatusEntry> {
+    output
+        .lines()
+        .filter(|l| !l.is_empty())
+        .filter_map(|line| {
+            let parts: Vec<&str> = line.splitn(3, '\t').collect();
+            if parts.len() < 2 {
+                return None;
+            }
+            let status = parts[0][..1].to_string();
+            let (path, old_path) = if (status == "R" || status == "C") && parts.len() == 3 {
+                (parts[2].to_string(), Some(parts[1].to_string()))
+            } else {
+                (parts[1].to_string(), None)
+            };
+            Some(StatusEntry { path, old_path, status })
+        })
+        .collect()
+}
+
+#[tauri::command]
+fn get_working_tree_status(
+    tab_id: String,
+    state: State<'_, AppState>,
+) -> Result<WorkingTreeStatus, String> {
+    let path = get_repo_path(&tab_id, &state)?;
+    let path_str = path.to_string_lossy().to_string();
+
+    let staged_out = Command::new("git")
+        .args(["-C", &path_str, "diff", "--cached", "--name-status", "-M"])
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    let unstaged_out = Command::new("git")
+        .args(["-C", &path_str, "diff", "--name-status"])
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    let untracked_out = Command::new("git")
+        .args(["-C", &path_str, "ls-files", "--others", "--exclude-standard"])
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    let mut unstaged = parse_name_status(&String::from_utf8_lossy(&unstaged_out.stdout));
+    for line in String::from_utf8_lossy(&untracked_out.stdout).lines() {
+        if !line.is_empty() {
+            unstaged.push(StatusEntry { path: line.to_string(), old_path: None, status: "?".to_string() });
+        }
+    }
+
+    Ok(WorkingTreeStatus {
+        staged: parse_name_status(&String::from_utf8_lossy(&staged_out.stdout)),
+        unstaged,
+    })
+}
+
+#[tauri::command]
+fn get_staged_diff(
+    tab_id: String,
+    file_path: String,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
+    let path = get_repo_path(&tab_id, &state)?;
+    let path_str = path.to_string_lossy().to_string();
+
+    let output = Command::new("git")
+        .args(["-C", &path_str, "diff", "--cached", "--no-color", "-M", "--", &file_path])
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}
+
+#[tauri::command]
+fn get_unstaged_diff(
+    tab_id: String,
+    file_path: String,
+    is_untracked: bool,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
+    let path = get_repo_path(&tab_id, &state)?;
+    let path_str = path.to_string_lossy().to_string();
+
+    let output = if is_untracked {
+        let full = path.join(&file_path).to_string_lossy().to_string();
+        Command::new("git")
+            .args(["diff", "--no-index", "--no-color", "--", "/dev/null", &full])
+            .output()
+            .map_err(|e| e.to_string())?
+    } else {
+        Command::new("git")
+            .args(["-C", &path_str, "diff", "--no-color", "--", &file_path])
+            .output()
+            .map_err(|e| e.to_string())?
+    };
+
+    // exit 1 = diff exists (normal), 128 = git error
+    if output.status.code() == Some(128) {
+        return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
+    }
+
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}
+
 // ── App entry point ──────────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -296,6 +416,9 @@ pub fn run() {
             checkout_branch,
             get_commit_detail,
             get_file_diff,
+            get_working_tree_status,
+            get_staged_diff,
+            get_unstaged_diff,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
