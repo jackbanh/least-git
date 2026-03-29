@@ -55,6 +55,14 @@
 }
 
 
+.commit-date {
+  flex-shrink: 0;
+  width: 100px;
+  color: var(--mantine-color-dimmed);
+  font-size: 12px;
+  text-align: right;
+}
+
 .commit-loading {
   color: var(--mantine-color-dimmed);
   font-style: italic;

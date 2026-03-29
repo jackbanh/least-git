@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTabStore } from "../store";
+import { useResize } from "../hooks/useResize";
 import DiffViewer from "./DiffViewer";
 import WorkingTreeDetail from "./WorkingTreeDetail";
 import "./CommitDetail.css";
@@ -58,6 +59,11 @@ function CommitDetailInner({
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [diff, setDiff] = useState<string>("");
   const [diffLoading, setDiffLoading] = useState(false);
+  const [leftWidth, setLeftWidth] = useState(220);
+  const [metaHeight, setMetaHeight] = useState(100);
+
+  const startLeftResize = useResize(leftWidth, setLeftWidth, "horizontal", 140, 480);
+  const startMetaResize = useResize(metaHeight, setMetaHeight, "vertical", 60, 300, true);
 
   useEffect(() => {
     if (!selectedOid) {
@@ -99,17 +105,7 @@ function CommitDetailInner({
 
   return (
     <div className="commit-detail">
-      <div className="detail-meta">
-        <span className="detail-oid">{detail.oid.slice(0, 7)}</span>
-        <span className="detail-author">
-          {detail.author_name}{" "}
-          <span className="detail-email">&lt;{detail.author_email}&gt;</span>
-        </span>
-        <span className="detail-date">{formatDate(detail.timestamp)}</span>
-        <span className="detail-summary">{detail.summary}</span>
-      </div>
-
-      <div className="detail-body">
+      <div className="detail-left" style={{ width: leftWidth }}>
         <div className="detail-files">
           {detail.files.map((file) => (
             <div
@@ -127,15 +123,29 @@ function CommitDetailInner({
           ))}
         </div>
 
-        <div className="detail-diff">
-          {diffLoading ? (
-            <div className="diff-loading">Loading diff…</div>
-          ) : diff ? (
-            <DiffViewer diff={diff} />
-          ) : (
-            <div className="diff-loading">Select a file to view diff</div>
-          )}
+        <div className="resize-handle resize-handle--horizontal" onMouseDown={startMetaResize} />
+
+        <div className="detail-meta" style={{ height: metaHeight }}>
+          <span className="detail-oid">{detail.oid.slice(0, 7)}</span>
+          <span className="detail-summary" title={detail.summary}>{detail.summary}</span>
+          <span className="detail-author">
+            {detail.author_name}{" "}
+            <span className="detail-email">&lt;{detail.author_email}&gt;</span>
+          </span>
+          <span className="detail-date">{formatDate(detail.timestamp)}</span>
         </div>
+      </div>
+
+      <div className="resize-handle resize-handle--vertical" onMouseDown={startLeftResize} />
+
+      <div className="detail-diff">
+        {diffLoading ? (
+          <div className="diff-loading">Loading diff…</div>
+        ) : diff ? (
+          <DiffViewer diff={diff} />
+        ) : (
+          <div className="diff-loading">Select a file to view diff</div>
+        )}
       </div>
     </div>
   );

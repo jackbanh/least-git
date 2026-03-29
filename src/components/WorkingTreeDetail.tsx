@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import DiffViewer from "./DiffViewer";
+import "./CommitDetail.css";
 import "./WorkingTreeDetail.css";
 
 interface StatusEntry {
@@ -64,17 +65,8 @@ export default function WorkingTreeDetail({ tabId }: { tabId: string }) {
     status && status.staged.length === 0 && status.unstaged.length === 0;
 
   return (
-    <div className="working-tree-detail">
-      <div className="detail-meta">
-        <span className="wt-title">Uncommitted Changes</span>
-        {status && (
-          <span className="wt-counts">
-            {status.staged.length} staged · {status.unstaged.length} unstaged
-          </span>
-        )}
-      </div>
-
-      <div className="detail-body">
+    <div className="commit-detail">
+      <div className="detail-left">
         <div className="detail-files">
           {!status && <div className="wt-section-empty">Loading…</div>}
 
@@ -111,17 +103,28 @@ export default function WorkingTreeDetail({ tabId }: { tabId: string }) {
           )}
         </div>
 
-        <div className="detail-diff">
-          {!selected ? (
-            <div className="diff-loading">Select a file to view diff</div>
-          ) : diffLoading ? (
-            <div className="diff-loading">Loading diff…</div>
-          ) : diff ? (
-            <DiffViewer diff={diff} />
-          ) : (
-            <div className="diff-loading">No diff available</div>
+        <div className="detail-meta">
+          <span className="wt-title">Uncommitted Changes</span>
+          {status && (
+            <span className="wt-counts">
+              {status.staged.length} staged · {status.unstaged.length} unstaged
+            </span>
           )}
         </div>
+      </div>
+
+      <div className="resize-handle resize-handle--vertical" />
+
+      <div className="detail-diff">
+        {!selected ? (
+          <div className="diff-loading">Select a file to view diff</div>
+        ) : diffLoading ? (
+          <div className="diff-loading">Loading diff…</div>
+        ) : diff ? (
+          <DiffViewer diff={diff} />
+        ) : (
+          <div className="diff-loading">No diff available</div>
+        )}
       </div>
     </div>
   );
