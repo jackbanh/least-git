@@ -3,7 +3,7 @@ use gix::bstr::ByteSlice;
 use serde::Serialize;
 use std::path::PathBuf;
 use std::process::Command;
-use tauri::menu::{Menu, MenuItem, Submenu};
+use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{Emitter, State};
 
 // ── Shared state ────────────────────────────────────────────────────────────
@@ -411,21 +411,34 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
-            let menu = Menu::with_items(
+            let refresh_item = MenuItem::with_id(
                 app,
-                &[&Submenu::with_items(
-                    app,
-                    "Repository",
-                    true,
-                    &[&MenuItem::with_id(
-                        app,
-                        "refresh",
-                        "Refresh",
-                        true,
-                        if cfg!(target_os = "macos") { Some("Cmd+R") } else { Some("F5") },
-                    )?],
-                )?],
+                "refresh",
+                "Refresh",
+                true,
+                if cfg!(target_os = "macos") { Some("Cmd+R") } else { Some("F5") },
             )?;
+            let repo_menu = Submenu::with_items(app, "Repository", true, &[&refresh_item])?;
+
+            // macOS requires the app-name menu as the first entry or nothing renders.
+            #[cfg(target_os = "macos")]
+            let menu = {
+                let app_menu = Submenu::with_items(
+                    app,
+                    app.package_info().name.clone(),
+                    true,
+                    &[
+                        &PredefinedMenuItem::about(app, None, None)?,
+                        &PredefinedMenuItem::separator(app)?,
+                        &PredefinedMenuItem::quit(app, None)?,
+                    ],
+                )?;
+                Menu::with_items(app, &[&app_menu, &repo_menu])?
+            };
+
+            #[cfg(not(target_os = "macos"))]
+            let menu = Menu::with_items(app, &[&repo_menu])?;
+
             app.set_menu(menu)?;
             app.on_menu_event(|app, event| {
                 if event.id() == "refresh" {

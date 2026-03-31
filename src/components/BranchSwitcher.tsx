@@ -9,7 +9,7 @@ interface BranchInfo {
   is_head: boolean;
 }
 
-export default function BranchSwitcher({ tabId }: { tabId: string }) {
+export default function BranchSwitcher({ tabId, listKey }: { tabId: string; listKey: number }) {
   const [branches, setBranches] = useState<BranchInfo[]>([]);
   const [filter, setFilter] = useState("");
   const [checking, setChecking] = useState<string | null>(null);
@@ -21,7 +21,7 @@ export default function BranchSwitcher({ tabId }: { tabId: string }) {
   useEffect(() => {
     invoke<BranchInfo[]>("list_branches", { tabId }).then(setBranches);
     setFilter("");
-  }, [tabId]);
+  }, [tabId, listKey]);
 
   const filtered = useMemo(() => {
     if (!filter.trim()) return branches;
