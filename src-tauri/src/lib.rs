@@ -161,18 +161,8 @@ fn list_branches(tab_id: String, state: State<'_, AppState>) -> Result<Vec<Branc
         .map_err(|e| e.to_string())?;
 
     let current = String::from_utf8_lossy(&head_out.stdout).trim().to_string();
-
-    let mut branches: Vec<BranchInfo> = String::from_utf8_lossy(&branch_out.stdout)
-        .lines()
-        .filter(|l| !l.is_empty())
-        .map(|name| BranchInfo {
-            name: name.to_string(),
-            is_head: name == current,
-        })
-        .collect();
-    branches.sort_unstable_by(|a, b| a.name.cmp(&b.name));
-
-    Ok(branches)
+    let raw = String::from_utf8_lossy(&branch_out.stdout).to_string();
+    Ok(parse_branches(&raw, &current))
 }
 
 #[tauri::command]
@@ -215,13 +205,7 @@ fn get_commit_detail(
         .map_err(|e| format!("not a commit: {e:?}"))?;
     let decoded = commit.decode().map_err(|e| e.to_string())?;
 
-    let summary_end = decoded.message.find_byte(b'\n').unwrap_or(decoded.message.len());
-    let summary = decoded.message[..summary_end].to_str_lossy().trim().to_string();
-    let body = if summary_end < decoded.message.len() {
-        decoded.message[summary_end..].to_str_lossy().trim().to_string()
-    } else {
-        String::new()
-    };
+    let (summary, body) = split_message(decoded.message);
 
     // Changed files via git CLI
     let files_out = Command::new("git")
@@ -294,6 +278,32 @@ pub struct StatusEntry {
 pub struct WorkingTreeStatus {
     pub staged: Vec<StatusEntry>,
     pub unstaged: Vec<StatusEntry>,
+}
+
+/// Splits a raw git commit message into (summary, body).
+/// Summary is the first line (trimmed). Body is everything after, also trimmed.
+fn split_message(msg: &[u8]) -> (String, String) {
+    let end = msg.iter().position(|&b| b == b'\n').unwrap_or(msg.len());
+    let summary = String::from_utf8_lossy(&msg[..end]).trim().to_string();
+    let body = if end < msg.len() {
+        String::from_utf8_lossy(&msg[end..]).trim().to_string()
+    } else {
+        String::new()
+    };
+    (summary, body)
+}
+
+fn parse_branches(raw: &str, current: &str) -> Vec<BranchInfo> {
+    let mut branches: Vec<BranchInfo> = raw
+        .lines()
+        .filter(|l| !l.is_empty())
+        .map(|name| BranchInfo {
+            name: name.to_string(),
+            is_head: name == current,
+        })
+        .collect();
+    branches.sort_unstable_by(|a, b| a.name.cmp(&b.name));
+    branches
 }
 
 fn parse_name_status(output: &str) -> Vec<StatusEntry> {
@@ -461,4 +471,159 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+// ── Tests ─────────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── split_message ────────────────────────────────────────────────────────
+
+    #[test]
+    fn split_message_single_line() {
+        let (summary, body) = split_message(b"Fix the bug");
+        assert_eq!(summary, "Fix the bug");
+        assert_eq!(body, "");
+    }
+
+    #[test]
+    fn split_message_with_body() {
+        let (summary, body) = split_message(b"Fix the bug\n\nMore details here.\nAnd another line.");
+        assert_eq!(summary, "Fix the bug");
+        assert_eq!(body, "More details here.\nAnd another line.");
+    }
+
+    #[test]
+    fn split_message_trims_whitespace() {
+        let (summary, body) = split_message(b"  Fix the bug  \n\n  Body here.  ");
+        assert_eq!(summary, "Fix the bug");
+        assert_eq!(body, "Body here.");
+    }
+
+    #[test]
+    fn split_message_empty() {
+        let (summary, body) = split_message(b"");
+        assert_eq!(summary, "");
+        assert_eq!(body, "");
+    }
+
+    #[test]
+    fn split_message_only_newline() {
+        let (summary, body) = split_message(b"\n");
+        assert_eq!(summary, "");
+        assert_eq!(body, "");
+    }
+
+    // ── parse_branches ───────────────────────────────────────────────────────
+
+    #[test]
+    fn parse_branches_sorted_alphabetically() {
+        let raw = "main\nzebra\nalpha\n";
+        let branches = parse_branches(raw, "main");
+        let names: Vec<&str> = branches.iter().map(|b| b.name.as_str()).collect();
+        assert_eq!(names, ["alpha", "main", "zebra"]);
+    }
+
+    #[test]
+    fn parse_branches_marks_head() {
+        let raw = "main\nfeature/foo\n";
+        let branches = parse_branches(raw, "feature/foo");
+        let head: Vec<&str> = branches.iter().filter(|b| b.is_head).map(|b| b.name.as_str()).collect();
+        assert_eq!(head, ["feature/foo"]);
+        assert!(!branches.iter().find(|b| b.name == "main").unwrap().is_head);
+    }
+
+    #[test]
+    fn parse_branches_empty_input() {
+        assert!(parse_branches("", "main").is_empty());
+    }
+
+    #[test]
+    fn parse_branches_ignores_blank_lines() {
+        let raw = "main\n\nfeature/bar\n";
+        let branches = parse_branches(raw, "main");
+        assert_eq!(branches.len(), 2);
+    }
+
+    #[test]
+    fn parse_branches_long_names() {
+        let raw = "users/jack/my-feature\nusers/alice/other\nmain\n";
+        let branches = parse_branches(raw, "users/jack/my-feature");
+        assert_eq!(branches[0].name, "main");
+        assert_eq!(branches[1].name, "users/alice/other");
+        assert_eq!(branches[2].name, "users/jack/my-feature");
+        assert!(branches[2].is_head);
+    }
+
+    // ── parse_name_status ────────────────────────────────────────────────────
+
+    #[test]
+    fn parse_name_status_modified() {
+        let out = "M\tsrc/main.rs\n";
+        let entries = parse_name_status(out);
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].status, "M");
+        assert_eq!(entries[0].path, "src/main.rs");
+        assert!(entries[0].old_path.is_none());
+    }
+
+    #[test]
+    fn parse_name_status_added_and_deleted() {
+        let out = "A\tnew_file.rs\nD\told_file.rs\n";
+        let entries = parse_name_status(out);
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].status, "A");
+        assert_eq!(entries[1].status, "D");
+    }
+
+    #[test]
+    fn parse_name_status_rename() {
+        let out = "R100\told/path.rs\tnew/path.rs\n";
+        let entries = parse_name_status(out);
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].status, "R");
+        assert_eq!(entries[0].path, "new/path.rs");
+        assert_eq!(entries[0].old_path.as_deref(), Some("old/path.rs"));
+    }
+
+    #[test]
+    fn parse_name_status_copy() {
+        let out = "C100\tsrc/original.rs\tsrc/copy.rs\n";
+        let entries = parse_name_status(out);
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].status, "C");
+        assert_eq!(entries[0].path, "src/copy.rs");
+        assert_eq!(entries[0].old_path.as_deref(), Some("src/original.rs"));
+    }
+
+    #[test]
+    fn parse_name_status_spaces_in_path() {
+        let out = "M\tsrc/my file with spaces.rs\n";
+        let entries = parse_name_status(out);
+        assert_eq!(entries[0].path, "src/my file with spaces.rs");
+    }
+
+    #[test]
+    fn parse_name_status_empty() {
+        assert!(parse_name_status("").is_empty());
+    }
+
+    #[test]
+    fn parse_name_status_skips_malformed_lines() {
+        // A line with no tab should be silently skipped
+        let out = "not-a-valid-line\nM\tvalid.rs\n";
+        let entries = parse_name_status(out);
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].path, "valid.rs");
+    }
+
+    #[test]
+    fn parse_name_status_multiple_files() {
+        let out = "M\tsrc/a.rs\nA\tsrc/b.rs\nD\tsrc/c.rs\nR90\told.rs\tnew.rs\n";
+        let entries = parse_name_status(out);
+        assert_eq!(entries.len(), 4);
+        assert_eq!(entries[3].old_path.as_deref(), Some("old.rs"));
+    }
 }
