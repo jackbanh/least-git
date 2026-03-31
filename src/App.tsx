@@ -98,7 +98,7 @@ export default function App() {
         {activeTabId ? (
           <>
             <div className="sidebar" style={{ width: sidebarWidth }}>
-              <BranchSwitcher tabId={activeTabId} />
+              <BranchSwitcher tabId={activeTabId} listKey={activeTab?.listKey ?? 0} />
             </div>
             <div className="resize-handle resize-handle--vertical" onMouseDown={startSidebarResize} />
             <div className="main-area">
