@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import Markdown from "react-markdown";
 import { useTabStore } from "../store";
 import { useResize } from "../hooks/useResize";
 import DiffViewer from "./DiffViewer";
@@ -126,13 +127,17 @@ function CommitDetailInner({
         <div className="resize-handle resize-handle--horizontal" onMouseDown={startMetaResize} />
 
         <div className="detail-meta" style={{ height: metaHeight }}>
-          <span className="detail-oid">{detail.oid.slice(0, 7)}</span>
-          <span className="detail-summary" title={detail.summary}>{detail.summary}</span>
-          <span className="detail-author">
-            {detail.author_name}{" "}
-            <span className="detail-email">&lt;{detail.author_email}&gt;</span>
-          </span>
-          <span className="detail-date">{formatDate(detail.timestamp)}</span>
+          <div className="detail-meta-header">
+            <span className="detail-oid">{detail.oid.slice(0, 7)}</span>
+            <span className="detail-author">
+              {detail.author_name}{" "}
+              <span className="detail-email">&lt;{detail.author_email}&gt;</span>
+            </span>
+            <span className="detail-date">{formatDate(detail.timestamp)}</span>
+          </div>
+          <div className="detail-message">
+            <Markdown>{detail.summary + (detail.body ? "\n\n" + detail.body : "")}</Markdown>
+          </div>
         </div>
       </div>
 

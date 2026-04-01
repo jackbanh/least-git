@@ -19,7 +19,7 @@
 **UI design:**
 - Follows a subset of Sourcetree's layout and conventions — familiar to existing Sourcetree users but stripped to only the 5 core operations
 - Remote branches are not shown anywhere in the UI — local branches only
-- **Styling: Mantine v7+** for app chrome (tabs, toolbar, branch panel, dialogs, commit form) — v7 uses CSS modules internally, no runtime CSS-in-JS overhead
+- **Styling: Mantine v8** for app chrome (tabs, toolbar, branch panel, dialogs, commit form) — v7+ uses CSS modules internally, no runtime CSS-in-JS overhead
 - Virtualized list rows (commit history, file tree) use plain CSS classes only — no Mantine components inside rows, as prop overhead compounds across high-frequency mount/unmount cycles during scroll
 - **State management: Zustand** — one store slice per open repo tab, avoids prop-drilling across the tab/panel hierarchy
 - Tab persistence across restarts is explicitly deferred (out of MVP scope)

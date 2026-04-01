@@ -12,11 +12,15 @@ export interface Tab {
 interface TabStore {
   tabs: Tab[];
   activeTabId: string | null;
+  sidebarWidth: number;
+  detailHeight: number;
   openTab: (tab: Omit<Tab, "selectedOid" | "listKey">) => void;
   closeTab: (id: string) => void;
   setActiveTab: (id: string) => void;
   selectCommit: (tabId: string, oid: string | null) => void;
   bumpListKey: (tabId: string) => void;
+  setSidebarWidth: (width: number) => void;
+  setDetailHeight: (height: number) => void;
 }
 
 export const useTabStore = create<TabStore>()(
@@ -24,6 +28,8 @@ export const useTabStore = create<TabStore>()(
     (set) => ({
       tabs: [],
       activeTabId: null,
+      sidebarWidth: 220,
+      detailHeight: 320,
 
       openTab: (tab) =>
         set((state) => {
@@ -61,10 +67,12 @@ export const useTabStore = create<TabStore>()(
             t.id === tabId ? { ...t, listKey: t.listKey + 1, selectedOid: null } : t
           ),
         })),
+
+      setSidebarWidth: (width) => set({ sidebarWidth: width }),
+      setDetailHeight: (height) => set({ detailHeight: height }),
     }),
     {
       name: "least-git-tabs",
-      // Only persist the tab list and active tab — not transient state
       partialize: (state) => ({
         tabs: state.tabs.map((t) => ({
           id: t.id,
@@ -74,6 +82,8 @@ export const useTabStore = create<TabStore>()(
           listKey: 0,
         })),
         activeTabId: state.activeTabId,
+        sidebarWidth: state.sidebarWidth,
+        detailHeight: state.detailHeight,
       }),
     }
   )
