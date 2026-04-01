@@ -64,7 +64,7 @@ export const useTabStore = create<TabStore>()(
       bumpListKey: (tabId) =>
         set((state) => ({
           tabs: state.tabs.map((t) =>
-            t.id === tabId ? { ...t, listKey: t.listKey + 1, selectedOid: null } : t
+            t.id === tabId ? { ...t, listKey: t.listKey + 1 } : t
           ),
         })),
 

@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useTabStore } from "../store";
 import { UNCOMMITTED } from "./CommitDetail";
+import ProgressBar from "./ProgressBar";
 import "./CommitList.css";
 
 interface CommitInfo {
@@ -17,11 +18,11 @@ interface CommitInfo {
 const PAGE_SIZE = 100;
 
 function formatDate(ts: number): string {
-  return new Date(ts * 1000).toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
+  const d = new Date(ts * 1000);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
 }
 
 export default function CommitList({ tabId }: { tabId: string }) {
@@ -82,6 +83,7 @@ export default function CommitList({ tabId }: { tabId: string }) {
 
   return (
     <div ref={parentRef} className="commit-list">
+      <ProgressBar visible={commits.length === 0 && hasMore} />
       <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
         {items.map((vItem) => {
           if (vItem.index === 0) {

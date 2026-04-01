@@ -9,6 +9,8 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "lint": "eslint src/",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "lint:rust": "cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings"
   },
   "dependencies": {
@@ -30,13 +32,18 @@
   "devDependencies": {
     "@eslint/js": "^9.39.4",
     "@tauri-apps/cli": "^2",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
     "eslint": "^9.39.4",
     "eslint-plugin-react-hooks": "^7.0.1",
+    "jsdom": "^29.0.1",
     "typescript": "~5.8.3",
     "typescript-eslint": "^8.58.0",
-    "vite": "^7.0.4"
+    "vite": "^7.0.4",
+    "vitest": "^4.1.2"
   }
 }
