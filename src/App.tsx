@@ -56,7 +56,6 @@ export default function App() {
         <Tabs
           value={activeTabId}
           onChange={(v) => v && setActiveTab(v)}
-          variant="outline"
         >
           <Group gap={0} wrap="nowrap" align="flex-end">
             <Tabs.List style={{ flexShrink: 0 }}>
