@@ -150,19 +150,14 @@ fn list_branches(tab_id: String, state: State<'_, AppState>) -> Result<Vec<Branc
     let path = get_repo_path(&tab_id, &state)?;
     let path_str = path.to_string_lossy().to_string();
 
-    let branch_out = Command::new("git")
-        .args(["-C", &path_str, "branch", "--format=%(refname:short)"])
+    // %(HEAD) is '*' for the current branch, ' ' for all others — one spawn instead of two.
+    let out = Command::new("git")
+        .args(["-C", &path_str, "branch", "--format=%(HEAD)%(refname:short)"])
         .output()
         .map_err(|e| e.to_string())?;
 
-    let head_out = Command::new("git")
-        .args(["-C", &path_str, "rev-parse", "--abbrev-ref", "HEAD"])
-        .output()
-        .map_err(|e| e.to_string())?;
-
-    let current = String::from_utf8_lossy(&head_out.stdout).trim().to_string();
-    let raw = String::from_utf8_lossy(&branch_out.stdout).to_string();
-    Ok(parse_branches(&raw, &current))
+    let raw = String::from_utf8_lossy(&out.stdout).to_string();
+    Ok(parse_branches(&raw))
 }
 
 #[tauri::command]
@@ -293,13 +288,13 @@ fn split_message(msg: &[u8]) -> (String, String) {
     (summary, body)
 }
 
-fn parse_branches(raw: &str, current: &str) -> Vec<BranchInfo> {
+fn parse_branches(raw: &str) -> Vec<BranchInfo> {
     let mut branches: Vec<BranchInfo> = raw
         .lines()
-        .filter(|l| !l.is_empty())
-        .map(|name| BranchInfo {
-            name: name.to_string(),
-            is_head: name == current,
+        .filter(|l| l.len() > 1)
+        .map(|line| {
+            let is_head = line.starts_with('*');
+            BranchInfo { name: line[1..].to_string(), is_head }
         })
         .collect();
     branches.sort_unstable_by(|a, b| a.name.cmp(&b.name));
@@ -327,27 +322,26 @@ fn parse_name_status(output: &str) -> Vec<StatusEntry> {
 }
 
 #[tauri::command]
-fn get_working_tree_status(
+async fn get_working_tree_status(
     tab_id: String,
     state: State<'_, AppState>,
 ) -> Result<WorkingTreeStatus, String> {
     let path = get_repo_path(&tab_id, &state)?;
     let path_str = path.to_string_lossy().to_string();
 
-    let staged_out = Command::new("git")
+    let staged_fut = tokio::process::Command::new("git")
         .args(["-C", &path_str, "diff", "--cached", "--name-status", "-M"])
-        .output()
-        .map_err(|e| e.to_string())?;
-
-    let unstaged_out = Command::new("git")
+        .output();
+    let unstaged_fut = tokio::process::Command::new("git")
         .args(["-C", &path_str, "diff", "--name-status"])
-        .output()
-        .map_err(|e| e.to_string())?;
-
-    let untracked_out = Command::new("git")
+        .output();
+    let untracked_fut = tokio::process::Command::new("git")
         .args(["-C", &path_str, "ls-files", "--others", "--exclude-standard"])
-        .output()
-        .map_err(|e| e.to_string())?;
+        .output();
+
+    let (staged_out, unstaged_out, untracked_out) =
+        tokio::try_join!(staged_fut, unstaged_fut, untracked_fut)
+            .map_err(|e| e.to_string())?;
 
     let mut unstaged = parse_name_status(&String::from_utf8_lossy(&unstaged_out.stdout));
     for line in String::from_utf8_lossy(&untracked_out.stdout).lines() {
@@ -520,16 +514,16 @@ mod tests {
 
     #[test]
     fn parse_branches_sorted_alphabetically() {
-        let raw = "main\nzebra\nalpha\n";
-        let branches = parse_branches(raw, "main");
+        let raw = " main\n zebra\n alpha\n";
+        let branches = parse_branches(raw);
         let names: Vec<&str> = branches.iter().map(|b| b.name.as_str()).collect();
         assert_eq!(names, ["alpha", "main", "zebra"]);
     }
 
     #[test]
     fn parse_branches_marks_head() {
-        let raw = "main\nfeature/foo\n";
-        let branches = parse_branches(raw, "feature/foo");
+        let raw = " main\n*feature/foo\n";
+        let branches = parse_branches(raw);
         let head: Vec<&str> = branches.iter().filter(|b| b.is_head).map(|b| b.name.as_str()).collect();
         assert_eq!(head, ["feature/foo"]);
         assert!(!branches.iter().find(|b| b.name == "main").unwrap().is_head);
@@ -537,20 +531,20 @@ mod tests {
 
     #[test]
     fn parse_branches_empty_input() {
-        assert!(parse_branches("", "main").is_empty());
+        assert!(parse_branches("").is_empty());
     }
 
     #[test]
     fn parse_branches_ignores_blank_lines() {
-        let raw = "main\n\nfeature/bar\n";
-        let branches = parse_branches(raw, "main");
+        let raw = " main\n\n feature/bar\n";
+        let branches = parse_branches(raw);
         assert_eq!(branches.len(), 2);
     }
 
     #[test]
     fn parse_branches_long_names() {
-        let raw = "users/jack/my-feature\nusers/alice/other\nmain\n";
-        let branches = parse_branches(raw, "users/jack/my-feature");
+        let raw = "*users/jack/my-feature\n users/alice/other\n main\n";
+        let branches = parse_branches(raw);
         assert_eq!(branches[0].name, "main");
         assert_eq!(branches[1].name, "users/alice/other");
         assert_eq!(branches[2].name, "users/jack/my-feature");
