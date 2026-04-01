@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { TextInput } from "@mantine/core";
 import { useTabStore } from "../store";
+import ProgressBar from "./ProgressBar";
 import "./BranchSwitcher.css";
 
 interface BranchInfo {
@@ -11,6 +12,7 @@ interface BranchInfo {
 
 export default function BranchSwitcher({ tabId, listKey }: { tabId: string; listKey: number }) {
   const [branches, setBranches] = useState<BranchInfo[]>([]);
+  const [isRefreshing, setIsRefreshing] = useState(true);
   const [filter, setFilter] = useState("");
   const [checking, setChecking] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -19,8 +21,11 @@ export default function BranchSwitcher({ tabId, listKey }: { tabId: string; list
   const selectCommit = useTabStore((s) => s.selectCommit);
 
   useEffect(() => {
-    invoke<BranchInfo[]>("list_branches", { tabId }).then(setBranches);
+    setIsRefreshing(true);
     setFilter("");
+    invoke<BranchInfo[]>("list_branches", { tabId })
+      .then(setBranches)
+      .finally(() => setIsRefreshing(false));
   }, [tabId, listKey]);
 
   const filtered = useMemo(() => {
@@ -48,6 +53,7 @@ export default function BranchSwitcher({ tabId, listKey }: { tabId: string; list
 
   return (
     <div className="branch-switcher">
+      <ProgressBar visible={isRefreshing} />
       <div className="branch-switcher-header">Branches</div>
       <div className="branch-filter-wrap">
         <TextInput
