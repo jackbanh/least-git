@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { Tabs, Button, ActionIcon, Group, Text } from "@mantine/core";
@@ -11,9 +11,10 @@ import CommitDetail from "./components/CommitDetail";
 import "./App.css";
 
 export default function App() {
-  const { tabs, activeTabId, openTab, closeTab, setActiveTab, bumpListKey } = useTabStore();
-  const [sidebarWidth, setSidebarWidth] = useState(220);
-  const [detailHeight, setDetailHeight] = useState(320);
+  const {
+    tabs, activeTabId, openTab, closeTab, setActiveTab, bumpListKey,
+    sidebarWidth, setSidebarWidth, detailHeight, setDetailHeight,
+  } = useTabStore();
 
   // Re-register persisted tabs with Rust on startup.
   // Drops any tab whose path no longer resolves to a valid git repo.
