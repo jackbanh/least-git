@@ -27,9 +27,11 @@ function formatDate(ts: number): string {
 
 export default function CommitList({ tabId }: { tabId: string }) {
   const [commits, setCommits] = useState<CommitInfo[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const parentRef = useRef<HTMLDivElement>(null);
+  // Ref-based guard so concurrent effect firings see the updated value synchronously,
+  // preventing duplicate fetches when loadMore is recreated after each page lands.
+  const isLoadingRef = useRef(false);
 
   const selectedOid = useTabStore(
     (s) => s.tabs.find((t) => t.id === tabId)?.selectedOid ?? null
@@ -37,8 +39,8 @@ export default function CommitList({ tabId }: { tabId: string }) {
   const selectCommit = useTabStore((s) => s.selectCommit);
 
   const loadMore = useCallback(async () => {
-    if (isLoading || !hasMore) return;
-    setIsLoading(true);
+    if (isLoadingRef.current || !hasMore) return;
+    isLoadingRef.current = true;
     try {
       const next = await invoke<CommitInfo[]>("load_commits", {
         tabId,
@@ -51,9 +53,9 @@ export default function CommitList({ tabId }: { tabId: string }) {
       console.error("load_commits failed:", e);
       setHasMore(false);
     } finally {
-      setIsLoading(false);
+      isLoadingRef.current = false;
     }
-  }, [tabId, commits.length, isLoading, hasMore]);
+  }, [tabId, commits.length, hasMore]);
 
   useEffect(() => {
     loadMore();
@@ -72,17 +74,39 @@ export default function CommitList({ tabId }: { tabId: string }) {
 
   const items = virtualizer.getVirtualItems();
 
+  // current flat index: 0 = uncommitted, 1..N = commits[index-1]
+  const selectedIndex =
+    selectedOid === UNCOMMITTED
+      ? 0
+      : commits.findIndex((c) => c.oid === selectedOid) + 1;
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+    e.preventDefault();
+    const maxIndex = commits.length; // 0..commits.length (last = last commit)
+    const next =
+      e.key === "ArrowUp"
+        ? Math.max(0, selectedIndex - 1)
+        : Math.min(maxIndex, selectedIndex + 1);
+    if (next === selectedIndex) return;
+    const oid = next === 0 ? UNCOMMITTED : commits[next - 1]?.oid;
+    if (oid) {
+      selectCommit(tabId, oid);
+      virtualizer.scrollToIndex(next, { behavior: "auto" });
+    }
+  }
+
   useEffect(() => {
     const last = items[items.length - 1];
     if (!last) return;
     // subtract 1 for the uncommitted row when checking proximity to end
-    if (last.index - 1 >= commits.length - 20 && hasMore && !isLoading) {
+    if (last.index - 1 >= commits.length - 20 && hasMore && !isLoadingRef.current) {
       loadMore();
     }
-  }, [items, commits.length, hasMore, isLoading, loadMore]);
+  }, [items, commits.length, hasMore, loadMore]);
 
   return (
-    <div ref={parentRef} className="commit-list">
+    <div ref={parentRef} className="commit-list" tabIndex={0} onKeyDown={handleKeyDown}>
       <ProgressBar visible={commits.length === 0 && hasMore} />
       <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
         {items.map((vItem) => {

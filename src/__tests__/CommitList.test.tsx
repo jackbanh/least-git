@@ -3,6 +3,23 @@ import { vi, describe, it, expect, beforeEach } from "vitest";
 import { MantineProvider } from "@mantine/core";
 import CommitList from "../components/CommitList";
 
+// Mock the virtualizer to render ALL items regardless of container size.
+// jsdom has no layout engine so getBoundingClientRect returns zeros, which
+// causes the real virtualizer to render nothing. This mock lets us query the
+// DOM for duplicate rows.
+vi.mock("@tanstack/react-virtual", () => ({
+  useVirtualizer: ({ count, estimateSize }: { count: number; estimateSize: () => number }) => ({
+    getTotalSize: () => count * estimateSize(),
+    getVirtualItems: () =>
+      Array.from({ length: count }, (_, i) => ({
+        index: i,
+        key: i,
+        start: i * estimateSize(),
+        size: estimateSize(),
+      })),
+  }),
+}));
+
 // ── Mocks ────────────────────────────────────────────────────────────────────
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
@@ -85,6 +102,38 @@ describe("CommitList", () => {
 
     await waitFor(() => {
       expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+    });
+  });
+
+  it("renders each commit exactly once — no duplicates from concurrent fetches", async () => {
+    // Regression: isLoading state (async) allowed two concurrent loadMore calls
+    // with the same offset, causing setCommits to append the same page twice.
+    // Fixed by using a ref guard (synchronous) instead.
+    const commits = [
+      { ...STUB_COMMIT, oid: "aaa111", short_oid: "aaa111", summary: "first commit" },
+      { ...STUB_COMMIT, oid: "bbb222", short_oid: "bbb222", summary: "second commit" },
+      { ...STUB_COMMIT, oid: "ccc333", short_oid: "ccc333", summary: "third commit" },
+    ];
+    mockInvoke.mockResolvedValue(commits); // < PAGE_SIZE → hasMore becomes false
+
+    renderCommitList();
+
+    await waitFor(() => {
+      expect(screen.getByText("first commit")).toBeInTheDocument();
+    });
+
+    // Each summary must appear exactly once — duplicates would mean the page
+    // was appended more than once.
+    expect(screen.getAllByText("first commit")).toHaveLength(1);
+    expect(screen.getAllByText("second commit")).toHaveLength(1);
+    expect(screen.getAllByText("third commit")).toHaveLength(1);
+
+    // invoke should have been called exactly once (offset 0 only)
+    expect(mockInvoke).toHaveBeenCalledTimes(1);
+    expect(mockInvoke).toHaveBeenCalledWith("load_commits", {
+      tabId: "test-tab",
+      offset: 0,
+      limit: 100,
     });
   });
 });
