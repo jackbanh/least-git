@@ -404,6 +404,41 @@ fn get_unstaged_diff(
     Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
+/// Apply a patch string via `git apply`.
+/// `reverse = true` → `git apply --reverse` (unstage a staged chunk).
+/// Always uses `--cached` so only the index is touched, never the working tree.
+#[tauri::command]
+fn apply_patch(
+    tab_id: String,
+    patch: String,
+    reverse: bool,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let path = get_repo_path(&tab_id, &state)?;
+    let path_str = path.to_string_lossy().to_string();
+
+    let mut args = vec!["-C", &path_str, "apply", "--cached"];
+    if reverse {
+        args.push("--reverse");
+    }
+
+    let mut child = Command::new("git")
+        .args(&args)
+        .stdin(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .map_err(|e| e.to_string())?;
+
+    use std::io::Write;
+    child.stdin.take().unwrap().write_all(patch.as_bytes()).map_err(|e| e.to_string())?;
+
+    let out = child.wait_with_output().map_err(|e| e.to_string())?;
+    if !out.status.success() {
+        return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
+    }
+    Ok(())
+}
+
 // ── App entry point ──────────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -462,6 +497,7 @@ pub fn run() {
             get_working_tree_status,
             get_staged_diff,
             get_unstaged_diff,
+            apply_patch,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

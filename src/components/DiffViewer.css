@@ -3,38 +3,25 @@
   min-height: 0;
   overflow-y: auto;
   overflow-x: auto;
-}
-
-.diff-line {
-  display: flex;
-  align-items: center;
-  padding: 0 12px;
   font-size: 12px;
-  font-family: var(--mantine-font-family-monospace), monospace;
-  white-space: pre;
-  tab-size: 4;
 }
 
-.diff-line--add {
-  background: var(--mantine-color-green-light);
-  color: var(--mantine-color-green-9);
-}
+/* Map react-diff-view CSS vars to Mantine tokens */
+.diff-scroll .diff {
+  --diff-font-family: var(--mantine-font-family-monospace), monospace;
+  --diff-background-color: transparent;
+  --diff-text-color: var(--mantine-color-text);
 
-.diff-line--remove {
-  background: var(--mantine-color-red-light);
-  color: var(--mantine-color-red-9);
-}
+  --diff-gutter-insert-background-color: var(--mantine-color-green-light);
+  --diff-gutter-insert-text-color: var(--mantine-color-green-9);
+  --diff-gutter-delete-background-color: var(--mantine-color-red-light);
+  --diff-gutter-delete-text-color: var(--mantine-color-red-9);
 
-.diff-line--hunk {
-  background: var(--mantine-color-blue-light);
-  color: var(--mantine-color-blue-7);
-  font-weight: 600;
-}
+  --diff-code-insert-background-color: var(--mantine-color-green-light);
+  --diff-code-insert-text-color: var(--mantine-color-green-9);
+  --diff-code-delete-background-color: var(--mantine-color-red-light);
+  --diff-code-delete-text-color: var(--mantine-color-red-9);
 
-.diff-line--header {
-  color: var(--mantine-color-dimmed);
-}
-
-.diff-line--context {
-  color: var(--mantine-color-text);
+  --diff-gutter-selected-background-color: var(--mantine-color-blue-light);
+  --diff-code-selected-background-color: var(--mantine-color-blue-light);
 }

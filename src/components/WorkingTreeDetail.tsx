@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import DiffViewer from "./DiffViewer";
+import InteractiveDiffViewer from "./InteractiveDiffViewer";
 import "./CommitDetail.css";
 import "./WorkingTreeDetail.css";
 
@@ -27,53 +27,61 @@ export default function WorkingTreeDetail({ tabId }: { tabId: string }) {
   const [diff, setDiff] = useState<string>("");
   const [diffLoading, setDiffLoading] = useState(false);
 
-  useEffect(() => {
-    setStatus(null);
-    setSelected(null);
-    setDiff("");
+  const refreshStatus = useCallback(() => {
     invoke<WorkingTreeStatus>("get_working_tree_status", { tabId })
       .then(setStatus)
       .catch((e) => console.error("get_working_tree_status failed:", e));
   }, [tabId]);
 
   useEffect(() => {
-    if (!selected) {
-      setDiff("");
-      return;
-    }
-    setDiffLoading(true);
-    const command = selected.staged ? "get_staged_diff" : "get_unstaged_diff";
-    const args = selected.staged
-      ? { tabId, filePath: selected.path }
-      : { tabId, filePath: selected.path, isUntracked: selected.is_untracked };
+    setStatus(null);
+    setSelected(null);
+    setDiff("");
+    refreshStatus();
+  }, [tabId, refreshStatus]);
 
+  const refreshDiff = useCallback((sel: SelectedFile) => {
+    setDiffLoading(true);
+    const command = sel.staged ? "get_staged_diff" : "get_unstaged_diff";
+    const args = sel.staged
+      ? { tabId, filePath: sel.path }
+      : { tabId, filePath: sel.path, isUntracked: sel.is_untracked };
     invoke<string>(command, args)
       .then(setDiff)
       .catch(() => setDiff(""))
       .finally(() => setDiffLoading(false));
-  }, [selected, tabId]);
+  }, [tabId]);
+
+  useEffect(() => {
+    if (!selected) { setDiff(""); return; }
+    refreshDiff(selected);
+  }, [selected, refreshDiff]);
+
+  const applyPatch = useCallback(async (patch: string, reverse: boolean) => {
+    try {
+      await invoke("apply_patch", { tabId, patch, reverse });
+      // Re-fetch both the file list and the diff for the current file
+      refreshStatus();
+      if (selected) refreshDiff(selected);
+    } catch (e) {
+      console.error("apply_patch failed:", e);
+    }
+  }, [tabId, selected, refreshStatus, refreshDiff]);
 
   function selectFile(entry: StatusEntry, staged: boolean) {
-    setSelected({
-      path: entry.path,
-      staged,
-      is_untracked: entry.status === "?",
-    });
+    setSelected({ path: entry.path, staged, is_untracked: entry.status === "?" });
   }
 
-  const isEmpty =
-    status && status.staged.length === 0 && status.unstaged.length === 0;
+  const isEmpty = status && status.staged.length === 0 && status.unstaged.length === 0;
 
   return (
     <div className="commit-detail">
       <div className="detail-left">
         <div className="detail-files">
           {!status && <div className="wt-section-empty">Loading…</div>}
-
           {isEmpty && (
             <div className="wt-section-empty">Nothing to commit, working tree clean</div>
           )}
-
           {status && status.staged.length > 0 && (
             <>
               <div className="wt-section-header">Staged</div>
@@ -87,7 +95,6 @@ export default function WorkingTreeDetail({ tabId }: { tabId: string }) {
               ))}
             </>
           )}
-
           {status && status.unstaged.length > 0 && (
             <>
               <div className="wt-section-header">Unstaged</div>
@@ -121,7 +128,12 @@ export default function WorkingTreeDetail({ tabId }: { tabId: string }) {
         ) : diffLoading ? (
           <div className="diff-loading">Loading diff…</div>
         ) : diff ? (
-          <DiffViewer diff={diff} />
+          <InteractiveDiffViewer
+            diff={diff}
+            staged={selected.staged}
+            onApplyHunk={(patch) => applyPatch(patch, selected.staged)}
+            onApplyLines={(patch) => applyPatch(patch, selected.staged)}
+          />
         ) : (
           <div className="diff-loading">No diff available</div>
         )}
