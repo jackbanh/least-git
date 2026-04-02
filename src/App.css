@@ -23,7 +23,7 @@ body,
   flex-shrink: 0;
   padding: 0 8px;
   border-bottom: 1px solid var(--mantine-color-default-border);
-  background: var(--mantine-color-body);
+  background: var(--mantine-color-default-hover);
 }
 
 /* workspace: sidebar + resize handle + main area */
@@ -39,7 +39,7 @@ body,
   overflow-y: auto;
   overflow-x: hidden;
   border-right: 1px solid var(--mantine-color-default-border);
-  background: var(--mantine-color-body);
+  background: var(--mantine-color-default-hover);
 }
 
 .resize-handle {
