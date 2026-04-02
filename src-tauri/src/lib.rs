@@ -1,8 +1,10 @@
 use dashmap::DashMap;
 use gix::bstr::ByteSlice;
 use serde::Serialize;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::Command;
+use std::sync::Mutex;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{Emitter, State};
 
@@ -11,6 +13,8 @@ use tauri::{Emitter, State};
 struct RepoEntry {
     path: PathBuf,
     name: String,
+    /// Caches CommitDetail by OID. Cleared on refresh (bumpListKey → close/reopen tab).
+    detail_cache: Mutex<HashMap<String, CommitDetail>>,
 }
 
 type AppState = DashMap<String, RepoEntry>;
@@ -91,7 +95,7 @@ fn open_repo(path: String, state: State<'_, AppState>) -> Result<TabInfo, String
         .unwrap_or("repo")
         .to_string();
 
-    state.insert(id.clone(), RepoEntry { path: canonical, name: name.clone() });
+    state.insert(id.clone(), RepoEntry { path: canonical, name: name.clone(), detail_cache: Mutex::new(HashMap::new()) });
 
     Ok(TabInfo { id: id.clone(), path: id, name })
 }
@@ -99,6 +103,13 @@ fn open_repo(path: String, state: State<'_, AppState>) -> Result<TabInfo, String
 #[tauri::command]
 fn close_tab(tab_id: String, state: State<'_, AppState>) {
     state.remove(&tab_id);
+}
+
+#[tauri::command]
+fn clear_detail_cache(tab_id: String, state: State<'_, AppState>) {
+    if let Some(entry) = state.get(&tab_id) {
+        entry.detail_cache.lock().unwrap().clear();
+    }
 }
 
 #[tauri::command]
@@ -182,42 +193,61 @@ fn checkout_branch(
 }
 
 #[tauri::command]
-fn get_commit_detail(
+async fn get_commit_detail(
     tab_id: String,
     oid: String,
     state: State<'_, AppState>,
 ) -> Result<CommitDetail, String> {
+    // Cache hit — return immediately without spawning any processes.
+    {
+        let entry = state.get(&tab_id).ok_or_else(|| format!("Tab not found: {tab_id}"))?;
+        let cached = entry.detail_cache.lock().unwrap().get(&oid).cloned();
+        if let Some(detail) = cached {
+            return Ok(detail);
+        }
+    }
+
     let path = get_repo_path(&tab_id, &state)?;
     let path_str = path.to_string_lossy().to_string();
+    let oid_clone = oid.clone();
 
-    // Metadata via gix
-    let repo = gix::open(&path).map_err(|e| e.to_string())?;
-    let commit_id = gix::ObjectId::from_hex(oid.trim().as_bytes())
-        .map_err(|e| format!("Invalid OID: {e}"))?;
-    let object = repo.find_object(commit_id).map_err(|e| e.to_string())?;
-    let commit = object
-        .try_into_commit()
-        .map_err(|e| format!("not a commit: {e:?}"))?;
-    let decoded = commit.decode().map_err(|e| e.to_string())?;
+    // Run gix metadata lookup and git diff-tree concurrently.
+    let meta_fut = tokio::task::spawn_blocking({
+        let path = path.clone();
+        let oid = oid.clone();
+        move || -> Result<(String, String, String, String, i64), String> {
+            let repo = gix::open(&path).map_err(|e| e.to_string())?;
+            let commit_id = gix::ObjectId::from_hex(oid.trim().as_bytes())
+                .map_err(|e| format!("Invalid OID: {e}"))?;
+            let object = repo.find_object(commit_id).map_err(|e| e.to_string())?;
+            let commit = object.try_into_commit().map_err(|e| format!("not a commit: {e:?}"))?;
+            let decoded = commit.decode().map_err(|e| e.to_string())?;
+            let (summary, body) = split_message(decoded.message);
+            Ok((
+                summary,
+                body,
+                decoded.author.name.to_str_lossy().to_string(),
+                decoded.author.email.to_str_lossy().to_string(),
+                decoded.author.time.seconds,
+            ))
+        }
+    });
 
-    let (summary, body) = split_message(decoded.message);
+    let files_fut = tokio::process::Command::new("git")
+        .args(["-C", &path_str, "diff-tree", "--no-commit-id", "-r", "--name-status", "-M", &oid_clone])
+        .output();
 
-    // Changed files via git CLI
-    let files_out = Command::new("git")
-        .args([
-            "-C", &path_str,
-            "diff-tree", "--no-commit-id", "-r", "--name-status", "-M", &oid,
-        ])
-        .output()
-        .map_err(|e| e.to_string())?;
+    let (meta_res, files_out) = tokio::try_join!(
+        async { meta_fut.await.map_err(|e: tokio::task::JoinError| e.to_string())? },
+        async { files_fut.await.map_err(|e| e.to_string()) }
+    )?;
 
+    let (summary, body, author_name, author_email, timestamp) = meta_res;
     let mut files = Vec::new();
     for line in String::from_utf8_lossy(&files_out.stdout).lines() {
         let parts: Vec<&str> = line.splitn(3, '\t').collect();
-        if parts.len() < 2 {
-            continue;
-        }
-        let status = parts[0][..1].to_string(); // first char: M/A/D/R/C
+        if parts.len() < 2 { continue; }
+        let status = parts[0][..1].to_string();
         let (file_path, old_path) = if (status == "R" || status == "C") && parts.len() == 3 {
             (parts[2].to_string(), Some(parts[1].to_string()))
         } else {
@@ -226,15 +256,14 @@ fn get_commit_detail(
         files.push(ChangedFile { path: file_path, old_path, status });
     }
 
-    Ok(CommitDetail {
-        oid,
-        summary,
-        body,
-        author_name: decoded.author.name.to_str_lossy().to_string(),
-        author_email: decoded.author.email.to_str_lossy().to_string(),
-        timestamp: decoded.author.time.seconds,
-        files,
-    })
+    let detail = CommitDetail { oid: oid.clone(), summary, body, author_name, author_email, timestamp, files };
+
+    // Store in cache.
+    if let Some(entry) = state.get(&tab_id) {
+        entry.detail_cache.lock().unwrap().insert(oid, detail.clone());
+    }
+
+    Ok(detail)
 }
 
 #[tauri::command]
@@ -489,6 +518,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             open_repo,
             close_tab,
+            clear_detail_cache,
             load_commits,
             list_branches,
             checkout_branch,

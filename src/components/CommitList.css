@@ -12,7 +12,6 @@
   align-items: center;
   gap: 12px;
   padding: 0 12px;
-  border-bottom: 1px solid var(--mantine-color-default-border);
   white-space: nowrap;
   overflow: hidden;
   cursor: pointer;

@@ -107,7 +107,20 @@ function CommitDetailInner({
   return (
     <div className="commit-detail">
       <div className="detail-left" style={{ width: leftWidth }}>
-        <div className="detail-files">
+        <div
+          className="detail-files"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+            e.preventDefault();
+            const idx = detail.files.findIndex((f) => f.path === selectedFile);
+            const next =
+              e.key === "ArrowUp"
+                ? Math.max(0, idx - 1)
+                : Math.min(detail.files.length - 1, idx + 1);
+            setSelectedFile(detail.files[next]?.path ?? null);
+          }}
+        >
           {detail.files.map((file) => (
             <div
               key={file.path}
@@ -127,16 +140,16 @@ function CommitDetailInner({
         <div className="resize-handle resize-handle--horizontal" onMouseDown={startMetaResize} />
 
         <div className="detail-meta" style={{ height: metaHeight }}>
-          <div className="detail-meta-header">
-            <span className="detail-oid">{detail.oid.slice(0, 7)}</span>
-            <span className="detail-author">
-              {detail.author_name}{" "}
-              <span className="detail-email">&lt;{detail.author_email}&gt;</span>
-            </span>
-            <span className="detail-date">{formatDate(detail.timestamp)}</span>
-          </div>
           <div className="detail-message">
             <Markdown>{detail.summary + (detail.body ? "\n\n" + detail.body : "")}</Markdown>
+            <div className="detail-meta-footer">
+              <span className="detail-oid">{detail.oid.slice(0, 7)}</span>
+              <span className="detail-author">
+                {detail.author_name}{" "}
+                <span className="detail-email">&lt;{detail.author_email}&gt;</span>
+              </span>
+              <span className="detail-date">{formatDate(detail.timestamp)}</span>
+            </div>
           </div>
         </div>
       </div>

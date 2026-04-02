@@ -28,7 +28,10 @@ export default function App() {
   // Listen for the native macOS menu Refresh event.
   useEffect(() => {
     const unlisten = listen("menu:refresh", () => {
-      if (activeTabId) bumpListKey(activeTabId);
+      if (activeTabId) {
+        invoke("clear_detail_cache", { tabId: activeTabId });
+        bumpListKey(activeTabId);
+      }
     });
     return () => { unlisten.then((fn) => fn()); };
   }, [activeTabId, bumpListKey]);
