@@ -79,7 +79,7 @@ function CommitDetailInner({
     invoke<CommitDetailData>("get_commit_detail", { tabId, oid: selectedOid })
       .then((d) => {
         setDetail(d);
-        setSelectedFile(d.files[0]?.path ?? null);
+        setSelectedFile(null);
       })
       .catch((e) => console.error("get_commit_detail failed:", e));
   }, [tabId, selectedOid]);

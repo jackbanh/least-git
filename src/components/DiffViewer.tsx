@@ -1,62 +1,25 @@
-import { useRef } from "react";
-import { useVirtualizer } from "@tanstack/react-virtual";
+import { parseDiff, Diff, Hunk } from "react-diff-view";
+import "react-diff-view/style/index.css";
 import "./DiffViewer.css";
 
-type DiffLineKind = "header" | "hunk" | "add" | "remove" | "context";
-
-function getDiffLineKind(line: string): DiffLineKind {
-  if (
-    line.startsWith("diff --git") ||
-    line.startsWith("index ") ||
-    line.startsWith("--- ") ||
-    line.startsWith("+++ ") ||
-    line.startsWith("new file") ||
-    line.startsWith("deleted file") ||
-    line.startsWith("rename") ||
-    line.startsWith("similarity") ||
-    line.startsWith("Binary")
-  )
-    return "header";
-  if (line.startsWith("@@")) return "hunk";
-  if (line.startsWith("+")) return "add";
-  if (line.startsWith("-")) return "remove";
-  return "context";
-}
-
 export default function DiffViewer({ diff }: { diff: string }) {
-  const parentRef = useRef<HTMLDivElement>(null);
-  const lines = diff.split("\n");
+  if (!diff.trim()) return null;
 
-  const virtualizer = useVirtualizer({
-    count: lines.length,
-    getScrollElement: () => parentRef.current,
-    estimateSize: () => 20,
-    overscan: 20,
-  });
+  const files = parseDiff(diff);
 
   return (
-    <div ref={parentRef} className="diff-scroll">
-      <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
-        {virtualizer.getVirtualItems().map((vItem) => {
-          const line = lines[vItem.index];
-          const kind = getDiffLineKind(line);
-          return (
-            <div
-              key={vItem.key}
-              className={`diff-line diff-line--${kind}`}
-              style={{
-                position: "absolute",
-                top: vItem.start,
-                left: 0,
-                right: 0,
-                height: vItem.size,
-              }}
-            >
-              {line || "\u00a0"}
-            </div>
-          );
-        })}
-      </div>
+    <div className="diff-scroll">
+      {files.map((file) => (
+        <Diff
+          key={`${file.oldPath}:${file.newPath}`}
+          viewType="unified"
+          diffType={file.type}
+          hunks={file.hunks}
+          gutterType="none"
+        >
+          {(hunks) => hunks.map((hunk) => <Hunk key={hunk.content} hunk={hunk} />)}
+        </Diff>
+      ))}
     </div>
   );
 }
