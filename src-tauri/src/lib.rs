@@ -3,10 +3,34 @@ use gix::bstr::ByteSlice;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::process::Command;
 use std::sync::Mutex;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{Emitter, State};
+
+/// Spawn a synchronous git process. On Windows, `CREATE_NO_WINDOW` prevents a
+/// console window from flashing when the app is launched as a GUI executable.
+fn git() -> std::process::Command {
+    #[allow(unused_mut)]
+    let mut cmd = std::process::Command::new("git");
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    }
+    cmd
+}
+
+/// Same as `git()` but returns a `tokio::process::Command` for async callers.
+fn git_async() -> tokio::process::Command {
+    #[allow(unused_mut)]
+    let mut cmd = tokio::process::Command::new("git");
+    #[cfg(windows)]
+    {
+        use tokio::process::windows::CommandExt;
+        cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    }
+    cmd
+}
 
 // ── Shared state ────────────────────────────────────────────────────────────
 
@@ -162,7 +186,7 @@ fn list_branches(tab_id: String, state: State<'_, AppState>) -> Result<Vec<Branc
     let path_str = path.to_string_lossy().to_string();
 
     // %(HEAD) is '*' for the current branch, ' ' for all others — one spawn instead of two.
-    let out = Command::new("git")
+    let out = git()
         .args(["-C", &path_str, "branch", "--format=%(HEAD)%(refname:short)"])
         .output()
         .map_err(|e| e.to_string())?;
@@ -180,7 +204,7 @@ fn checkout_branch(
     let path = get_repo_path(&tab_id, &state)?;
     let path_str = path.to_string_lossy().to_string();
 
-    let output = Command::new("git")
+    let output = git()
         .args(["-C", &path_str, "checkout", &branch])
         .output()
         .map_err(|e| e.to_string())?;
@@ -233,7 +257,7 @@ async fn get_commit_detail(
         }
     });
 
-    let files_fut = tokio::process::Command::new("git")
+    let files_fut = git_async()
         .args(["-C", &path_str, "diff-tree", "--no-commit-id", "-r", "--name-status", "-M", &oid_clone])
         .output();
 
@@ -277,7 +301,7 @@ fn get_file_diff(
     let path_str = path.to_string_lossy().to_string();
 
     // --root handles initial commits (diffs against empty tree)
-    let output = Command::new("git")
+    let output = git()
         .args([
             "-C", &path_str,
             "diff-tree", "--root", "--no-commit-id", "-r", "-p", "--no-color", "-M",
@@ -358,13 +382,13 @@ async fn get_working_tree_status(
     let path = get_repo_path(&tab_id, &state)?;
     let path_str = path.to_string_lossy().to_string();
 
-    let staged_fut = tokio::process::Command::new("git")
+    let staged_fut = git_async()
         .args(["-C", &path_str, "diff", "--cached", "--name-status", "-M"])
         .output();
-    let unstaged_fut = tokio::process::Command::new("git")
+    let unstaged_fut = git_async()
         .args(["-C", &path_str, "diff", "--name-status"])
         .output();
-    let untracked_fut = tokio::process::Command::new("git")
+    let untracked_fut = git_async()
         .args(["-C", &path_str, "ls-files", "--others", "--exclude-standard"])
         .output();
 
@@ -394,7 +418,7 @@ fn get_staged_diff(
     let path = get_repo_path(&tab_id, &state)?;
     let path_str = path.to_string_lossy().to_string();
 
-    let output = Command::new("git")
+    let output = git()
         .args(["-C", &path_str, "diff", "--cached", "--no-color", "-M", "--", &file_path])
         .output()
         .map_err(|e| e.to_string())?;
@@ -414,12 +438,12 @@ fn get_unstaged_diff(
 
     let output = if is_untracked {
         let full = path.join(&file_path).to_string_lossy().to_string();
-        Command::new("git")
+        git()
             .args(["diff", "--no-index", "--no-color", "--", "/dev/null", &full])
             .output()
             .map_err(|e| e.to_string())?
     } else {
-        Command::new("git")
+        git()
             .args(["-C", &path_str, "diff", "--no-color", "--", &file_path])
             .output()
             .map_err(|e| e.to_string())?
@@ -451,7 +475,7 @@ fn apply_patch(
         args.push("--reverse");
     }
 
-    let mut child = Command::new("git")
+    let mut child = git()
         .args(&args)
         .stdin(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
