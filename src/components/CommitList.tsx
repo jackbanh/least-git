@@ -25,13 +25,18 @@ function formatDate(ts: number): string {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-export default function CommitList({ tabId }: { tabId: string }) {
+export default function CommitList({ tabId, listKey }: { tabId: string; listKey: number }) {
   const [commits, setCommits] = useState<CommitInfo[]>([]);
   const [hasMore, setHasMore] = useState(true);
   const parentRef = useRef<HTMLDivElement>(null);
   // Ref-based guard so concurrent effect firings see the updated value synchronously,
   // preventing duplicate fetches when loadMore is recreated after each page lands.
   const isLoadingRef = useRef(false);
+  // Stale-while-revalidate: preserve previous commits for display until fresh page 0 arrives.
+  const staleCommitsRef = useRef<CommitInfo[]>([]);
+  const commitsRef = useRef(commits);
+  commitsRef.current = commits;
+  const prevListKeyRef = useRef(listKey);
 
   const selectedOid = useTabStore(
     (s) => s.tabs.find((t) => t.id === tabId)?.selectedOid ?? null
@@ -62,8 +67,42 @@ export default function CommitList({ tabId }: { tabId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // index 0 = uncommitted row, 1..N = commits[index-1], +1 more if hasMore
-  const count = 1 + commits.length + (hasMore ? 1 : 0);
+  // When listKey changes (refresh signal), keep showing current commits until fresh
+  // page 0 arrives, then replace them.
+  useEffect(() => {
+    if (listKey === prevListKeyRef.current) return;
+    prevListKeyRef.current = listKey;
+
+    staleCommitsRef.current = commitsRef.current;
+    setCommits([]);
+    setHasMore(true);
+    isLoadingRef.current = true;
+
+    invoke<CommitInfo[]>("load_commits", { tabId, offset: 0, limit: PAGE_SIZE })
+      .then((fresh) => {
+        staleCommitsRef.current = [];
+        setCommits(fresh);
+        if (fresh.length < PAGE_SIZE) setHasMore(false);
+      })
+      .catch(() => {
+        staleCommitsRef.current = [];
+        setHasMore(false);
+      })
+      .finally(() => {
+        isLoadingRef.current = false;
+      });
+  // tabId is stable for the component lifetime (key={activeTabId} remounts on tab change)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listKey]);
+
+  // Show stale commits while fresh page 0 is in flight, then switch to fresh commits.
+  const visibleCommits =
+    commits.length === 0 && staleCommitsRef.current.length > 0
+      ? staleCommitsRef.current
+      : commits;
+
+  // index 0 = uncommitted row, 1..N = visibleCommits[index-1], +1 more if hasMore
+  const count = 1 + visibleCommits.length + (hasMore ? 1 : 0);
 
   const virtualizer = useVirtualizer({
     count,
@@ -74,22 +113,22 @@ export default function CommitList({ tabId }: { tabId: string }) {
 
   const items = virtualizer.getVirtualItems();
 
-  // current flat index: 0 = uncommitted, 1..N = commits[index-1]
+  // current flat index: 0 = uncommitted, 1..N = visibleCommits[index-1]
   const selectedIndex =
     selectedOid === UNCOMMITTED
       ? 0
-      : commits.findIndex((c) => c.oid === selectedOid) + 1;
+      : visibleCommits.findIndex((c) => c.oid === selectedOid) + 1;
 
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
     e.preventDefault();
-    const maxIndex = commits.length; // 0..commits.length (last = last commit)
+    const maxIndex = visibleCommits.length; // 0..visibleCommits.length (last = last commit)
     const next =
       e.key === "ArrowUp"
         ? Math.max(0, selectedIndex - 1)
         : Math.min(maxIndex, selectedIndex + 1);
     if (next === selectedIndex) return;
-    const oid = next === 0 ? UNCOMMITTED : commits[next - 1]?.oid;
+    const oid = next === 0 ? UNCOMMITTED : visibleCommits[next - 1]?.oid;
     if (oid) {
       selectCommit(tabId, oid);
       virtualizer.scrollToIndex(next, { behavior: "auto" });
@@ -130,7 +169,7 @@ export default function CommitList({ tabId }: { tabId: string }) {
             );
           }
 
-          const commit = commits[vItem.index - 1];
+          const commit = visibleCommits[vItem.index - 1];
           const isSelected = commit?.oid === selectedOid;
           return (
             <div

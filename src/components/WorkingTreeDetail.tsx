@@ -74,10 +74,35 @@ export default function WorkingTreeDetail({ tabId }: { tabId: string }) {
 
   const isEmpty = status && status.staged.length === 0 && status.unstaged.length === 0;
 
+  // Flat ordered list used for ArrowUp/ArrowDown navigation across both sections.
+  const allFiles = status
+    ? [
+        ...status.staged.map((f) => ({ ...f, staged: true })),
+        ...status.unstaged.map((f) => ({ ...f, staged: false })),
+      ]
+    : [];
+  const selectedIndex = allFiles.findIndex(
+    (f) => f.path === selected?.path && f.staged === selected?.staged
+  );
+
   return (
     <div className="commit-detail">
       <div className="detail-left">
-        <div className="detail-files">
+        <div
+          className="detail-files"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+            if (allFiles.length === 0) return;
+            e.preventDefault();
+            const next =
+              e.key === "ArrowUp"
+                ? Math.max(0, selectedIndex - 1)
+                : Math.min(allFiles.length - 1, selectedIndex + 1);
+            const f = allFiles[next];
+            setSelected({ path: f.path, staged: f.staged, is_untracked: f.status === "?" });
+          }}
+        >
           {!status && <div className="wt-section-empty">Loading…</div>}
           {isEmpty && (
             <div className="wt-section-empty">Nothing to commit, working tree clean</div>
@@ -154,7 +179,10 @@ function FileRow({
   return (
     <div
       className={`file-row${isSelected ? " file-row--selected" : ""}`}
-      onClick={onClick}
+      onClick={(e) => {
+        (e.currentTarget.closest(".detail-files") as HTMLElement | null)?.focus();
+        onClick();
+      }}
     >
       <span className={`file-status file-status--${file.status.toLowerCase()}`}>
         {file.status}
