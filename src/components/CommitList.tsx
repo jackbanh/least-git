@@ -1,10 +1,23 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { Menu } from "@mantine/core";
+import {
+  IconCopy,
+  IconGitPullRequest,
+  IconRefresh,
+  IconRotate2,
+} from "@tabler/icons-react";
 import { useTabStore } from "../store";
 import { UNCOMMITTED } from "./CommitDetail";
 import ProgressBar from "./ProgressBar";
 import "./CommitList.css";
+
+interface ContextMenuState {
+  oid: string;
+  x: number;
+  y: number;
+}
 
 interface CommitInfo {
   oid: string;
@@ -28,6 +41,8 @@ function formatDate(ts: number): string {
 export default function CommitList({ tabId, listKey }: { tabId: string; listKey: number }) {
   const [commits, setCommits] = useState<CommitInfo[]>([]);
   const [hasMore, setHasMore] = useState(true);
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const contextMenuOidRef = useRef<string | null>(null);
   const parentRef = useRef<HTMLDivElement>(null);
   // Ref-based guard so concurrent effect firings see the updated value synchronously,
   // preventing duplicate fetches when loadMore is recreated after each page lands.
@@ -145,7 +160,13 @@ export default function CommitList({ tabId, listKey }: { tabId: string; listKey:
   }, [items, commits.length, hasMore, loadMore]);
 
   return (
-    <div ref={parentRef} className="commit-list" tabIndex={0} onKeyDown={handleKeyDown}>
+    <div
+      ref={parentRef}
+      className="commit-list"
+      tabIndex={0}
+      onKeyDown={handleKeyDown}
+      style={contextMenu ? { overflowY: "hidden" } : undefined}
+    >
       <ProgressBar visible={commits.length === 0 && hasMore} />
       <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
         {items.map((vItem) => {
@@ -183,6 +204,13 @@ export default function CommitList({ tabId, listKey }: { tabId: string; listKey:
                 height: vItem.size,
               }}
               onClick={() => commit && selectCommit(tabId, commit.oid)}
+              onContextMenu={(e) => {
+                if (!commit) return;
+                e.preventDefault();
+                selectCommit(tabId, commit.oid);
+                contextMenuOidRef.current = commit.oid;
+                setContextMenu({ oid: commit.oid, x: e.clientX, y: e.clientY });
+              }}
             >
               {commit ? (
                 <>
@@ -198,6 +226,33 @@ export default function CommitList({ tabId, listKey }: { tabId: string; listKey:
           );
         })}
       </div>
+      <Menu
+        opened={!!contextMenu}
+        onClose={() => setContextMenu(null)}
+        position="right-start"
+      >
+        <Menu.Target>
+          {/* Zero-size anchor positioned at the right-click coordinates */}
+          <div
+            style={{
+              position: "fixed",
+              left: contextMenu?.x ?? 0,
+              top: contextMenu?.y ?? 0,
+              width: 0,
+              height: 0,
+            }}
+          />
+        </Menu.Target>
+        <Menu.Dropdown>
+          <Menu.Item leftSection={<IconCopy size={14} />} onClick={() => contextMenuOidRef.current && navigator.clipboard.writeText(contextMenuOidRef.current)}>
+            Copy SHA-1
+          </Menu.Item>
+          <Menu.Divider />
+          <Menu.Item leftSection={<IconGitPullRequest size={14} />}>Pull with Rebase</Menu.Item>
+          <Menu.Item leftSection={<IconRefresh size={14} />}>Rebase Interactively onto Here</Menu.Item>
+          <Menu.Item leftSection={<IconRotate2 size={14} />} color="red">Reset to Here…</Menu.Item>
+        </Menu.Dropdown>
+      </Menu>
     </div>
   );
 }

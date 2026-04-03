@@ -5,6 +5,8 @@
   overflow-x: hidden;
   position: relative;
   font-size: 13px;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .commit-row {
@@ -15,6 +17,7 @@
   white-space: nowrap;
   overflow: hidden;
   cursor: pointer;
+  -webkit-user-select: none;
   user-select: none;
 }
 
