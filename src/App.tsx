@@ -18,9 +18,13 @@ export default function App() {
 
   // Re-register persisted tabs with Rust on startup.
   // Drops any tab whose path no longer resolves to a valid git repo.
+  // Bumps listKey after each successful open_repo so CommitList re-fetches now
+  // that the Rust AppState has the tab (the initial mount fetch races and fails).
   useEffect(() => {
     tabs.forEach((tab) => {
-      invoke<Tab>("open_repo", { path: tab.path }).catch(() => closeTab(tab.id));
+      invoke<Tab>("open_repo", { path: tab.path })
+        .then(() => bumpListKey(tab.id))
+        .catch(() => closeTab(tab.id));
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -107,8 +111,9 @@ export default function App() {
             <div className="main-area">
               <div className="commit-list-pane">
                 <CommitList
-                  key={`${activeTabId}-${activeTab?.listKey ?? 0}`}
+                  key={activeTabId}
                   tabId={activeTabId}
+                  listKey={activeTab?.listKey ?? 0}
                 />
               </div>
               <div className="resize-handle resize-handle--horizontal" onMouseDown={startDetailResize} />

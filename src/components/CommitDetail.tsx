@@ -125,7 +125,10 @@ function CommitDetailInner({
             <div
               key={file.path}
               className={`file-row${selectedFile === file.path ? " file-row--selected" : ""}`}
-              onClick={() => setSelectedFile(file.path)}
+              onClick={(e) => {
+              setSelectedFile(file.path);
+              (e.currentTarget.closest(".detail-files") as HTMLElement | null)?.focus();
+            }}
             >
               <span className={`file-status file-status--${file.status.toLowerCase()}`}>
                 {file.status}
