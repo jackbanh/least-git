@@ -492,6 +492,80 @@ fn apply_patch(
     Ok(())
 }
 
+// ── Pull with rebase ─────────────────────────────────────────────────────────
+
+#[derive(Clone, Serialize)]
+struct PullLine {
+    tab_id: String,
+    line: String,
+}
+
+#[derive(Clone, Serialize)]
+struct PullDone {
+    tab_id: String,
+    success: bool,
+}
+
+#[tauri::command]
+async fn pull_with_rebase(
+    tab_id: String,
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    use tokio::io::{AsyncBufReadExt, BufReader};
+
+    let path = get_repo_path(&tab_id, &state)?;
+    let path_str = path.to_string_lossy().to_string();
+
+    // Detect whether origin has main or master and use that branch.
+    let probe = git()
+        .args(["-C", &path_str, "ls-remote", "--heads", "origin", "main", "master"])
+        .output()
+        .map_err(|e| e.to_string())?;
+    let probe_out = String::from_utf8_lossy(&probe.stdout);
+    let branch = if probe_out.contains("refs/heads/main") { "main" } else { "master" };
+
+    let mut child = git_async()
+        .args(["-C", &path_str, "pull", "--rebase", "--autostash", "origin", branch])
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .map_err(|e| e.to_string())?;
+
+    let stdout = child.stdout.take().unwrap();
+    let stderr = child.stderr.take().unwrap();
+
+    // Stream stdout and stderr concurrently, emitting each line as an event.
+    let emit_line = {
+        let app = app.clone();
+        let tab_id = tab_id.clone();
+        move |line: String| {
+            let _ = app.emit("pull:line", PullLine { tab_id: tab_id.clone(), line });
+        }
+    };
+    let emit_line2 = emit_line.clone();
+
+    let out_task = tokio::spawn(async move {
+        let mut lines = BufReader::new(stdout).lines();
+        while let Ok(Some(line)) = lines.next_line().await {
+            emit_line(line);
+        }
+    });
+    let err_task = tokio::spawn(async move {
+        let mut lines = BufReader::new(stderr).lines();
+        while let Ok(Some(line)) = lines.next_line().await {
+            emit_line2(line);
+        }
+    });
+
+    let status = child.wait().await.map_err(|e| e.to_string())?;
+    let _ = tokio::join!(out_task, err_task);
+
+    let _ = app.emit("pull:done", PullDone { tab_id, success: status.success() });
+
+    Ok(())
+}
+
 // ── App entry point ──────────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -499,6 +573,7 @@ pub fn run() {
     let state: AppState = DashMap::new();
     tauri::Builder::default()
         .manage(state)
+        .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
@@ -552,6 +627,7 @@ pub fn run() {
             get_staged_diff,
             get_unstaged_diff,
             apply_patch,
+            pull_with_rebase,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

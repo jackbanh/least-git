@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Menu } from "@mantine/core";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import {
   IconCopy,
   IconGitPullRequest,
@@ -11,6 +12,7 @@ import {
 import { useTabStore } from "../store";
 import { UNCOMMITTED } from "./CommitDetail";
 import ProgressBar from "./ProgressBar";
+import PullDrawer from "./PullDrawer";
 import "./CommitList.css";
 
 interface ContextMenuState {
@@ -43,6 +45,8 @@ export default function CommitList({ tabId, listKey }: { tabId: string; listKey:
   const [hasMore, setHasMore] = useState(true);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const contextMenuOidRef = useRef<string | null>(null);
+  const [pullDrawerOpen, setPullDrawerOpen] = useState(false);
+  const bumpListKey = useTabStore((s) => s.bumpListKey);
   const parentRef = useRef<HTMLDivElement>(null);
   // Ref-based guard so concurrent effect firings see the updated value synchronously,
   // preventing duplicate fetches when loadMore is recreated after each page lands.
@@ -244,15 +248,21 @@ export default function CommitList({ tabId, listKey }: { tabId: string; listKey:
           />
         </Menu.Target>
         <Menu.Dropdown>
-          <Menu.Item leftSection={<IconCopy size={14} />} onClick={() => contextMenuOidRef.current && navigator.clipboard.writeText(contextMenuOidRef.current)}>
+          <Menu.Item leftSection={<IconCopy size={14} />} onClick={() => contextMenuOidRef.current && writeText(contextMenuOidRef.current)}>
             Copy SHA-1
           </Menu.Item>
           <Menu.Divider />
-          <Menu.Item leftSection={<IconGitPullRequest size={14} />}>Pull with Rebase</Menu.Item>
+          <Menu.Item leftSection={<IconGitPullRequest size={14} />} onClick={() => setPullDrawerOpen(true)}>Pull with Rebase</Menu.Item>
           <Menu.Item leftSection={<IconRefresh size={14} />}>Rebase Interactively onto Here</Menu.Item>
           <Menu.Item leftSection={<IconRotate2 size={14} />} color="red">Reset to Here…</Menu.Item>
         </Menu.Dropdown>
       </Menu>
+      <PullDrawer
+        tabId={tabId}
+        opened={pullDrawerOpen}
+        onClose={() => setPullDrawerOpen(false)}
+        onSuccess={() => bumpListKey(tabId)}
+      />
     </div>
   );
 }

@@ -28,4 +28,5 @@ gix = { version = "0.70", features = ["revision"] }
 notify = "8"
 dashmap = "6"
 tauri-plugin-window-state = "2.4.1"
+tauri-plugin-clipboard-manager = "2.3.2"
 
