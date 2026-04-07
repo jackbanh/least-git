@@ -21,7 +21,7 @@ interface SelectedFile {
   is_untracked: boolean;
 }
 
-export default function WorkingTreeDetail({ tabId }: { tabId: string }) {
+export default function WorkingTreeDetail({ tabId, listKey }: { tabId: string; listKey: number }) {
   const [status, setStatus] = useState<WorkingTreeStatus | null>(null);
   const [selected, setSelected] = useState<SelectedFile | null>(null);
   const [diff, setDiff] = useState<string>("");
@@ -39,6 +39,12 @@ export default function WorkingTreeDetail({ tabId }: { tabId: string }) {
     setDiff("");
     refreshStatus();
   }, [tabId, refreshStatus]);
+
+  useEffect(() => {
+    refreshStatus();
+  // listKey changes signal a refresh; tabId is stable within this component's lifetime
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listKey]);
 
   const refreshDiff = useCallback((sel: SelectedFile) => {
     setDiffLoading(true);

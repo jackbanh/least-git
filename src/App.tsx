@@ -118,7 +118,7 @@ export default function App() {
               </div>
               <div className="resize-handle resize-handle--horizontal" onMouseDown={startDetailResize} />
               <div className="detail-pane" style={{ height: detailHeight }}>
-                <CommitDetail tabId={activeTabId} />
+                <CommitDetail tabId={activeTabId} listKey={activeTab?.listKey ?? 0} />
               </div>
             </div>
           </>
