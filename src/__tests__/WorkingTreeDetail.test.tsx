@@ -19,7 +19,7 @@ const STUB_STATUS = {
 };
 
 function renderWTD() {
-  return render(<WorkingTreeDetail tabId="test-tab" />);
+  return render(<WorkingTreeDetail tabId="test-tab" listKey={0} />);
 }
 
 describe("WorkingTreeDetail file list keyboard navigation", () => {
