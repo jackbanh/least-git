@@ -171,6 +171,52 @@ describe("CommitList", () => {
     );
   });
 
+  it("keeps stale commits visible when the refresh fetch fails", async () => {
+    // Bug: the listKey effect's .catch() cleared staleCommitsRef, so a failed
+    // refresh left commits=[] and stale=[] → visibleCommits=[] → blank list.
+    const initial = [{ ...STUB_COMMIT, oid: "aaa111", short_oid: "aaa111", summary: "old commit" }];
+
+    mockInvoke.mockResolvedValueOnce(initial);
+    const { rerender } = renderCommitList(0);
+    await waitFor(() => expect(screen.getByText("old commit")).toBeInTheDocument());
+
+    // Refresh fetch fails
+    mockInvoke.mockRejectedValueOnce(new Error("network error"));
+    rerenderCommitList(rerender, 1);
+
+    // Stale commits must remain visible after the failure settles
+    await waitFor(() => expect(mockInvoke).toHaveBeenCalledTimes(2));
+    expect(screen.getByText("old commit")).toBeInTheDocument();
+  });
+
+  it("keeps stale commits visible during a rapid double listKey bump", async () => {
+    // Bug: the second bump fires before the first refresh resolves, so
+    // commitsRef.current is [] (already cleared by the first bump's setCommits([])).
+    // staleCommitsRef then saves [] and the list goes blank during the second fetch.
+    const initial = [{ ...STUB_COMMIT, oid: "aaa111", short_oid: "aaa111", summary: "old commit" }];
+    const fresh   = [{ ...STUB_COMMIT, oid: "bbb222", short_oid: "bbb222", summary: "new commit" }];
+
+    mockInvoke.mockResolvedValueOnce(initial);
+    const { rerender } = renderCommitList(0);
+    await waitFor(() => expect(screen.getByText("old commit")).toBeInTheDocument());
+
+    // First bump — fetch stays pending
+    mockInvoke.mockReturnValueOnce(new Promise(() => {})); // never resolves
+    rerenderCommitList(rerender, 1);
+
+    // Second rapid bump before first fetch returns — this fetch also stays pending
+    let resolveSecond!: (v: unknown) => void;
+    mockInvoke.mockReturnValueOnce(new Promise((res) => { resolveSecond = res; }));
+    rerenderCommitList(rerender, 2);
+
+    // Stale commits must still be visible while both fetches are in-flight
+    expect(screen.getByText("old commit")).toBeInTheDocument();
+
+    resolveSecond(fresh);
+    await waitFor(() => expect(screen.getByText("new commit")).toBeInTheDocument());
+    expect(screen.queryByText("old commit")).not.toBeInTheDocument();
+  });
+
   it("keeps previous commits visible while a listKey-triggered refresh is in flight", async () => {
     // Regression: before this fix, bumping listKey caused a key-prop remount which
     // reset commits to [] immediately, leaving the list blank until the fetch resolved.
