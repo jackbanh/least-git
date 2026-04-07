@@ -24,6 +24,22 @@
 - **State management: Zustand** — one store slice per open repo tab, avoids prop-drilling across the tab/panel hierarchy
 - Tab persistence across restarts is explicitly deferred (out of MVP scope)
 
+**Rules for Rust commands:**
+
+- **All external process calls must be async.** Every invocation of the system `git` binary must use `git_async()` (returns `tokio::process::Command`) and `.await` the result. Using the synchronous `git()` helper inside a `#[tauri::command]` blocks a Tokio worker thread for the entire duration of the process — seconds for checkout or pull on large repos.
+
+  ```rust
+  // WRONG — blocks the async executor
+  let out = git().args([...]).output()?;
+
+  // CORRECT
+  let out = git_async().args([...]).output().await?;
+  ```
+
+  `git()` (sync, `std::process::Command`) exists solely to define the two factory functions and must not be called from any Tauri command.
+
+- **Long-running operations must stream output.** Operations that can take more than ~200ms (checkout, pull, push, rebase) must stream stdout/stderr line-by-line to the frontend via Tauri events rather than buffering and returning on completion. Use the `PullLine` / `PullDone` structs and the `GitOutputDrawer` frontend component. Event naming convention: `<operation>:line` and `<operation>:done`.
+
 **Key performance constraints to design around:**
 - History view must render recent commits on the current branch with no perceptible delay — first page of results (e.g. 50–100 commits) must appear near-instantly even in repos with 100k+ total commits; virtual scroll handles the rest
 - Branch switcher must feel instant for local branches — listing and switching must not block the UI; checkout should stream progress back rather than freezing until done
