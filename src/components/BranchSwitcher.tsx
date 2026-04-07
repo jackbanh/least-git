@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { TextInput } from "@mantine/core";
 import { useTabStore } from "../store";
+import GitOutputDrawer from "./GitOutputDrawer";
 import ProgressBar from "./ProgressBar";
 import "./BranchSwitcher.css";
 
@@ -14,7 +15,7 @@ export default function BranchSwitcher({ tabId, listKey }: { tabId: string; list
   const [branches, setBranches] = useState<BranchInfo[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(true);
   const [filter, setFilter] = useState("");
-  const [checking, setChecking] = useState<string | null>(null);
+  const [checkoutBranch, setCheckoutBranch] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const bumpListKey = useTabStore((s) => s.bumpListKey);
@@ -34,21 +35,21 @@ export default function BranchSwitcher({ tabId, listKey }: { tabId: string; list
     return branches.filter((b) => b.name.toLowerCase().includes(q));
   }, [branches, filter]);
 
-  async function handleCheckout(name: string) {
-    if (checking || branches.find((b) => b.name === name)?.is_head) return;
-    setChecking(name);
+  function handleCheckout(name: string) {
+    if (checkoutBranch || branches.find((b) => b.name === name)?.is_head) return;
     setError(null);
-    try {
-      await invoke("checkout_branch", { tabId, branch: name });
-      bumpListKey(tabId);
-      selectCommit(tabId, null);
-      const updated = await invoke<BranchInfo[]>("list_branches", { tabId });
-      setBranches(updated);
-    } catch (e) {
-      setError(String(e));
-    } finally {
-      setChecking(null);
-    }
+    setCheckoutBranch(name);
+  }
+
+  function handleCheckoutSuccess() {
+    bumpListKey(tabId);
+    selectCommit(tabId, null);
+    // Re-fetch branch list to reflect new HEAD.
+    invoke<BranchInfo[]>("list_branches", { tabId }).then(setBranches);
+  }
+
+  function handleCheckoutClose() {
+    setCheckoutBranch(null);
   }
 
   return (
@@ -71,7 +72,7 @@ export default function BranchSwitcher({ tabId, listKey }: { tabId: string; list
             className={[
               "branch-row",
               branch.is_head ? "branch-row--head" : "",
-              checking === branch.name ? "branch-row--checking" : "",
+              checkoutBranch === branch.name ? "branch-row--checking" : "",
             ]
               .filter(Boolean)
               .join(" ")}
@@ -84,6 +85,16 @@ export default function BranchSwitcher({ tabId, listKey }: { tabId: string; list
           <div className="branch-empty">No matches</div>
         )}
       </div>
+      <GitOutputDrawer
+        tabId={tabId}
+        opened={!!checkoutBranch}
+        title={`Checkout ${checkoutBranch ?? ""}`}
+        command="checkout_branch"
+        commandArgs={{ branch: checkoutBranch ?? "" }}
+        eventPrefix="checkout"
+        onClose={handleCheckoutClose}
+        onSuccess={handleCheckoutSuccess}
+      />
     </div>
   );
 }

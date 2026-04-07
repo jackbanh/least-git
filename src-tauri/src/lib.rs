@@ -4,6 +4,7 @@ use serde::Serialize;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Mutex;
+#[allow(unused_imports)]
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{Emitter, State};
 
@@ -26,7 +27,7 @@ fn git_async() -> tokio::process::Command {
     let mut cmd = tokio::process::Command::new("git");
     #[cfg(windows)]
     {
-        use tokio::process::windows::CommandExt;
+        use std::os::windows::process::CommandExt;
         cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
     }
     cmd
@@ -181,14 +182,15 @@ fn load_commits(
 }
 
 #[tauri::command]
-fn list_branches(tab_id: String, state: State<'_, AppState>) -> Result<Vec<BranchInfo>, String> {
+async fn list_branches(tab_id: String, state: State<'_, AppState>) -> Result<Vec<BranchInfo>, String> {
     let path = get_repo_path(&tab_id, &state)?;
     let path_str = path.to_string_lossy().to_string();
 
     // %(HEAD) is '*' for the current branch, ' ' for all others — one spawn instead of two.
-    let out = git()
+    let out = git_async()
         .args(["-C", &path_str, "branch", "--format=%(HEAD)%(refname:short)"])
         .output()
+        .await
         .map_err(|e| e.to_string())?;
 
     let raw = String::from_utf8_lossy(&out.stdout).to_string();
@@ -196,21 +198,56 @@ fn list_branches(tab_id: String, state: State<'_, AppState>) -> Result<Vec<Branc
 }
 
 #[tauri::command]
-fn checkout_branch(
+async fn checkout_branch(
     tab_id: String,
     branch: String,
+    app: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
+    use tokio::io::{AsyncBufReadExt, BufReader};
+
     let path = get_repo_path(&tab_id, &state)?;
     let path_str = path.to_string_lossy().to_string();
 
-    let output = git()
+    let mut child = git_async()
         .args(["-C", &path_str, "checkout", &branch])
-        .output()
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
         .map_err(|e| e.to_string())?;
 
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
+    let stdout = child.stdout.take().unwrap();
+    let stderr = child.stderr.take().unwrap();
+
+    let emit_line = {
+        let app = app.clone();
+        let tab_id = tab_id.clone();
+        move |line: String| {
+            let _ = app.emit("checkout:line", PullLine { tab_id: tab_id.clone(), line });
+        }
+    };
+    let emit_line2 = emit_line.clone();
+
+    let out_task = tokio::spawn(async move {
+        let mut lines = BufReader::new(stdout).lines();
+        while let Ok(Some(line)) = lines.next_line().await {
+            emit_line(line);
+        }
+    });
+    let err_task = tokio::spawn(async move {
+        let mut lines = BufReader::new(stderr).lines();
+        while let Ok(Some(line)) = lines.next_line().await {
+            emit_line2(line);
+        }
+    });
+
+    let status = child.wait().await.map_err(|e| e.to_string())?;
+    let _ = tokio::join!(out_task, err_task);
+
+    let _ = app.emit("checkout:done", PullDone { tab_id, success: status.success() });
+
+    if !status.success() {
+        return Err(format!("git checkout {} failed", branch));
     }
 
     Ok(())
@@ -291,7 +328,7 @@ async fn get_commit_detail(
 }
 
 #[tauri::command]
-fn get_file_diff(
+async fn get_file_diff(
     tab_id: String,
     oid: String,
     file_path: String,
@@ -301,13 +338,14 @@ fn get_file_diff(
     let path_str = path.to_string_lossy().to_string();
 
     // --root handles initial commits (diffs against empty tree)
-    let output = git()
+    let output = git_async()
         .args([
             "-C", &path_str,
             "diff-tree", "--root", "--no-commit-id", "-r", "-p", "--no-color", "-M",
             &oid, "--", &file_path,
         ])
         .output()
+        .await
         .map_err(|e| e.to_string())?;
 
     Ok(String::from_utf8_lossy(&output.stdout).to_string())
@@ -410,7 +448,7 @@ async fn get_working_tree_status(
 }
 
 #[tauri::command]
-fn get_staged_diff(
+async fn get_staged_diff(
     tab_id: String,
     file_path: String,
     state: State<'_, AppState>,
@@ -418,16 +456,17 @@ fn get_staged_diff(
     let path = get_repo_path(&tab_id, &state)?;
     let path_str = path.to_string_lossy().to_string();
 
-    let output = git()
+    let output = git_async()
         .args(["-C", &path_str, "diff", "--cached", "--no-color", "-M", "--", &file_path])
         .output()
+        .await
         .map_err(|e| e.to_string())?;
 
     Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
 #[tauri::command]
-fn get_unstaged_diff(
+async fn get_unstaged_diff(
     tab_id: String,
     file_path: String,
     is_untracked: bool,
@@ -438,14 +477,16 @@ fn get_unstaged_diff(
 
     let output = if is_untracked {
         let full = path.join(&file_path).to_string_lossy().to_string();
-        git()
+        git_async()
             .args(["diff", "--no-index", "--no-color", "--", "/dev/null", &full])
             .output()
+            .await
             .map_err(|e| e.to_string())?
     } else {
-        git()
+        git_async()
             .args(["-C", &path_str, "diff", "--no-color", "--", &file_path])
             .output()
+            .await
             .map_err(|e| e.to_string())?
     };
 
@@ -461,12 +502,14 @@ fn get_unstaged_diff(
 /// `reverse = true` → `git apply --reverse` (unstage a staged chunk).
 /// Always uses `--cached` so only the index is touched, never the working tree.
 #[tauri::command]
-fn apply_patch(
+async fn apply_patch(
     tab_id: String,
     patch: String,
     reverse: bool,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
+    use tokio::io::AsyncWriteExt;
+
     let path = get_repo_path(&tab_id, &state)?;
     let path_str = path.to_string_lossy().to_string();
 
@@ -475,17 +518,16 @@ fn apply_patch(
         args.push("--reverse");
     }
 
-    let mut child = git()
+    let mut child = git_async()
         .args(&args)
         .stdin(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
         .map_err(|e| e.to_string())?;
 
-    use std::io::Write;
-    child.stdin.take().unwrap().write_all(patch.as_bytes()).map_err(|e| e.to_string())?;
+    child.stdin.take().unwrap().write_all(patch.as_bytes()).await.map_err(|e| e.to_string())?;
 
-    let out = child.wait_with_output().map_err(|e| e.to_string())?;
+    let out = child.wait_with_output().await.map_err(|e| e.to_string())?;
     if !out.status.success() {
         return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
     }
@@ -518,9 +560,10 @@ async fn pull_with_rebase(
     let path_str = path.to_string_lossy().to_string();
 
     // Detect whether origin has main or master and use that branch.
-    let probe = git()
+    let probe = git_async()
         .args(["-C", &path_str, "ls-remote", "--heads", "origin", "main", "master"])
         .output()
+        .await
         .map_err(|e| e.to_string())?;
     let probe_out = String::from_utf8_lossy(&probe.stdout);
     let branch = if probe_out.contains("refs/heads/main") { "main" } else { "master" };
