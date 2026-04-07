@@ -92,7 +92,12 @@ export default function CommitList({ tabId, listKey }: { tabId: string; listKey:
     if (listKey === prevListKeyRef.current) return;
     prevListKeyRef.current = listKey;
 
-    staleCommitsRef.current = commitsRef.current;
+    // Only overwrite stale if there's actually something to preserve.
+    // On a rapid double-bump, commitsRef is already [] (cleared by the first bump),
+    // so we must not overwrite the stale data we already saved.
+    if (commitsRef.current.length > 0) {
+      staleCommitsRef.current = commitsRef.current;
+    }
     setCommits([]);
     setHasMore(true);
     isLoadingRef.current = true;
@@ -104,7 +109,7 @@ export default function CommitList({ tabId, listKey }: { tabId: string; listKey:
         if (fresh.length < PAGE_SIZE) setHasMore(false);
       })
       .catch(() => {
-        staleCommitsRef.current = [];
+        // Do NOT clear staleCommitsRef here — keep stale data visible on error.
         setHasMore(false);
       })
       .finally(() => {

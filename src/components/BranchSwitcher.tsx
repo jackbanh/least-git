@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { TextInput } from "@mantine/core";
 import { useTabStore } from "../store";
@@ -20,13 +20,17 @@ export default function BranchSwitcher({ tabId, listKey }: { tabId: string; list
 
   const bumpListKey = useTabStore((s) => s.bumpListKey);
   const selectCommit = useTabStore((s) => s.selectCommit);
+  // Generation counter: if a newer fetch starts before an older one resolves,
+  // discard the stale response instead of overwriting correct data.
+  const fetchGenRef = useRef(0);
 
   useEffect(() => {
+    const gen = ++fetchGenRef.current;
     setIsRefreshing(true);
     setFilter("");
     invoke<BranchInfo[]>("list_branches", { tabId })
-      .then(setBranches)
-      .finally(() => setIsRefreshing(false));
+      .then((data) => { if (gen === fetchGenRef.current) setBranches(data); })
+      .finally(() => { if (gen === fetchGenRef.current) setIsRefreshing(false); });
   }, [tabId, listKey]);
 
   const filtered = useMemo(() => {
@@ -44,8 +48,11 @@ export default function BranchSwitcher({ tabId, listKey }: { tabId: string; list
   function handleCheckoutSuccess() {
     bumpListKey(tabId);
     selectCommit(tabId, null);
-    // Re-fetch branch list to reflect new HEAD.
-    invoke<BranchInfo[]>("list_branches", { tabId }).then(setBranches);
+    // Re-fetch branch list to reflect new HEAD (reuses the same generation guard).
+    const gen = ++fetchGenRef.current;
+    invoke<BranchInfo[]>("list_branches", { tabId }).then((data) => {
+      if (gen === fetchGenRef.current) setBranches(data);
+    });
   }
 
   function handleCheckoutClose() {
