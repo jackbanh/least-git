@@ -651,7 +651,13 @@ pub fn run() {
                 true,
                 if cfg!(target_os = "macos") { Some("Cmd+R") } else { Some("F5") },
             )?;
-            let branch_item = MenuItem::with_id(app, "branch", "Branch…", true, None::<&str>)?;
+            let branch_item = MenuItem::with_id(
+                app,
+                "branch",
+                "Branch…",
+                true,
+                if cfg!(target_os = "macos") { Some("CmdOrCtrl+Shift+B") } else { Some("Ctrl+Shift+B") },
+            )?;
             let repo_menu = Submenu::with_items(app, "Repository", true, &[&refresh_item, &branch_item])?;
 
             // macOS requires the app-name menu as the first entry or nothing renders.

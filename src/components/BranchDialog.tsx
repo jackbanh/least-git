@@ -70,6 +70,9 @@ export default function BranchDialog({
             onKeyDown={handleKeyDown}
             error={error}
             data-autofocus
+            spellCheck={false}
+            autoCorrect="off"
+            autoCapitalize="off"
           />
           <Group justify="flex-end" mt="md" gap="xs">
             <Button variant="default" onClick={handleClose} disabled={creating}>
