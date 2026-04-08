@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { Tabs, Button, ActionIcon, Group, Text } from "@mantine/core";
@@ -6,6 +6,7 @@ import { listen } from "@tauri-apps/api/event";
 import { useTabStore, Tab } from "./store";
 import { useResize } from "./hooks/useResize";
 import BranchSwitcher from "./components/BranchSwitcher";
+import BranchDialog from "./components/BranchDialog";
 import CommitList from "./components/CommitList";
 import CommitDetail from "./components/CommitDetail";
 import "./App.css";
@@ -15,6 +16,8 @@ export default function App() {
     tabs, activeTabId, openTab, closeTab, setActiveTab, bumpListKey,
     sidebarWidth, setSidebarWidth, detailHeight, setDetailHeight,
   } = useTabStore();
+
+  const [branchDialogOpen, setBranchDialogOpen] = useState(false);
 
   // Re-register persisted tabs with Rust on startup.
   // Drops any tab whose path no longer resolves to a valid git repo.
@@ -39,6 +42,12 @@ export default function App() {
     });
     return () => { unlisten.then((fn) => fn()); };
   }, [activeTabId, bumpListKey]);
+
+  // Listen for the native Repository > Branch… menu item.
+  useEffect(() => {
+    const unlisten = listen("menu:branch", () => setBranchDialogOpen(true));
+    return () => { unlisten.then((fn) => fn()); };
+  }, []);
 
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? null;
 
@@ -131,6 +140,14 @@ export default function App() {
           </div>
         )}
       </div>
+      {activeTabId && (
+        <BranchDialog
+          tabId={activeTabId}
+          opened={branchDialogOpen}
+          onClose={() => setBranchDialogOpen(false)}
+          onCreated={() => bumpListKey(activeTabId)}
+        />
+      )}
     </div>
   );
 }

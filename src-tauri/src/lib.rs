@@ -198,6 +198,29 @@ async fn list_branches(tab_id: String, state: State<'_, AppState>) -> Result<Vec
 }
 
 #[tauri::command]
+async fn create_branch(
+    tab_id: String,
+    name: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let path = state
+        .get(&tab_id)
+        .ok_or_else(|| "tab not found".to_string())?
+        .path
+        .clone();
+    let out = git_async()
+        .args(["branch", "--", &name])
+        .current_dir(&path)
+        .output()
+        .await
+        .map_err(|e| e.to_string())?;
+    if !out.status.success() {
+        return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
+    }
+    Ok(())
+}
+
+#[tauri::command]
 async fn checkout_branch(
     tab_id: String,
     branch: String,
@@ -628,7 +651,8 @@ pub fn run() {
                 true,
                 if cfg!(target_os = "macos") { Some("Cmd+R") } else { Some("F5") },
             )?;
-            let repo_menu = Submenu::with_items(app, "Repository", true, &[&refresh_item])?;
+            let branch_item = MenuItem::with_id(app, "branch", "Branch…", true, None::<&str>)?;
+            let repo_menu = Submenu::with_items(app, "Repository", true, &[&refresh_item, &branch_item])?;
 
             // macOS requires the app-name menu as the first entry or nothing renders.
             #[cfg(target_os = "macos")]
@@ -653,6 +677,8 @@ pub fn run() {
             app.on_menu_event(|app, event| {
                 if event.id() == "refresh" {
                     let _ = app.emit("menu:refresh", ());
+                } else if event.id() == "branch" {
+                    let _ = app.emit("menu:branch", ());
                 }
             });
             Ok(())
@@ -663,6 +689,7 @@ pub fn run() {
             clear_detail_cache,
             load_commits,
             list_branches,
+            create_branch,
             checkout_branch,
             get_commit_detail,
             get_file_diff,
