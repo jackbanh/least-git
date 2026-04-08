@@ -209,7 +209,7 @@ async fn create_branch(
         .path
         .clone();
     let out = git_async()
-        .args(["branch", "--", &name])
+        .args(["checkout", "-b", &name])
         .current_dir(&path)
         .output()
         .await
