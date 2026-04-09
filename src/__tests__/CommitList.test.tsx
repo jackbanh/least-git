@@ -24,6 +24,7 @@ vi.mock("@tanstack/react-virtual", () => ({
 // ── Mocks ────────────────────────────────────────────────────────────────────
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
+vi.mock("@tauri-apps/plugin-log", () => ({ warn: vi.fn() }));
 
 vi.mock("../store", () => ({
   useTabStore: vi.fn((selector: (s: object) => unknown) =>
