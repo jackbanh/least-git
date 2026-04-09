@@ -63,7 +63,7 @@ function CommitDetailInner({
   const [leftWidth, setLeftWidth] = useState(220);
   const [metaHeight, setMetaHeight] = useState(100);
 
-  const startLeftResize = useResize(leftWidth, setLeftWidth, "horizontal", 140, 480);
+  const startLeftResize = useResize(leftWidth, setLeftWidth, "horizontal", 140, 9999);
   const startMetaResize = useResize(metaHeight, setMetaHeight, "vertical", 60, 300, true);
 
   useEffect(() => {
