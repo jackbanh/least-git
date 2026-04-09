@@ -85,7 +85,7 @@ describe("CommitList", () => {
       expect(mockInvoke).toHaveBeenCalledWith("load_commits", {
         tabId: "test-tab",
         offset: 0,
-        limit: 100,
+        limit: 25,
       });
     });
   });
@@ -146,7 +146,7 @@ describe("CommitList", () => {
     expect(mockInvoke).toHaveBeenCalledWith("load_commits", {
       tabId: "test-tab",
       offset: 0,
-      limit: 100,
+      limit: 25,
     });
   });
 

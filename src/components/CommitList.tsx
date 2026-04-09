@@ -31,7 +31,7 @@ interface CommitInfo {
   timestamp: number;
 }
 
-const PAGE_SIZE = 100;
+const PAGE_SIZE = 25;
 
 function formatDate(ts: number): string {
   const d = new Date(ts * 1000);
