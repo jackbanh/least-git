@@ -1,0 +1,9 @@
+# Normalise all text files to LF in the repo.
+# On Windows, git will check out LF (no CRLF conversion), preventing
+# Cargo and other tools from seeing the file as modified after a build.
+* text=auto eol=lf
+
+# Binaries — no line ending translation.
+*.png binary
+*.ico binary
+*.icns binary
