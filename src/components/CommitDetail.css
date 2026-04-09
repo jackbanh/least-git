@@ -28,7 +28,7 @@
 .detail-files {
   flex: 1;
   overflow-y: auto;
-  overflow-x: hidden;
+  overflow-x: auto;
 }
 
 .detail-meta {
@@ -124,7 +124,6 @@
   cursor: pointer;
   user-select: none;
   white-space: nowrap;
-  overflow: hidden;
 }
 
 .file-row:hover {
@@ -155,10 +154,7 @@
 .file-status--\? { color: var(--mantine-color-gray-6); }
 
 .file-path {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-family: var(--mantine-font-family-monospace), monospace;
+  font-family: var(--mantine-font-family);
 }
 
 /* ── Right column: diff ───────────────────────────────────────────────────── */
