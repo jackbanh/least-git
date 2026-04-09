@@ -147,6 +147,7 @@ fn load_commits(
     limit: usize,
     state: State<'_, AppState>,
 ) -> Result<Vec<CommitInfo>, String> {
+    let t = std::time::Instant::now();
     let path = get_repo_path(&tab_id, &state)?;
     let repo = gix::open(&path).map_err(|e| e.to_string())?;
     let head_id = repo.head_id().map_err(|e| e.to_string())?;
@@ -181,6 +182,11 @@ fn load_commits(
         });
     }
 
+    info!(
+        "load_commits offset={offset} returned {} commits in {}ms",
+        commits.len(),
+        t.elapsed().as_millis()
+    );
     Ok(commits)
 }
 
@@ -238,6 +244,8 @@ async fn checkout_branch(
     let path = get_repo_path(&tab_id, &state)?;
     let path_str = path.to_string_lossy().to_string();
 
+    info!("checkout_branch: {branch}");
+    let checkout_start = std::time::Instant::now();
     let mut child = git_async()
         .args(["-C", &path_str, "checkout", &branch])
         .stdout(std::process::Stdio::piped())
@@ -275,12 +283,13 @@ async fn checkout_branch(
 
     let _ = app.emit("checkout:done", PullDone { tab_id, success: status.success() });
 
+    let elapsed = checkout_start.elapsed().as_millis();
     if !status.success() {
-        warn!("checkout_branch failed: {branch}");
+        warn!("checkout_branch failed: {branch} ({elapsed}ms)");
         return Err(format!("git checkout {} failed", branch));
     }
 
-    info!("checked out branch: {branch}");
+    info!("checkout_branch done: {branch} ({elapsed}ms)");
     Ok(())
 }
 

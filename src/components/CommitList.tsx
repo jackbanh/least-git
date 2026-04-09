@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Menu } from "@mantine/core";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
+import { warn as logWarn } from "@tauri-apps/plugin-log";
 import {
   IconCopy,
   IconGitPullRequest,
@@ -72,6 +73,7 @@ export default function CommitList({ tabId, listKey }: { tabId: string; listKey:
         limit: PAGE_SIZE,
       });
       setCommits((prev) => [...prev, ...next]);
+      if (next.length === 0 && commits.length === 0) logWarn(`load_commits returned 0 commits for tab ${tabId}`);
       if (next.length < PAGE_SIZE) setHasMore(false);
     } catch (e) {
       console.error("load_commits failed:", e);
@@ -106,6 +108,7 @@ export default function CommitList({ tabId, listKey }: { tabId: string; listKey:
       .then((fresh) => {
         staleCommitsRef.current = [];
         setCommits(fresh);
+        if (fresh.length === 0) logWarn(`load_commits returned 0 commits for tab ${tabId}`);
         if (fresh.length < PAGE_SIZE) setHasMore(false);
       })
       .catch(() => {
