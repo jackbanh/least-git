@@ -1,5 +1,6 @@
 use dashmap::DashMap;
 use gix::bstr::ByteSlice;
+use log::{error, info, warn};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -122,12 +123,14 @@ fn open_repo(path: String, state: State<'_, AppState>) -> Result<TabInfo, String
 
     state.insert(id.clone(), RepoEntry { path: canonical, name: name.clone(), detail_cache: Mutex::new(HashMap::new()) });
 
+    info!("opened repo: {name} ({id})");
     Ok(TabInfo { id: id.clone(), path: id, name })
 }
 
 #[tauri::command]
 fn close_tab(tab_id: String, state: State<'_, AppState>) {
     state.remove(&tab_id);
+    info!("closed tab: {tab_id}");
 }
 
 #[tauri::command]
@@ -215,8 +218,11 @@ async fn create_branch(
         .await
         .map_err(|e| e.to_string())?;
     if !out.status.success() {
-        return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
+        let msg = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        warn!("create_branch failed: {msg}");
+        return Err(msg);
     }
+    info!("created and checked out branch: {name}");
     Ok(())
 }
 
@@ -270,9 +276,11 @@ async fn checkout_branch(
     let _ = app.emit("checkout:done", PullDone { tab_id, success: status.success() });
 
     if !status.success() {
+        warn!("checkout_branch failed: {branch}");
         return Err(format!("git checkout {} failed", branch));
     }
 
+    info!("checked out branch: {branch}");
     Ok(())
 }
 
@@ -596,6 +604,7 @@ async fn pull_with_rebase(
         .map_err(|e| e.to_string())?;
     let probe_out = String::from_utf8_lossy(&probe.stdout);
     let branch = if probe_out.contains("refs/heads/main") { "main" } else { "master" };
+    info!("pull_with_rebase: origin/{branch}");
 
     let mut child = git_async()
         .args(["-C", &path_str, "pull", "--rebase", "--autostash", "origin", branch])
@@ -633,6 +642,11 @@ async fn pull_with_rebase(
     let status = child.wait().await.map_err(|e| e.to_string())?;
     let _ = tokio::join!(out_task, err_task);
 
+    if status.success() {
+        info!("pull_with_rebase succeeded");
+    } else {
+        warn!("pull_with_rebase failed with status: {}", status);
+    }
     let _ = app.emit("pull:done", PullDone { tab_id, success: status.success() });
 
     Ok(())
@@ -645,6 +659,21 @@ pub fn run() {
     let state: AppState = DashMap::new();
     tauri::Builder::default()
         .manage(state)
+        .plugin({
+            let builder = tauri_plugin_log::Builder::new()
+                .level(log::LevelFilter::Info)
+                .target(tauri_plugin_log::Target::new(
+                    tauri_plugin_log::TargetKind::LogDir {
+                        file_name: Some("least-git".into()),
+                    },
+                ));
+            // In dev builds also echo to stdout.
+            #[cfg(debug_assertions)]
+            let builder = builder.target(tauri_plugin_log::Target::new(
+                tauri_plugin_log::TargetKind::Stdout,
+            ));
+            builder.build()
+        })
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_opener::init())
