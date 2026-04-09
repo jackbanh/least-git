@@ -411,7 +411,13 @@ fn parse_branches(raw: &str) -> Vec<BranchInfo> {
             BranchInfo { name: line[1..].to_string(), is_head }
         })
         .collect();
-    branches.sort_unstable_by(|a, b| a.name.cmp(&b.name));
+    branches.sort_unstable_by(|a, b| {
+        let rank = |name: &str| match name {
+            "main" | "master" => 0u8,
+            _ => 1,
+        };
+        rank(&a.name).cmp(&rank(&b.name)).then(a.name.cmp(&b.name))
+    });
     branches
 }
 
@@ -755,11 +761,19 @@ mod tests {
     // ── parse_branches ───────────────────────────────────────────────────────
 
     #[test]
-    fn parse_branches_sorted_alphabetically() {
+    fn parse_branches_main_sorted_first() {
         let raw = " main\n zebra\n alpha\n";
         let branches = parse_branches(raw);
         let names: Vec<&str> = branches.iter().map(|b| b.name.as_str()).collect();
-        assert_eq!(names, ["alpha", "main", "zebra"]);
+        assert_eq!(names, ["main", "alpha", "zebra"]);
+    }
+
+    #[test]
+    fn parse_branches_master_sorted_first() {
+        let raw = " zebra\n master\n alpha\n";
+        let branches = parse_branches(raw);
+        let names: Vec<&str> = branches.iter().map(|b| b.name.as_str()).collect();
+        assert_eq!(names, ["master", "alpha", "zebra"]);
     }
 
     #[test]
