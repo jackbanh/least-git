@@ -26,17 +26,17 @@
 }
 
 .commit-row--selected {
-  background: var(--mantine-color-blue-light);
+  background: var(--mantine-color-sage-light);
 }
 
 .commit-row--selected:hover {
-  background: var(--mantine-color-blue-light-hover);
+  background: var(--mantine-color-sage-light-hover);
 }
 
 .commit-oid {
   flex-shrink: 0;
   width: 56px;
-  color: var(--mantine-color-orange-6);
+  color: var(--app-color-oid);
   font-size: 12px;
 }
 

@@ -3,10 +3,10 @@
   align-items: center;
   gap: 8px;
   padding: 2px 8px;
-  background: var(--mantine-color-blue-light);
+  background: var(--mantine-color-sage-light);
   font-family: var(--mantine-font-family-monospace), monospace;
   font-size: 11px;
-  color: var(--mantine-color-blue-7);
+  color: var(--mantine-color-sage-7);
   user-select: none;
 }
 
@@ -18,15 +18,15 @@
   flex-shrink: 0;
   padding: 1px 8px;
   font-size: 11px;
-  border: 1px solid var(--mantine-color-blue-4);
+  border: 1px solid var(--mantine-color-sage-4);
   border-radius: 3px;
-  background: var(--mantine-color-blue-light);
-  color: var(--mantine-color-blue-7);
+  background: var(--mantine-color-sage-light);
+  color: var(--mantine-color-sage-7);
   cursor: pointer;
 }
 
 .idv-hunk-action:hover {
-  background: var(--mantine-color-blue-light-hover);
+  background: var(--mantine-color-sage-light-hover);
 }
 
 .idv-selection-bar {
