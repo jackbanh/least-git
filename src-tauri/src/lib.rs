@@ -143,22 +143,48 @@ fn clear_detail_cache(tab_id: String, state: State<'_, AppState>) {
 #[tauri::command]
 fn load_commits(
     tab_id: String,
-    offset: usize,
+    after_oid: Option<String>,
     limit: usize,
     state: State<'_, AppState>,
 ) -> Result<Vec<CommitInfo>, String> {
     let t = std::time::Instant::now();
     let path = get_repo_path(&tab_id, &state)?;
     let repo = gix::open(&path).map_err(|e| e.to_string())?;
-    let head_id = repo.head_id().map_err(|e| e.to_string())?;
-    let walk = head_id
+
+    // Determine where to start the walk.
+    // `after_oid` is the OID of the last commit already shown (the page cursor).
+    // We decode that commit to find its first parent and begin the walk there,
+    // so we never skip O(offset) commits from HEAD.
+    let start_id = if let Some(oid_str) = after_oid {
+        let cursor_oid = gix::ObjectId::from_hex(oid_str.trim().as_bytes())
+            .map_err(|e| format!("Invalid cursor OID: {e}"))?;
+        let obj = repo.find_object(cursor_oid).map_err(|e| e.to_string())?;
+        let commit = obj.try_into_commit().map_err(|e| format!("not a commit: {e:?}"))?;
+        let decoded = commit.decode().map_err(|e| e.to_string())?;
+        // Clone the first parent OID out before decoded/commit are dropped.
+        let first_parent = decoded.parents.first().copied().map(|p| p.to_owned());
+        drop(decoded);
+        drop(commit);
+        match first_parent {
+            None => return Ok(vec![]), // cursor was the root commit — nothing further
+            Some(parent_oid) => {
+                let hex = parent_oid.to_string();
+                repo.rev_parse_single(gix::bstr::BStr::new(hex.as_bytes()))
+                    .map_err(|e| format!("cursor parent not found: {e}"))?
+            }
+        }
+    } else {
+        repo.head_id().map_err(|e| e.to_string())?
+    };
+
+    let walk = start_id
         .ancestors()
         .first_parent_only()
         .all()
         .map_err(|e| e.to_string())?;
 
     let mut commits = Vec::with_capacity(limit.min(100));
-    for info in walk.skip(offset).take(limit) {
+    for info in walk.take(limit) {
         let info = info.map_err(|e| e.to_string())?;
         let oid_str = info.id.to_string();
         let short_oid = oid_str[..7].to_string();
@@ -183,7 +209,8 @@ fn load_commits(
     }
 
     info!(
-        "load_commits offset={offset} returned {} commits in {}ms",
+        "load_commits after_oid={} returned {} commits in {}ms",
+        if commits.is_empty() { "None".to_string() } else { commits[0].oid[..7].to_string() },
         commits.len(),
         t.elapsed().as_millis()
     );
@@ -335,7 +362,7 @@ async fn get_commit_detail(
     });
 
     let files_fut = git_async()
-        .args(["-C", &path_str, "diff-tree", "--no-commit-id", "-r", "--name-status", "-M", &oid_clone])
+        .args(["-C", &path_str, "diff-tree", "--no-commit-id", "-r", "--name-status", &oid_clone])
         .output();
 
     let (meta_res, files_out) = tokio::try_join!(
@@ -467,7 +494,7 @@ async fn get_working_tree_status(
     let path_str = path.to_string_lossy().to_string();
 
     let staged_fut = git_async()
-        .args(["-C", &path_str, "diff", "--cached", "--name-status", "-M"])
+        .args(["-C", &path_str, "diff", "--cached", "--name-status"])
         .output();
     let unstaged_fut = git_async()
         .args(["-C", &path_str, "diff", "--name-status"])
@@ -523,8 +550,10 @@ async fn get_unstaged_diff(
 
     let output = if is_untracked {
         let full = path.join(&file_path).to_string_lossy().to_string();
+        // Use the platform null device: /dev/null on Unix, nul on Windows.
+        let null_dev = if cfg!(windows) { "nul" } else { "/dev/null" };
         git_async()
-            .args(["diff", "--no-index", "--no-color", "--", "/dev/null", &full])
+            .args(["diff", "--no-index", "--no-color", "--", null_dev, &full])
             .output()
             .await
             .map_err(|e| e.to_string())?
@@ -605,14 +634,14 @@ async fn pull_with_rebase(
     let path = get_repo_path(&tab_id, &state)?;
     let path_str = path.to_string_lossy().to_string();
 
-    // Detect whether origin has main or master and use that branch.
+    // Detect whether origin tracks main or master by checking local tracking refs —
+    // a local file read, no network round-trip required.
     let probe = git_async()
-        .args(["-C", &path_str, "ls-remote", "--heads", "origin", "main", "master"])
+        .args(["-C", &path_str, "rev-parse", "--verify", "--quiet", "refs/remotes/origin/main"])
         .output()
         .await
         .map_err(|e| e.to_string())?;
-    let probe_out = String::from_utf8_lossy(&probe.stdout);
-    let branch = if probe_out.contains("refs/heads/main") { "main" } else { "master" };
+    let branch = if probe.status.success() { "main" } else { "master" };
     info!("pull_with_rebase: origin/{branch}");
 
     let mut child = git_async()

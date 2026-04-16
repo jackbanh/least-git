@@ -57,6 +57,10 @@ export default function CommitList({ tabId, listKey }: { tabId: string; listKey:
   const commitsRef = useRef(commits);
   commitsRef.current = commits;
   const prevListKeyRef = useRef(listKey);
+  // Cursor for the next page: OID of the last commit already fetched.
+  // Updated synchronously in render so loadMore always sees the latest value.
+  const lastOidRef = useRef<string | null>(null);
+  lastOidRef.current = commits.length > 0 ? commits[commits.length - 1].oid : null;
 
   const selectedOid = useTabStore(
     (s) => s.tabs.find((t) => t.id === tabId)?.selectedOid ?? null
@@ -69,11 +73,11 @@ export default function CommitList({ tabId, listKey }: { tabId: string; listKey:
     try {
       const next = await invoke<CommitInfo[]>("load_commits", {
         tabId,
-        offset: commits.length,
+        afterOid: lastOidRef.current,
         limit: PAGE_SIZE,
       });
       setCommits((prev) => [...prev, ...next]);
-      if (next.length === 0 && commits.length === 0) logWarn(`load_commits returned 0 commits for tab ${tabId}`);
+      if (next.length === 0 && lastOidRef.current === null) logWarn(`load_commits returned 0 commits for tab ${tabId}`);
       if (next.length < PAGE_SIZE) setHasMore(false);
     } catch (e) {
       console.error("load_commits failed:", e);
@@ -81,7 +85,7 @@ export default function CommitList({ tabId, listKey }: { tabId: string; listKey:
     } finally {
       isLoadingRef.current = false;
     }
-  }, [tabId, commits.length, hasMore]);
+  }, [tabId, hasMore]);
 
   useEffect(() => {
     loadMore();
@@ -100,11 +104,12 @@ export default function CommitList({ tabId, listKey }: { tabId: string; listKey:
     if (commitsRef.current.length > 0) {
       staleCommitsRef.current = commitsRef.current;
     }
+    lastOidRef.current = null; // reset cursor so the refresh starts from HEAD
     setCommits([]);
     setHasMore(true);
     isLoadingRef.current = true;
 
-    invoke<CommitInfo[]>("load_commits", { tabId, offset: 0, limit: PAGE_SIZE })
+    invoke<CommitInfo[]>("load_commits", { tabId, afterOid: null, limit: PAGE_SIZE })
       .then((fresh) => {
         staleCommitsRef.current = [];
         setCommits(fresh);
