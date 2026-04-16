@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { useTabStore } from "../store";
+import { useResize } from "../hooks/useResize";
 import InteractiveDiffViewer from "./InteractiveDiffViewer";
 import "./CommitDetail.css";
 import "./WorkingTreeDetail.css";
@@ -26,6 +28,10 @@ export default function WorkingTreeDetail({ tabId, listKey }: { tabId: string; l
   const [selected, setSelected] = useState<SelectedFile | null>(null);
   const [diff, setDiff] = useState<string>("");
   const [diffLoading, setDiffLoading] = useState(false);
+
+  const detailLeftWidth = useTabStore((s) => s.detailLeftWidth);
+  const setDetailLeftWidth = useTabStore((s) => s.setDetailLeftWidth);
+  const startLeftResize = useResize(detailLeftWidth, setDetailLeftWidth, "horizontal", 140, 9999);
 
   const refreshStatus = useCallback(() => {
     invoke<WorkingTreeStatus>("get_working_tree_status", { tabId })
@@ -93,7 +99,7 @@ export default function WorkingTreeDetail({ tabId, listKey }: { tabId: string; l
 
   return (
     <div className="commit-detail">
-      <div className="detail-left">
+      <div className="detail-left" style={{ width: detailLeftWidth }}>
         <div
           className="detail-files"
           tabIndex={0}
@@ -151,7 +157,7 @@ export default function WorkingTreeDetail({ tabId, listKey }: { tabId: string; l
         </div>
       </div>
 
-      <div className="resize-handle resize-handle--vertical" />
+      <div className="resize-handle resize-handle--vertical" onMouseDown={startLeftResize} />
 
       <div className="detail-diff">
         {!selected ? (
