@@ -60,10 +60,12 @@ function CommitDetailInner({
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [diff, setDiff] = useState<string>("");
   const [diffLoading, setDiffLoading] = useState(false);
-  const [leftWidth, setLeftWidth] = useState(220);
   const [metaHeight, setMetaHeight] = useState(100);
 
-  const startLeftResize = useResize(leftWidth, setLeftWidth, "horizontal", 140, 9999);
+  const detailLeftWidth = useTabStore((s) => s.detailLeftWidth);
+  const setDetailLeftWidth = useTabStore((s) => s.setDetailLeftWidth);
+
+  const startLeftResize = useResize(detailLeftWidth, setDetailLeftWidth, "horizontal", 140, 9999);
   const startMetaResize = useResize(metaHeight, setMetaHeight, "vertical", 60, 300, true);
 
   useEffect(() => {
@@ -106,7 +108,7 @@ function CommitDetailInner({
 
   return (
     <div className="commit-detail">
-      <div className="detail-left" style={{ width: leftWidth }}>
+      <div className="detail-left" style={{ width: detailLeftWidth }}>
         <div
           className="detail-files"
           tabIndex={0}
