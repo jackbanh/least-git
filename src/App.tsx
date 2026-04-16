@@ -7,6 +7,7 @@ import { useTabStore, Tab } from "./store";
 import { useResize } from "./hooks/useResize";
 import BranchSwitcher from "./components/BranchSwitcher";
 import BranchDialog from "./components/BranchDialog";
+import PullDrawer from "./components/PullDrawer";
 import CommitList from "./components/CommitList";
 import CommitDetail from "./components/CommitDetail";
 import "./App.css";
@@ -18,6 +19,7 @@ export default function App() {
   } = useTabStore();
 
   const [branchDialogOpen, setBranchDialogOpen] = useState(false);
+  const [pullDrawerOpen, setPullDrawerOpen] = useState(false);
 
   // Re-register persisted tabs with Rust on startup.
   // Drops any tab whose path no longer resolves to a valid git repo.
@@ -46,6 +48,12 @@ export default function App() {
   // Listen for the native Repository > Branch… menu item.
   useEffect(() => {
     const unlisten = listen("menu:branch", () => setBranchDialogOpen(true));
+    return () => { unlisten.then((fn) => fn()); };
+  }, []);
+
+  // Listen for the native Repository > Pull… menu item.
+  useEffect(() => {
+    const unlisten = listen("menu:pull", () => setPullDrawerOpen(true));
     return () => { unlisten.then((fn) => fn()); };
   }, []);
 
@@ -146,6 +154,14 @@ export default function App() {
           opened={branchDialogOpen}
           onClose={() => setBranchDialogOpen(false)}
           onCreated={() => bumpListKey(activeTabId)}
+        />
+      )}
+      {activeTabId && (
+        <PullDrawer
+          tabId={activeTabId}
+          opened={pullDrawerOpen}
+          onClose={() => setPullDrawerOpen(false)}
+          onSuccess={() => bumpListKey(activeTabId)}
         />
       )}
     </div>
