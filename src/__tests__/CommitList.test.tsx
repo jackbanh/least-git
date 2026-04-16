@@ -84,7 +84,7 @@ describe("CommitList", () => {
     await waitFor(() => {
       expect(mockInvoke).toHaveBeenCalledWith("load_commits", {
         tabId: "test-tab",
-        offset: 0,
+        afterOid: null,
         limit: 25,
       });
     });
@@ -141,11 +141,11 @@ describe("CommitList", () => {
     expect(screen.getAllByText("second commit")).toHaveLength(1);
     expect(screen.getAllByText("third commit")).toHaveLength(1);
 
-    // invoke should have been called exactly once (offset 0 only)
+    // invoke should have been called exactly once (no cursor on first page)
     expect(mockInvoke).toHaveBeenCalledTimes(1);
     expect(mockInvoke).toHaveBeenCalledWith("load_commits", {
       tabId: "test-tab",
-      offset: 0,
+      afterOid: null,
       limit: 25,
     });
   });
