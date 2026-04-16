@@ -731,7 +731,14 @@ pub fn run() {
                 true,
                 if cfg!(target_os = "macos") { Some("CmdOrCtrl+Shift+B") } else { Some("Ctrl+Shift+B") },
             )?;
-            let repo_menu = Submenu::with_items(app, "Repository", true, &[&refresh_item, &branch_item])?;
+            let pull_item = MenuItem::with_id(
+                app,
+                "pull",
+                "Pull…",
+                true,
+                Some("CmdOrCtrl+Shift+P"),
+            )?;
+            let repo_menu = Submenu::with_items(app, "Repository", true, &[&refresh_item, &branch_item, &pull_item])?;
 
             // macOS requires the app-name menu as the first entry or nothing renders.
             #[cfg(target_os = "macos")]
@@ -758,6 +765,8 @@ pub fn run() {
                     let _ = app.emit("menu:refresh", ());
                 } else if event.id() == "branch" {
                     let _ = app.emit("menu:branch", ());
+                } else if event.id() == "pull" {
+                    let _ = app.emit("menu:pull", ());
                 }
             });
             Ok(())
