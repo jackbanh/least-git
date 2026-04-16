@@ -56,7 +56,7 @@
 
 .detail-oid {
   font-family: var(--mantine-font-family-monospace), monospace;
-  color: var(--app-color-oid);
+  color: var(--mantine-color-orange-6);
   font-weight: 600;
 }
 
@@ -111,7 +111,7 @@
   margin: 0 0 6px;
   padding-left: 18px;
 }
-.detail-message a { color: var(--mantine-color-sage-6); }
+.detail-message a { color: var(--mantine-color-blue-6); }
 
 /* ── File rows ────────────────────────────────────────────────────────────── */
 
@@ -131,11 +131,11 @@
 }
 
 .file-row--selected {
-  background: var(--mantine-color-sage-light);
+  background: var(--mantine-color-blue-light);
 }
 
 .file-row--selected:hover {
-  background: var(--mantine-color-sage-light-hover);
+  background: var(--mantine-color-blue-light-hover);
 }
 
 .file-status {
@@ -146,7 +146,7 @@
   font-family: var(--mantine-font-family-monospace), monospace;
 }
 
-.file-status--m { color: var(--app-color-modified); }
+.file-status--m { color: var(--mantine-color-blue-6); }
 .file-status--a { color: var(--mantine-color-green-6); }
 .file-status--d { color: var(--mantine-color-red-6); }
 .file-status--r { color: var(--mantine-color-violet-6); }

@@ -4,28 +4,6 @@
   box-sizing: border-box;
 }
 
-/* ── Warm-minimalism theme overrides ────────────────────────────────────────
-   Override Mantine's default cool-gray light palette with warm linen tones.
-   Custom app tokens are defined here so component stylesheets can share them.
-   ────────────────────────────────────────────────────────────────────────── */
-[data-mantine-color-scheme="light"] {
-  /* Backgrounds — warm linen → parchment → stone */
-  --mantine-color-body:          #f7f3ed;
-  --mantine-color-default:       #f0ebe3;
-  --mantine-color-default-hover: #e7e0d6;
-  --mantine-color-default-border:#d0c9be;
-
-  /* Typography */
-  --mantine-color-text:        #2e2820;
-  --mantine-color-dimmed:      #8c8175;
-  --mantine-color-placeholder: #a89e92;
-  --mantine-color-anchor:      var(--mantine-color-sage-6);
-
-  /* App-specific tokens */
-  --app-color-oid:      #9c5f2a; /* bark/amber — commit hashes */
-  --app-color-modified: #b07030; /* autumn amber — modified file badge */
-}
-
 html,
 body,
 #root {
@@ -71,7 +49,7 @@ body,
 }
 
 .resize-handle:hover {
-  background: var(--mantine-color-sage-4);
+  background: var(--mantine-color-blue-5);
 }
 
 .resize-handle--vertical {
