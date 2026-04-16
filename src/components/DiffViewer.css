@@ -22,6 +22,6 @@
   --diff-code-delete-background-color: var(--mantine-color-red-light);
   --diff-code-delete-text-color: var(--mantine-color-red-9);
 
-  --diff-gutter-selected-background-color: var(--mantine-color-sage-light);
-  --diff-code-selected-background-color: var(--mantine-color-sage-light);
+  --diff-gutter-selected-background-color: var(--mantine-color-blue-light);
+  --diff-code-selected-background-color: var(--mantine-color-blue-light);
 }
