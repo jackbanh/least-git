@@ -1,9 +1,20 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { vi, describe, it, expect, beforeEach } from "vitest";
+import { MantineProvider } from "@mantine/core";
 import WorkingTreeDetail from "../components/WorkingTreeDetail";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
+vi.mock("@tauri-apps/plugin-log", () => ({ warn: vi.fn(), info: vi.fn(), error: vi.fn() }));
 vi.mock("../components/InteractiveDiffViewer", () => ({ default: () => <div>diff</div> }));
+vi.mock("../hooks/useResize", () => ({ useResize: () => vi.fn() }));
+vi.mock("../store", () => ({
+  useTabStore: vi.fn((selector: (s: object) => unknown) =>
+    selector({
+      detailLeftWidth: 220,
+      setDetailLeftWidth: vi.fn(),
+    })
+  ),
+}));
 
 import { invoke } from "@tauri-apps/api/core";
 const mockInvoke = vi.mocked(invoke);
@@ -19,7 +30,11 @@ const STUB_STATUS = {
 };
 
 function renderWTD() {
-  return render(<WorkingTreeDetail tabId="test-tab" listKey={0} />);
+  return render(
+    <MantineProvider>
+      <WorkingTreeDetail tabId="test-tab" listKey={0} />
+    </MantineProvider>
+  );
 }
 
 describe("WorkingTreeDetail file list keyboard navigation", () => {
