@@ -148,6 +148,7 @@ fn load_commits(
     state: State<'_, AppState>,
 ) -> Result<Vec<CommitInfo>, String> {
     let t = std::time::Instant::now();
+    let from_cursor = after_oid.is_some();
     let path = get_repo_path(&tab_id, &state)?;
     let repo = gix::open(&path).map_err(|e| e.to_string())?;
 
@@ -155,6 +156,7 @@ fn load_commits(
     // `after_oid` is the OID of the last commit already shown (the page cursor).
     // We decode that commit to find its first parent and begin the walk there,
     // so we never skip O(offset) commits from HEAD.
+    let cursor_t = std::time::Instant::now();
     let start_id = if let Some(oid_str) = after_oid {
         let cursor_oid = gix::ObjectId::from_hex(oid_str.trim().as_bytes())
             .map_err(|e| format!("Invalid cursor OID: {e}"))?;
@@ -166,7 +168,10 @@ fn load_commits(
         drop(decoded);
         drop(commit);
         match first_parent {
-            None => return Ok(vec![]), // cursor was the root commit — nothing further
+            None => {
+                info!("load_commits cursor was root commit — no more history");
+                return Ok(vec![]);
+            }
             Some(parent_oid) => {
                 let hex = parent_oid.to_string();
                 repo.rev_parse_single(gix::bstr::BStr::new(hex.as_bytes()))
@@ -176,7 +181,9 @@ fn load_commits(
     } else {
         repo.head_id().map_err(|e| e.to_string())?
     };
+    let cursor_ms = cursor_t.elapsed().as_millis();
 
+    let walk_t = std::time::Instant::now();
     let walk = start_id
         .ancestors()
         .first_parent_only()
@@ -207,13 +214,25 @@ fn load_commits(
             timestamp: decoded.author.time.seconds,
         });
     }
+    let walk_ms = walk_t.elapsed().as_millis();
+    let total_ms = t.elapsed().as_millis();
 
-    info!(
-        "load_commits after_oid={} returned {} commits in {}ms",
-        if commits.is_empty() { "None".to_string() } else { commits[0].oid[..7].to_string() },
+    let msg = format!(
+        "load_commits from={} returned={} cursor_ms={} walk_ms={} total_ms={}",
+        if from_cursor { "cursor" } else { "HEAD" },
         commits.len(),
-        t.elapsed().as_millis()
+        cursor_ms,
+        walk_ms,
+        total_ms,
     );
+    if total_ms > 2000 {
+        warn!("[SLOW] {msg}");
+    } else {
+        info!("{msg}");
+    }
+    if commits.is_empty() && !from_cursor {
+        warn!("load_commits returned 0 commits from HEAD — repo may be empty or tab not registered");
+    }
     Ok(commits)
 }
 
@@ -326,15 +345,19 @@ async fn get_commit_detail(
     oid: String,
     state: State<'_, AppState>,
 ) -> Result<CommitDetail, String> {
+    let short = &oid[..7.min(oid.len())];
+
     // Cache hit — return immediately without spawning any processes.
     {
         let entry = state.get(&tab_id).ok_or_else(|| format!("Tab not found: {tab_id}"))?;
         let cached = entry.detail_cache.lock().unwrap().get(&oid).cloned();
         if let Some(detail) = cached {
+            info!("get_commit_detail oid={short} cache=hit");
             return Ok(detail);
         }
     }
 
+    let t = std::time::Instant::now();
     let path = get_repo_path(&tab_id, &state)?;
     let path_str = path.to_string_lossy().to_string();
     let oid_clone = oid.clone();
@@ -382,6 +405,15 @@ async fn get_commit_detail(
             (parts[1].to_string(), None)
         };
         files.push(ChangedFile { path: file_path, old_path, status });
+    }
+
+    let total_ms = t.elapsed().as_millis();
+    let file_count = files.len();
+    let msg = format!("get_commit_detail oid={short} cache=miss files={file_count} total_ms={total_ms}");
+    if total_ms > 2000 {
+        warn!("[SLOW] {msg}");
+    } else {
+        info!("{msg}");
     }
 
     let detail = CommitDetail { oid: oid.clone(), summary, body, author_name, author_email, timestamp, files };
@@ -490,6 +522,7 @@ async fn get_working_tree_status(
     tab_id: String,
     state: State<'_, AppState>,
 ) -> Result<WorkingTreeStatus, String> {
+    let t = std::time::Instant::now();
     let path = get_repo_path(&tab_id, &state)?;
     let path_str = path.to_string_lossy().to_string();
 
@@ -507,17 +540,31 @@ async fn get_working_tree_status(
         tokio::try_join!(staged_fut, unstaged_fut, untracked_fut)
             .map_err(|e| e.to_string())?;
 
+    let staged = parse_name_status(&String::from_utf8_lossy(&staged_out.stdout));
     let mut unstaged = parse_name_status(&String::from_utf8_lossy(&unstaged_out.stdout));
+    let mut untracked_count = 0usize;
     for line in String::from_utf8_lossy(&untracked_out.stdout).lines() {
         if !line.is_empty() {
             unstaged.push(StatusEntry { path: line.to_string(), old_path: None, status: "?".to_string() });
+            untracked_count += 1;
         }
     }
 
-    Ok(WorkingTreeStatus {
-        staged: parse_name_status(&String::from_utf8_lossy(&staged_out.stdout)),
-        unstaged,
-    })
+    let total_ms = t.elapsed().as_millis();
+    let msg = format!(
+        "get_working_tree_status staged={} modified={} untracked={} total_ms={}",
+        staged.len(),
+        unstaged.len() - untracked_count,
+        untracked_count,
+        total_ms,
+    );
+    if total_ms > 2000 {
+        warn!("[SLOW] {msg}");
+    } else {
+        info!("{msg}");
+    }
+
+    Ok(WorkingTreeStatus { staged, unstaged })
 }
 
 #[tauri::command]

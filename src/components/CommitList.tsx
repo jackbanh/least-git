@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Menu } from "@mantine/core";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-import { warn as logWarn } from "@tauri-apps/plugin-log";
+import { warn as logWarn, info as logInfo, error as logError } from "@tauri-apps/plugin-log";
 import {
   IconCopy,
   IconGitPullRequest,
@@ -70,17 +70,26 @@ export default function CommitList({ tabId, listKey }: { tabId: string; listKey:
   const loadMore = useCallback(async () => {
     if (isLoadingRef.current || !hasMore) return;
     isLoadingRef.current = true;
+    const cursor = lastOidRef.current;
+    const loadedBefore = commitsRef.current.length;
+    logInfo(`CommitList[${tabId}] loadMore start cursor=${cursor?.slice(0, 7) ?? "null"} loaded=${loadedBefore}`);
+    const t0 = performance.now();
     try {
       const next = await invoke<CommitInfo[]>("load_commits", {
         tabId,
-        afterOid: lastOidRef.current,
+        afterOid: cursor,
         limit: PAGE_SIZE,
       });
+      const ms = Math.round(performance.now() - t0);
+      logInfo(`CommitList[${tabId}] loadMore done count=${next.length} ms=${ms} hasMore=${next.length >= PAGE_SIZE}`);
       setCommits((prev) => [...prev, ...next]);
-      if (next.length === 0 && lastOidRef.current === null) logWarn(`load_commits returned 0 commits for tab ${tabId}`);
+      if (next.length === 0 && cursor === null) {
+        logWarn(`CommitList[${tabId}] loadMore returned 0 commits from HEAD`);
+      }
       if (next.length < PAGE_SIZE) setHasMore(false);
     } catch (e) {
-      console.error("load_commits failed:", e);
+      const ms = Math.round(performance.now() - t0);
+      logError(`CommitList[${tabId}] loadMore failed ms=${ms} error=${e}`);
       setHasMore(false);
     } finally {
       isLoadingRef.current = false;
@@ -101,23 +110,33 @@ export default function CommitList({ tabId, listKey }: { tabId: string; listKey:
     // Only overwrite stale if there's actually something to preserve.
     // On a rapid double-bump, commitsRef is already [] (cleared by the first bump),
     // so we must not overwrite the stale data we already saved.
-    if (commitsRef.current.length > 0) {
+    const currentCount = commitsRef.current.length;
+    const savingStale = currentCount > 0;
+    if (savingStale) {
       staleCommitsRef.current = commitsRef.current;
     }
+    logInfo(`CommitList[${tabId}] refresh listKey=${listKey} current=${currentCount} savingStale=${savingStale} staleNow=${staleCommitsRef.current.length}`);
     lastOidRef.current = null; // reset cursor so the refresh starts from HEAD
     setCommits([]);
     setHasMore(true);
     isLoadingRef.current = true;
 
+    const t0 = performance.now();
     invoke<CommitInfo[]>("load_commits", { tabId, afterOid: null, limit: PAGE_SIZE })
       .then((fresh) => {
+        const ms = Math.round(performance.now() - t0);
+        logInfo(`CommitList[${tabId}] refresh done count=${fresh.length} ms=${ms}`);
+        if (fresh.length === 0) {
+          logWarn(`CommitList[${tabId}] refresh returned 0 commits — list will go empty (stale=${staleCommitsRef.current.length})`);
+        }
         staleCommitsRef.current = [];
         setCommits(fresh);
-        if (fresh.length === 0) logWarn(`load_commits returned 0 commits for tab ${tabId}`);
         if (fresh.length < PAGE_SIZE) setHasMore(false);
       })
-      .catch(() => {
+      .catch((e) => {
+        const ms = Math.round(performance.now() - t0);
         // Do NOT clear staleCommitsRef here — keep stale data visible on error.
+        logWarn(`CommitList[${tabId}] refresh failed ms=${ms} stale=${staleCommitsRef.current.length} error=${e}`);
         setHasMore(false);
       })
       .finally(() => {
