@@ -26,6 +26,11 @@
   line-height: 1.6;
 }
 
+.pull-drawer-cmd {
+  color: var(--mantine-color-dimmed);
+  user-select: all;
+}
+
 .pull-drawer-footer {
   display: flex;
   justify-content: flex-end;
