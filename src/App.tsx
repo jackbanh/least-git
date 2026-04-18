@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { Tabs, Button, ActionIcon, Group, Text } from "@mantine/core";
@@ -14,9 +14,14 @@ import "./App.css";
 
 export default function App() {
   const {
-    tabs, activeTabId, openTab, closeTab, setActiveTab, bumpListKey,
+    tabs, activeTabId, openTab, closeTab, setActiveTab, bumpListKey, bumpStatusKey,
     sidebarWidth, setSidebarWidth, detailHeight, setDetailHeight,
   } = useTabStore();
+
+  // Per-tab, per-kind last-fired timestamps for throttling repo:changed events.
+  // Leading-edge throttle: first event fires immediately, subsequent events
+  // within the cooldown window are dropped.
+  const repoChangedThrottle = useRef<Record<string, number>>({});
 
   const [branchDialogOpen, setBranchDialogOpen] = useState(false);
   const [pullDrawerOpen, setPullDrawerOpen] = useState(false);
@@ -32,6 +37,29 @@ export default function App() {
         .catch(() => closeTab(tab.id));
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Listen for filesystem-watcher events emitted by the Rust backend.
+  // "refs"  → commit list changed (new commit, branch switch, pull, reset…)
+  // "index" → only staging area changed (stage/unstage without committing)
+  useEffect(() => {
+    const unlisten = listen<{ tab_id: string; kind: string }>("repo:changed", (e) => {
+      const { tab_id, kind } = e.payload;
+      const key = `${tab_id}:${kind}`;
+      const now = Date.now();
+      const COOLDOWN_MS = 2000;
+      if (now - (repoChangedThrottle.current[key] ?? 0) < COOLDOWN_MS) return;
+      repoChangedThrottle.current[key] = now;
+
+      if (kind === "refs") {
+        bumpListKey(tab_id);
+      } else if (kind === "index") {
+        bumpStatusKey(tab_id);
+      }
+    });
+    return () => { unlisten.then((fn) => fn()); };
+  // bumpListKey and bumpStatusKey are stable Zustand actions — no need in deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Listen for the native macOS menu Refresh event.
@@ -135,7 +163,7 @@ export default function App() {
               </div>
               <div className="resize-handle resize-handle--horizontal" onMouseDown={startDetailResize} />
               <div className="detail-pane" style={{ height: detailHeight }}>
-                <CommitDetail tabId={activeTabId} listKey={activeTab?.listKey ?? 0} />
+                <CommitDetail tabId={activeTabId} listKey={activeTab?.listKey ?? 0} statusKey={activeTab?.statusKey ?? 0} />
               </div>
             </div>
           </>

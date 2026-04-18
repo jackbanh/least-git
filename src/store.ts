@@ -7,6 +7,7 @@ export interface Tab {
   name: string;
   selectedOid: string | null;
   listKey: number;
+  statusKey: number;
 }
 
 interface TabStore {
@@ -15,11 +16,12 @@ interface TabStore {
   sidebarWidth: number;
   detailHeight: number;
   detailLeftWidth: number;
-  openTab: (tab: Omit<Tab, "selectedOid" | "listKey">) => void;
+  openTab: (tab: Omit<Tab, "selectedOid" | "listKey" | "statusKey">) => void;
   closeTab: (id: string) => void;
   setActiveTab: (id: string) => void;
   selectCommit: (tabId: string, oid: string | null) => void;
   bumpListKey: (tabId: string) => void;
+  bumpStatusKey: (tabId: string) => void;
   setSidebarWidth: (width: number) => void;
   setDetailHeight: (height: number) => void;
   setDetailLeftWidth: (width: number) => void;
@@ -40,7 +42,7 @@ export const useTabStore = create<TabStore>()(
             return { activeTabId: tab.id };
           }
           return {
-            tabs: [...state.tabs, { ...tab, selectedOid: null, listKey: 0 }],
+            tabs: [...state.tabs, { ...tab, selectedOid: null, listKey: 0, statusKey: 0 }],
             activeTabId: tab.id,
           };
         }),
@@ -71,6 +73,13 @@ export const useTabStore = create<TabStore>()(
           ),
         })),
 
+      bumpStatusKey: (tabId) =>
+        set((state) => ({
+          tabs: state.tabs.map((t) =>
+            t.id === tabId ? { ...t, statusKey: t.statusKey + 1 } : t
+          ),
+        })),
+
       setSidebarWidth: (width) => set({ sidebarWidth: width }),
       setDetailHeight: (height) => set({ detailHeight: height }),
       setDetailLeftWidth: (width) => set({ detailLeftWidth: width }),
@@ -84,6 +93,7 @@ export const useTabStore = create<TabStore>()(
           name: t.name,
           selectedOid: null,
           listKey: 0,
+          statusKey: 0,
         })),
         activeTabId: state.activeTabId,
         sidebarWidth: state.sidebarWidth,

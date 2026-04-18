@@ -30,7 +30,7 @@ interface SelectedFile {
   is_untracked: boolean;
 }
 
-export default function WorkingTreeDetail({ tabId, listKey }: { tabId: string; listKey: number }) {
+export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId: string; listKey: number; statusKey: number }) {
   const [status, setStatus] = useState<WorkingTreeStatus | null>(null);
   const [selected, setSelected] = useState<SelectedFile | null>(null);
   const [diff, setDiff] = useState<string>("");
@@ -88,9 +88,15 @@ export default function WorkingTreeDetail({ tabId, listKey }: { tabId: string; l
 
   useEffect(() => {
     refreshStatus();
-  // listKey changes signal a refresh; tabId is stable within this component's lifetime
+  // listKey changes signal a full refresh (branch switch, new commit, pull…)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listKey]);
+
+  useEffect(() => {
+    refreshStatus();
+  // statusKey changes signal an index-only refresh (stage/unstage via watcher)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusKey]);
 
   const refreshDiff = useCallback((sel: SelectedFile) => {
     setDiffLoading(true);

@@ -1,10 +1,13 @@
 use dashmap::DashMap;
 use gix::bstr::ByteSlice;
 use log::{error, info, warn};
+use notify_debouncer_mini::notify::RecursiveMode;
+use notify_debouncer_mini::new_debouncer;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Mutex;
+use std::time::Duration;
 #[allow(unused_imports)]
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{Emitter, State};
@@ -41,6 +44,8 @@ struct RepoEntry {
     name: String,
     /// Caches CommitDetail by OID. Cleared on refresh (bumpListKey → close/reopen tab).
     detail_cache: Mutex<HashMap<String, CommitDetail>>,
+    /// Keeps the filesystem watcher alive for the lifetime of the tab.
+    _watcher: Mutex<Option<notify_debouncer_mini::Debouncer<notify_debouncer_mini::notify::RecommendedWatcher>>>,
 }
 
 type AppState = DashMap<String, RepoEntry>;
@@ -98,7 +103,11 @@ pub struct CommitDetail {
 // ── Commands ─────────────────────────────────────────────────────────────────
 
 #[tauri::command]
-fn open_repo(path: String, state: State<'_, AppState>) -> Result<TabInfo, String> {
+fn open_repo(
+    path: String,
+    state: State<'_, AppState>,
+    app: tauri::AppHandle,
+) -> Result<TabInfo, String> {
     let canonical = PathBuf::from(&path)
         .canonicalize()
         .map_err(|e| e.to_string())?;
@@ -113,7 +122,8 @@ fn open_repo(path: String, state: State<'_, AppState>) -> Result<TabInfo, String
         });
     }
 
-    gix::open(&canonical).map_err(|e| format!("Not a git repository: {e}"))?;
+    let repo = gix::open(&canonical).map_err(|e| format!("Not a git repository: {e}"))?;
+    let git_dir = repo.git_dir().to_path_buf();
 
     let name = canonical
         .file_name()
@@ -121,7 +131,79 @@ fn open_repo(path: String, state: State<'_, AppState>) -> Result<TabInfo, String
         .unwrap_or("repo")
         .to_string();
 
-    state.insert(id.clone(), RepoEntry { path: canonical, name: name.clone(), detail_cache: Mutex::new(HashMap::new()) });
+    // ── Filesystem watcher ────────────────────────────────────────────────────
+    // Watch only .git/ (not the working tree — too expensive for large monorepos).
+    // Debounce at 500 ms so a burst of related changes (commit, rebase, etc.)
+    // coalesces into a single frontend event.
+    let watcher = {
+        let tab_id = id.clone();
+        let app_handle = app.clone();
+        match new_debouncer(
+            Duration::from_millis(500),
+            move |result: notify_debouncer_mini::DebounceEventResult| {
+                let events = match result {
+                    Ok(evs) => evs,
+                    Err(errs) => {
+                        warn!("watcher errors: {errs:?}");
+                        return;
+                    }
+                };
+                // Skip lock files — they're transient and always paired with
+                // the real file write, which will fire its own event.
+                let events: Vec<_> = events
+                    .iter()
+                    .filter(|ev| ev.path.extension().map_or(true, |e| e != "lock"))
+                    .collect();
+                if events.is_empty() {
+                    return;
+                }
+                let has_refs = events.iter().any(|ev| {
+                    let name = ev.path.file_name().unwrap_or_default();
+                    name == "HEAD"
+                        || name == "packed-refs"
+                        || ev.path.components().any(|c| c.as_os_str() == "refs")
+                });
+                let has_index = events
+                    .iter()
+                    .any(|ev| ev.path.file_name().unwrap_or_default() == "index");
+                // "refs" supersedes "index": a commit touches both, but a full
+                // commit-list refresh already covers the working-tree status.
+                let kind = if has_refs {
+                    "refs"
+                } else if has_index {
+                    "index"
+                } else {
+                    return;
+                };
+                info!("repo:changed tab={tab_id} kind={kind}");
+                let _ = app_handle.emit(
+                    "repo:changed",
+                    serde_json::json!({ "tab_id": tab_id, "kind": kind }),
+                );
+            },
+        ) {
+            Ok(mut d) => {
+                if let Err(e) = d.watcher().watch(&git_dir, RecursiveMode::Recursive) {
+                    warn!("failed to watch {git_dir:?}: {e}");
+                }
+                Some(d)
+            }
+            Err(e) => {
+                warn!("failed to create watcher for {git_dir:?}: {e}");
+                None
+            }
+        }
+    };
+
+    state.insert(
+        id.clone(),
+        RepoEntry {
+            path: canonical,
+            name: name.clone(),
+            detail_cache: Mutex::new(HashMap::new()),
+            _watcher: Mutex::new(watcher),
+        },
+    );
 
     info!("opened repo: {name} ({id})");
     Ok(TabInfo { id: id.clone(), path: id, name })
