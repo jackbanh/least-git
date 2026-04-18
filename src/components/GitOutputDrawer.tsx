@@ -21,6 +21,7 @@ export default function GitOutputDrawer({
   command,
   commandArgs,
   eventPrefix,
+  displayCommand,
   onClose,
   onSuccess,
 }: {
@@ -30,6 +31,8 @@ export default function GitOutputDrawer({
   command: string;
   commandArgs: Record<string, unknown>;
   eventPrefix: string;
+  /** Shell command string shown at the top of the output, e.g. "git pull --rebase" */
+  displayCommand?: string;
   onClose: () => void;
   onSuccess: () => void;
 }) {
@@ -106,6 +109,7 @@ export default function GitOutputDrawer({
         scrollHideDelay={0}
       >
         <pre className="pull-drawer-output">
+          {displayCommand && <span className="pull-drawer-cmd">$ {displayCommand}{"\n"}</span>}
           {lines.length > 0 ? lines.join("\n") : "Starting…"}
         </pre>
         <div ref={bottomRef} />

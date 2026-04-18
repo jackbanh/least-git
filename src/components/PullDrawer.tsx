@@ -19,6 +19,7 @@ export default function PullDrawer({
       command="pull_with_rebase"
       commandArgs={{}}
       eventPrefix="pull"
+      displayCommand="git pull --rebase"
       onClose={onClose}
       onSuccess={onSuccess}
     />
