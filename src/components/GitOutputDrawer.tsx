@@ -37,6 +37,7 @@ export default function GitOutputDrawer({
   const [status, setStatus] = useState<Status>("running");
   const viewportRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!opened) return;
@@ -69,6 +70,14 @@ export default function GitOutputDrawer({
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: "end" });
   }, [lines]);
+
+  // When the command finishes, scroll the Close button into view and
+  // focus it on success so the user can dismiss with Enter/Space.
+  useEffect(() => {
+    if (status === "running") return;
+    closeButtonRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    if (status === "success") closeButtonRef.current?.focus();
+  }, [status]);
 
   const statusIcon =
     status === "success" ? <IconCheck size={16} color="var(--mantine-color-green-6)" /> :
@@ -103,6 +112,7 @@ export default function GitOutputDrawer({
       </ScrollArea>
       <div className="pull-drawer-footer">
         <Button
+          ref={closeButtonRef}
           size="xs"
           variant="default"
           disabled={status === "running"}
