@@ -36,13 +36,13 @@ function formatDate(ts: number): string {
 }
 
 // Routing shell — always calls hooks in the same order, then delegates.
-export default function CommitDetail({ tabId, listKey }: { tabId: string; listKey: number }) {
+export default function CommitDetail({ tabId, listKey, statusKey }: { tabId: string; listKey: number; statusKey: number }) {
   const selectedOid = useTabStore(
     (s) => s.tabs.find((t) => t.id === tabId)?.selectedOid ?? null
   );
 
   if (selectedOid === UNCOMMITTED) {
-    return <WorkingTreeDetail tabId={tabId} listKey={listKey} />;
+    return <WorkingTreeDetail tabId={tabId} listKey={listKey} statusKey={statusKey} />;
   }
 
   return <CommitDetailInner tabId={tabId} selectedOid={selectedOid} />;

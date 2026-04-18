@@ -37,7 +37,7 @@ const STUB_DETAIL = {
 };
 
 function renderDetail() {
-  return render(<CommitDetail tabId="test-tab" listKey={0} />);
+  return render(<CommitDetail tabId="test-tab" listKey={0} statusKey={0} />);
 }
 
 describe("CommitDetail file list keyboard navigation", () => {

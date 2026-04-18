@@ -32,7 +32,7 @@ const STUB_STATUS = {
 function renderWTD() {
   return render(
     <MantineProvider>
-      <WorkingTreeDetail tabId="test-tab" listKey={0} />
+      <WorkingTreeDetail tabId="test-tab" listKey={0} statusKey={0} />
     </MantineProvider>
   );
 }
