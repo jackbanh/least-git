@@ -1,5 +1,12 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { Menu } from "@mantine/core";
+import {
+  IconArrowBarToDown,
+  IconArrowBarToUp,
+  IconRotate2,
+  IconTrash,
+} from "@tabler/icons-react";
 import { useTabStore } from "../store";
 import { useResize } from "../hooks/useResize";
 import InteractiveDiffViewer from "./InteractiveDiffViewer";
@@ -32,6 +39,39 @@ export default function WorkingTreeDetail({ tabId, listKey }: { tabId: string; l
   const detailLeftWidth = useTabStore((s) => s.detailLeftWidth);
   const setDetailLeftWidth = useTabStore((s) => s.setDetailLeftWidth);
   const startLeftResize = useResize(detailLeftWidth, setDetailLeftWidth, "horizontal", 140, 9999);
+
+  // ── Context menu ────────────────────────────────────────────────────────
+  interface ContextMenuState { x: number; y: number; entry: StatusEntry; staged: boolean }
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  // Ref copy so menu-item click handlers always see the latest target even
+  // after the menu's onClose fires and nulls contextMenu.
+  const contextTargetRef = useRef<ContextMenuState | null>(null);
+
+  function openContextMenu(e: React.MouseEvent, entry: StatusEntry, staged: boolean) {
+    e.preventDefault();
+    const state = { x: e.clientX, y: e.clientY, entry, staged };
+    contextTargetRef.current = state;
+    setContextMenu(state);
+  }
+
+  async function runFileAction(
+    command: string,
+    filePath: string,
+    confirm?: string,
+  ) {
+    if (confirm && !window.confirm(confirm)) return;
+    try {
+      await invoke(command, { tabId, filePath });
+      refreshStatus();
+      // Clear diff if the acted-on file was selected
+      if (selected?.path === filePath) {
+        setSelected(null);
+        setDiff("");
+      }
+    } catch (e) {
+      console.error(`${command} failed:`, e);
+    }
+  }
 
   const refreshStatus = useCallback(() => {
     invoke<WorkingTreeStatus>("get_working_tree_status", { tabId })
@@ -128,6 +168,7 @@ export default function WorkingTreeDetail({ tabId, listKey }: { tabId: string; l
                   file={f}
                   isSelected={selected?.path === f.path && selected.staged}
                   onClick={() => selectFile(f, true)}
+                  onContextMenu={(e) => openContextMenu(e, f, true)}
                 />
               ))}
             </>
@@ -141,6 +182,7 @@ export default function WorkingTreeDetail({ tabId, listKey }: { tabId: string; l
                   file={f}
                   isSelected={selected?.path === f.path && !selected.staged}
                   onClick={() => selectFile(f, false)}
+                  onContextMenu={(e) => openContextMenu(e, f, false)}
                 />
               ))}
             </>
@@ -156,6 +198,74 @@ export default function WorkingTreeDetail({ tabId, listKey }: { tabId: string; l
           )}
         </div>
       </div>
+
+      <Menu
+        opened={!!contextMenu}
+        onClose={() => setContextMenu(null)}
+        position="right-start"
+      >
+        <Menu.Target>
+          <div
+            style={{
+              position: "fixed",
+              left: contextMenu?.x ?? 0,
+              top: contextMenu?.y ?? 0,
+              width: 0,
+              height: 0,
+            }}
+          />
+        </Menu.Target>
+        <Menu.Dropdown>
+          {contextTargetRef.current?.staged ? (
+            // ── Staged file ──────────────────────────────────────────────
+            <Menu.Item
+              leftSection={<IconArrowBarToDown size={14} />}
+              onClick={() => runFileAction("unstage_file", contextTargetRef.current!.entry.path)}
+            >
+              Unstage
+            </Menu.Item>
+          ) : (
+            // ── Unstaged / untracked file ────────────────────────────────
+            <>
+              <Menu.Item
+                leftSection={<IconArrowBarToUp size={14} />}
+                onClick={() => runFileAction("stage_file", contextTargetRef.current!.entry.path)}
+              >
+                {contextTargetRef.current?.entry.status === "?" ? "Add File" : "Stage"}
+              </Menu.Item>
+              {contextTargetRef.current?.entry.status === "?" ? (
+                <Menu.Item
+                  leftSection={<IconTrash size={14} />}
+                  color="red"
+                  onClick={() =>
+                    runFileAction(
+                      "delete_untracked",
+                      contextTargetRef.current!.entry.path,
+                      `Delete "${contextTargetRef.current!.entry.path}"? This cannot be undone.`,
+                    )
+                  }
+                >
+                  Delete File
+                </Menu.Item>
+              ) : (
+                <Menu.Item
+                  leftSection={<IconRotate2 size={14} />}
+                  color="red"
+                  onClick={() =>
+                    runFileAction(
+                      "discard_changes",
+                      contextTargetRef.current!.entry.path,
+                      `Discard changes to "${contextTargetRef.current!.entry.path}"? This cannot be undone.`,
+                    )
+                  }
+                >
+                  Discard Changes
+                </Menu.Item>
+              )}
+            </>
+          )}
+        </Menu.Dropdown>
+      </Menu>
 
       <div className="resize-handle resize-handle--vertical" onMouseDown={startLeftResize} />
 
@@ -183,10 +293,12 @@ function FileRow({
   file,
   isSelected,
   onClick,
+  onContextMenu,
 }: {
   file: StatusEntry;
   isSelected: boolean | undefined;
   onClick: () => void;
+  onContextMenu: (e: React.MouseEvent) => void;
 }) {
   return (
     <div
@@ -195,6 +307,7 @@ function FileRow({
         (e.currentTarget.closest(".detail-files") as HTMLElement | null)?.focus();
         onClick();
       }}
+      onContextMenu={onContextMenu}
     >
       <span className={`file-status file-status--${file.status.toLowerCase()}`}>
         {file.status}

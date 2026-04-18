@@ -567,6 +567,86 @@ async fn get_working_tree_status(
     Ok(WorkingTreeStatus { staged, unstaged })
 }
 
+// ── Working tree file actions ────────────────────────────────────────────────
+
+/// Stage a file (or untracked file) — `git add -- <path>`.
+#[tauri::command]
+async fn stage_file(
+    tab_id: String,
+    file_path: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let path = get_repo_path(&tab_id, &state)?;
+    let out = git_async()
+        .args(["add", "--", &file_path])
+        .current_dir(&path)
+        .output()
+        .await
+        .map_err(|e| e.to_string())?;
+    if !out.status.success() {
+        return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
+    }
+    info!("stage_file: {file_path}");
+    Ok(())
+}
+
+/// Unstage a file — `git restore --staged -- <path>`.
+#[tauri::command]
+async fn unstage_file(
+    tab_id: String,
+    file_path: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let path = get_repo_path(&tab_id, &state)?;
+    let out = git_async()
+        .args(["restore", "--staged", "--", &file_path])
+        .current_dir(&path)
+        .output()
+        .await
+        .map_err(|e| e.to_string())?;
+    if !out.status.success() {
+        return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
+    }
+    info!("unstage_file: {file_path}");
+    Ok(())
+}
+
+/// Discard working-tree changes for a tracked file — `git restore -- <path>`.
+#[tauri::command]
+async fn discard_changes(
+    tab_id: String,
+    file_path: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let path = get_repo_path(&tab_id, &state)?;
+    let out = git_async()
+        .args(["restore", "--", &file_path])
+        .current_dir(&path)
+        .output()
+        .await
+        .map_err(|e| e.to_string())?;
+    if !out.status.success() {
+        return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
+    }
+    info!("discard_changes: {file_path}");
+    Ok(())
+}
+
+/// Delete an untracked file from the filesystem.
+#[tauri::command]
+async fn delete_untracked(
+    tab_id: String,
+    file_path: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let path = get_repo_path(&tab_id, &state)?;
+    let full = path.join(&file_path);
+    std::fs::remove_file(&full)
+        .map_err(|e| format!("Failed to delete {file_path}: {e}"))?;
+    info!("delete_untracked: {file_path}");
+    Ok(())
+}
+
 #[tauri::command]
 async fn get_staged_diff(
     tab_id: String,
@@ -832,6 +912,10 @@ pub fn run() {
             get_staged_diff,
             get_unstaged_diff,
             apply_patch,
+            stage_file,
+            unstage_file,
+            discard_changes,
+            delete_untracked,
             pull_with_rebase,
         ])
         .run(tauri::generate_context!())
