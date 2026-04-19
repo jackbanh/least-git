@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Menu } from "@mantine/core";
+import { warn as logWarn, info as logInfo } from "@tauri-apps/plugin-log";
+import { Loader, Menu } from "@mantine/core";
 import {
   IconArrowBarToDown,
   IconArrowBarToUp,
@@ -69,14 +70,35 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
         setDiff("");
       }
     } catch (e) {
-      console.error(`${command} failed:`, e);
+      logWarn(`WorkingTreeDetail[${tabId}] ${command} failed: ${e}`);
     }
   }
 
+  // Synchronous guard: drops concurrent refreshes so at most one git status
+  // call is in flight at a time (important on slow monorepos).
+  const isRefreshingRef = useRef(false);
+
   const refreshStatus = useCallback(() => {
+    if (isRefreshingRef.current) {
+      logWarn(`WorkingTreeDetail[${tabId}] refreshStatus skipped — already in flight`);
+      return;
+    }
+    isRefreshingRef.current = true;
+    const t0 = performance.now();
+    logInfo(`WorkingTreeDetail[${tabId}] refreshStatus start`);
     invoke<WorkingTreeStatus>("get_working_tree_status", { tabId })
-      .then(setStatus)
-      .catch((e) => console.error("get_working_tree_status failed:", e));
+      .then((s) => {
+        const ms = Math.round(performance.now() - t0);
+        logInfo(`WorkingTreeDetail[${tabId}] refreshStatus done staged=${s.staged.length} unstaged=${s.unstaged.length} ms=${ms}`);
+        setStatus(s);
+      })
+      .catch((e) => {
+        const ms = Math.round(performance.now() - t0);
+        logWarn(`WorkingTreeDetail[${tabId}] refreshStatus failed ms=${ms} error=${e}`);
+      })
+      .finally(() => {
+        isRefreshingRef.current = false;
+      });
   }, [tabId]);
 
   useEffect(() => {
@@ -161,7 +183,7 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
             setSelected({ path: f.path, staged: f.staged, is_untracked: f.status === "?" });
           }}
         >
-          {!status && <div className="wt-section-empty">Loading…</div>}
+          {!status && <div className="wt-section-empty"><Loader size="xs" /></div>}
           {isEmpty && (
             <div className="wt-section-empty">Nothing to commit, working tree clean</div>
           )}
@@ -279,7 +301,7 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
         {!selected ? (
           <div className="diff-loading">Select a file to view diff</div>
         ) : diffLoading ? (
-          <div className="diff-loading">Loading diff…</div>
+          <div className="diff-loading"><Loader size="sm" /></div>
         ) : diff ? (
           <InteractiveDiffViewer
             diff={diff}

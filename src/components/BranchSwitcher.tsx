@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { warn as logWarn, info as logInfo } from "@tauri-apps/plugin-log";
 import { TextInput } from "@mantine/core";
 import { useTabStore } from "../store";
 import GitOutputDrawer from "./GitOutputDrawer";
@@ -23,35 +24,77 @@ export default function BranchSwitcher({ tabId, listKey }: { tabId: string; list
   // Generation counter: if a newer fetch starts before an older one resolves,
   // discard the stale response instead of overwriting correct data.
   const fetchGenRef = useRef(0);
+  // Stale-while-revalidate: preserve last known branches while a refresh is
+  // in flight so the list never goes blank.
+  const staleBranchesRef = useRef<BranchInfo[]>([]);
+  const branchesRef = useRef(branches);
+  branchesRef.current = branches;
 
   useEffect(() => {
     const gen = ++fetchGenRef.current;
+    // Snapshot current branches as stale data before clearing (only if non-empty).
+    if (branchesRef.current.length > 0) {
+      staleBranchesRef.current = branchesRef.current;
+    }
     setIsRefreshing(true);
     setFilter("");
+    const t0 = performance.now();
+    logInfo(`BranchSwitcher[${tabId}] refresh start listKey=${listKey} stale=${staleBranchesRef.current.length}`);
     invoke<BranchInfo[]>("list_branches", { tabId })
-      .then((data) => { if (gen === fetchGenRef.current) setBranches(data); })
+      .then((data) => {
+        if (gen !== fetchGenRef.current) return;
+        const ms = Math.round(performance.now() - t0);
+        logInfo(`BranchSwitcher[${tabId}] refresh done count=${data.length} ms=${ms}`);
+        if (data.length === 0) {
+          logWarn(`BranchSwitcher[${tabId}] list_branches returned 0 — keeping stale=${staleBranchesRef.current.length}`);
+          // Don't replace non-empty stale data with an empty result; the repo
+          // is almost certainly mid-operation. Let the next refresh correct it.
+          if (staleBranchesRef.current.length > 0) return;
+        }
+        staleBranchesRef.current = [];
+        setBranches(data);
+      })
+      .catch((e) => {
+        if (gen !== fetchGenRef.current) return;
+        const ms = Math.round(performance.now() - t0);
+        logWarn(`BranchSwitcher[${tabId}] refresh failed ms=${ms} error=${e}`);
+      })
       .finally(() => { if (gen === fetchGenRef.current) setIsRefreshing(false); });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tabId, listKey]);
 
+  // Show stale branches while a refresh is in flight so the list never blanks.
+  const visibleBranches =
+    branches.length === 0 && staleBranchesRef.current.length > 0
+      ? staleBranchesRef.current
+      : branches;
+
   const filtered = useMemo(() => {
-    if (!filter.trim()) return branches;
+    if (!filter.trim()) return visibleBranches;
     const q = filter.toLowerCase();
-    return branches.filter((b) => b.name.toLowerCase().includes(q));
-  }, [branches, filter]);
+    return visibleBranches.filter((b) => b.name.toLowerCase().includes(q));
+  }, [visibleBranches, filter]);
 
   function handleCheckout(name: string) {
-    if (checkoutBranch || branches.find((b) => b.name === name)?.is_head) return;
+    if (checkoutBranch || visibleBranches.find((b) => b.name === name)?.is_head) return;
+    logInfo(`BranchSwitcher[${tabId}] checkout start branch=${name}`);
     setError(null);
     setCheckoutBranch(name);
   }
 
   function handleCheckoutSuccess() {
+    logInfo(`BranchSwitcher[${tabId}] checkout success`);
     bumpListKey(tabId);
     selectCommit(tabId, null);
     // Re-fetch branch list to reflect new HEAD (reuses the same generation guard).
     const gen = ++fetchGenRef.current;
+    const t0 = performance.now();
     invoke<BranchInfo[]>("list_branches", { tabId }).then((data) => {
-      if (gen === fetchGenRef.current) setBranches(data);
+      if (gen !== fetchGenRef.current) return;
+      const ms = Math.round(performance.now() - t0);
+      logInfo(`BranchSwitcher[${tabId}] post-checkout refresh done count=${data.length} ms=${ms}`);
+      staleBranchesRef.current = [];
+      setBranches(data);
     });
   }
 
