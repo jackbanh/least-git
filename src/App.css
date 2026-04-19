@@ -13,20 +13,33 @@ body,
   overflow: hidden;
 }
 
+body {
+  font-family: var(--lg-font-sans, -apple-system, BlinkMacSystemFont, sans-serif);
+  background: var(--lg-page-bg);
+  color: var(--lg-ink);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
 .app-shell {
   display: flex;
   flex-direction: column;
   height: 100%;
+  background: var(--lg-page-bg);
+  position: relative;
 }
+
+/* ── Tab bar ──────────────────────────────────────────────────────── */
 
 .tab-bar {
   flex-shrink: 0;
   padding: 0 8px;
-  border-bottom: 1px solid var(--mantine-color-default-border);
-  background: var(--mantine-color-default-hover);
+  border-bottom: 0.5px solid var(--lg-border);
+  background: var(--lg-chrome-bg);
 }
 
-/* workspace: sidebar + resize handle + main area */
+/* ── Workspace ────────────────────────────────────────────────────── */
+
 .workspace {
   flex: 1;
   min-height: 0;
@@ -38,28 +51,44 @@ body,
   flex-shrink: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  border-right: 1px solid var(--mantine-color-default-border);
-  background: var(--mantine-color-default-hover);
+  border-right: 0.5px solid var(--lg-border);
+  background: var(--lg-sidebar-bg);
 }
 
 .resize-handle {
   flex-shrink: 0;
   background: transparent;
   transition: background 120ms;
+  position: relative;
 }
 
-.resize-handle:hover {
-  background: var(--mantine-color-blue-5);
+.resize-handle:hover,
+.resize-handle:active {
+  background: var(--lg-accent-soft);
 }
 
 .resize-handle--vertical {
-  width: 4px;
+  width: 1px;
   cursor: col-resize;
+  background: var(--lg-border-soft);
 }
 
 .resize-handle--horizontal {
-  height: 4px;
+  height: 1px;
   cursor: row-resize;
+  background: var(--lg-border-soft);
+}
+
+.resize-handle--vertical:hover,
+.resize-handle--vertical:active {
+  background: var(--lg-accent-soft);
+  width: 3px;
+}
+
+.resize-handle--horizontal:hover,
+.resize-handle--horizontal:active {
+  background: var(--lg-accent-soft);
+  height: 3px;
 }
 
 /* main area: commit list (top) + detail pane (bottom) */
@@ -70,6 +99,7 @@ body,
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background: var(--lg-panel-bg);
 }
 
 .commit-list-pane {
@@ -82,7 +112,7 @@ body,
 
 .detail-pane {
   flex-shrink: 0;
-  border-top: 1px solid var(--mantine-color-default-border);
+  border-top: 0.5px solid var(--lg-border);
   display: flex;
   flex-direction: column;
   overflow: hidden;

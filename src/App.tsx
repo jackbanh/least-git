@@ -11,6 +11,8 @@ import BranchDialog from "./components/BranchDialog";
 import PullDrawer from "./components/PullDrawer";
 import CommitList from "./components/CommitList";
 import CommitDetail from "./components/CommitDetail";
+import Toolbar from "./components/Toolbar";
+import TweaksPanel from "./components/TweaksPanel";
 import "./App.css";
 
 export default function App() {
@@ -19,18 +21,45 @@ export default function App() {
     sidebarWidth, setSidebarWidth, detailHeight, setDetailHeight,
   } = useTabStore();
 
-  // Per-tab, per-kind last-fired timestamps for throttling repo:changed events.
-  // Leading-edge throttle: first event fires immediately, subsequent events
-  // within the cooldown window are dropped.
   const repoChangedThrottle = useRef<Record<string, number>>({});
 
   const [branchDialogOpen, setBranchDialogOpen] = useState(false);
   const [pullDrawerOpen, setPullDrawerOpen] = useState(false);
+  const [tweaksOpen, setTweaksOpen] = useState(false);
+
+  // Theme state
+  const [theme, setThemeState] = useState<"light" | "dark">(() => {
+    return (localStorage.getItem("lg-theme") as "light" | "dark") ?? "light";
+  });
+  const [accentHue, setAccentHueState] = useState<number>(() => {
+    return parseInt(localStorage.getItem("lg-accent-hue") ?? "155", 10);
+  });
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem("lg-theme", theme);
+  }, [theme]);
+
+  useEffect(() => {
+    document.documentElement.style.setProperty("--lg-accent-hue", String(accentHue));
+    localStorage.setItem("lg-accent-hue", String(accentHue));
+  }, [accentHue]);
+
+  // Apply initial theme immediately (avoids flash)
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    document.documentElement.style.setProperty("--lg-accent-hue", String(accentHue));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function setTheme(t: "light" | "dark") {
+    setThemeState(t);
+  }
+  function setAccentHue(h: number) {
+    setAccentHueState(h);
+  }
 
   // Re-register persisted tabs with Rust on startup.
-  // Drops any tab whose path no longer resolves to a valid git repo.
-  // Bumps listKey after each successful open_repo so CommitList re-fetches now
-  // that the Rust AppState has the tab (the initial mount fetch races and fails).
   useEffect(() => {
     tabs.forEach((tab) => {
       invoke<Tab>("open_repo", { path: tab.path })
@@ -40,9 +69,6 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Listen for filesystem-watcher events emitted by the Rust backend.
-  // "refs"  → commit list changed (new commit, branch switch, pull, reset…)
-  // "index" → only staging area changed (stage/unstage without committing)
   useEffect(() => {
     const unlisten = listen<{ tab_id: string; kind: string }>("repo:changed", (e) => {
       const { tab_id, kind } = e.payload;
@@ -64,11 +90,9 @@ export default function App() {
       }
     });
     return () => { unlisten.then((fn) => fn()); };
-  // bumpListKey and bumpStatusKey are stable Zustand actions — no need in deps
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Listen for the native macOS menu Refresh event.
   useEffect(() => {
     const unlisten = listen("menu:refresh", () => {
       if (activeTabId) {
@@ -80,21 +104,16 @@ export default function App() {
     return () => { unlisten.then((fn) => fn()); };
   }, [activeTabId, bumpListKey]);
 
-  // Listen for the native Repository > Branch… menu item.
   useEffect(() => {
     const unlisten = listen("menu:branch", () => setBranchDialogOpen(true));
     return () => { unlisten.then((fn) => fn()); };
   }, []);
 
-  // Listen for the native Repository > Pull… menu item.
   useEffect(() => {
     const unlisten = listen("menu:pull", () => setPullDrawerOpen(true));
     return () => { unlisten.then((fn) => fn()); };
   }, []);
 
-  // Pre-arm the throttle so the imminent watcher event (fired ~100ms after any
-  // intentional git operation) is swallowed by the 2 s cooldown window instead
-  // of triggering a redundant second refresh.
   function preArmThrottle(tabId: string, kind: string) {
     const key = `${tabId}:${kind}`;
     repoChangedThrottle.current[key] = Date.now();
@@ -162,6 +181,19 @@ export default function App() {
         </Tabs>
       </div>
 
+      <Toolbar
+        onPull={() => setPullDrawerOpen(true)}
+        onBranch={() => setBranchDialogOpen(true)}
+        onRefresh={() => {
+          if (activeTabId) {
+            invoke("clear_detail_cache", { tabId: activeTabId });
+            preArmThrottle(activeTabId, "refs");
+            bumpListKey(activeTabId);
+          }
+        }}
+        onToggleTweaks={() => setTweaksOpen((o) => !o)}
+      />
+
       <div className="workspace">
         {activeTabId ? (
           <>
@@ -196,6 +228,7 @@ export default function App() {
           </div>
         )}
       </div>
+
       {activeTabId && (
         <BranchDialog
           tabId={activeTabId}
@@ -212,6 +245,15 @@ export default function App() {
           onSuccess={() => { preArmThrottle(activeTabId, "refs"); bumpListKey(activeTabId); }}
         />
       )}
+
+      <TweaksPanel
+        open={tweaksOpen}
+        onClose={() => setTweaksOpen(false)}
+        theme={theme}
+        setTheme={setTheme}
+        accentHue={accentHue}
+        setAccentHue={setAccentHue}
+      />
     </div>
   );
 }

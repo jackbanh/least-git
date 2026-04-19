@@ -189,7 +189,10 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
           )}
           {status && status.staged.length > 0 && (
             <>
-              <div className="wt-section-header">Staged</div>
+              <div className="wt-section-header">
+                <span className="wt-section-label">Staged</span>
+                <span className="wt-section-count">{status.staged.length}</span>
+              </div>
               {status.staged.map((f) => (
                 <FileRow
                   key={`staged:${f.path}`}
@@ -203,7 +206,10 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
           )}
           {status && status.unstaged.length > 0 && (
             <>
-              <div className="wt-section-header">Unstaged</div>
+              <div className="wt-section-header">
+                <span className="wt-section-label">Changes</span>
+                <span className="wt-section-count">{status.unstaged.length}</span>
+              </div>
               {status.unstaged.map((f) => (
                 <FileRow
                   key={`unstaged:${f.path}`}
@@ -217,7 +223,7 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
           )}
         </div>
 
-        <div className="detail-meta">
+        <div className="wt-meta">
           <span className="wt-title">Uncommitted Changes</span>
           {status && (
             <span className="wt-counts">

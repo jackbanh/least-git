@@ -1,0 +1,79 @@
+/* Design tokens — Nordic/warm-neutral palette, oklch throughout */
+
+:root {
+  --lg-page-bg: oklch(97.5% 0.004 80);
+  --lg-chrome-bg: oklch(96.5% 0.005 80);
+  --lg-panel-bg: oklch(98.5% 0.003 80);
+  --lg-sidebar-bg: oklch(95.5% 0.007 70);
+  --lg-hover-bg: oklch(94% 0.009 70);
+  --lg-selected-bg: oklch(91% 0.014 70);
+
+  --lg-border: oklch(89% 0.010 70);
+  --lg-border-soft: oklch(92% 0.008 70);
+  --lg-border-strong: oklch(83% 0.014 70);
+
+  --lg-ink: oklch(28% 0.015 60);
+  --lg-ink-soft: oklch(42% 0.014 60);
+  --lg-ink-muted: oklch(57% 0.012 60);
+  --lg-ink-faint: oklch(70% 0.010 65);
+
+  /* Accent — sass default hue 155, overridable via JS on :root */
+  --lg-accent-hue: 155;
+  --lg-accent: oklch(55% 0.07 var(--lg-accent-hue));
+  --lg-accent-soft: oklch(88% 0.04 var(--lg-accent-hue));
+  --lg-accent-text: oklch(40% 0.07 var(--lg-accent-hue));
+
+  --lg-sha: oklch(52% 0.11 38);
+
+  --lg-added: oklch(55% 0.09 155);
+  --lg-modified: oklch(60% 0.10 70);
+  --lg-deleted: oklch(55% 0.12 28);
+  --lg-uncommitted: oklch(66% 0.13 70);
+
+  --lg-diff-add-fg: oklch(40% 0.14 150);
+  --lg-diff-add-bg: oklch(92% 0.06 150);
+  --lg-diff-add-bar: oklch(62% 0.16 150);
+  --lg-diff-rem-fg: oklch(42% 0.17 25);
+  --lg-diff-rem-bg: oklch(92% 0.07 25);
+  --lg-diff-rem-bar: oklch(62% 0.20 25);
+
+  --lg-font-serif: 'Fraunces', 'Iowan Old Style', Georgia, serif;
+  --lg-font-sans: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+  --lg-font-mono: 'IBM Plex Mono', 'SF Mono', Menlo, Consolas, monospace;
+}
+
+[data-theme="dark"] {
+  --lg-page-bg: oklch(19% 0.008 60);
+  --lg-chrome-bg: oklch(22% 0.010 60);
+  --lg-panel-bg: oklch(24% 0.009 60);
+  --lg-sidebar-bg: oklch(21% 0.012 55);
+  --lg-hover-bg: oklch(27% 0.012 60);
+  --lg-selected-bg: oklch(32% 0.018 60);
+
+  --lg-border: oklch(31% 0.014 60);
+  --lg-border-soft: oklch(28% 0.012 60);
+  --lg-border-strong: oklch(40% 0.018 60);
+
+  --lg-ink: oklch(91% 0.010 75);
+  --lg-ink-soft: oklch(76% 0.012 70);
+  --lg-ink-muted: oklch(60% 0.012 65);
+  --lg-ink-faint: oklch(50% 0.012 65);
+
+  --lg-accent: oklch(72% 0.08 var(--lg-accent-hue));
+  --lg-accent-soft: oklch(32% 0.05 var(--lg-accent-hue));
+  --lg-accent-text: oklch(78% 0.08 var(--lg-accent-hue));
+
+  --lg-sha: oklch(72% 0.11 38);
+
+  --lg-added: oklch(70% 0.09 155);
+  --lg-modified: oklch(75% 0.10 70);
+  --lg-deleted: oklch(70% 0.12 28);
+  --lg-uncommitted: oklch(76% 0.13 70);
+
+  --lg-diff-add-fg: oklch(82% 0.14 150);
+  --lg-diff-add-bg: oklch(30% 0.06 150);
+  --lg-diff-add-bar: oklch(68% 0.18 150);
+  --lg-diff-rem-fg: oklch(78% 0.16 25);
+  --lg-diff-rem-bg: oklch(30% 0.08 25);
+  --lg-diff-rem-bar: oklch(66% 0.20 25);
+}
