@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { info as logInfo } from "@tauri-apps/plugin-log";
 import { open } from "@tauri-apps/plugin-dialog";
 import { Tabs, Button, ActionIcon, Group, Text } from "@mantine/core";
 import { listen } from "@tauri-apps/api/event";
@@ -48,8 +49,13 @@ export default function App() {
       const key = `${tab_id}:${kind}`;
       const now = Date.now();
       const COOLDOWN_MS = 2000;
-      if (now - (repoChangedThrottle.current[key] ?? 0) < COOLDOWN_MS) return;
+      const sinceLastMs = now - (repoChangedThrottle.current[key] ?? 0);
+      if (sinceLastMs < COOLDOWN_MS) {
+        logInfo(`App repo:changed throttled tab=${tab_id} kind=${kind} sinceLastMs=${sinceLastMs}`);
+        return;
+      }
       repoChangedThrottle.current[key] = now;
+      logInfo(`App repo:changed dispatching tab=${tab_id} kind=${kind}`);
 
       if (kind === "refs") {
         bumpListKey(tab_id);

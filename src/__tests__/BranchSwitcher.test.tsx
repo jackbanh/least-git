@@ -4,6 +4,7 @@ import { MantineProvider } from "@mantine/core";
 import BranchSwitcher from "../components/BranchSwitcher";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
+vi.mock("@tauri-apps/plugin-log", () => ({ warn: vi.fn(), info: vi.fn(), error: vi.fn() }));
 
 vi.mock("../store", () => ({
   useTabStore: vi.fn((selector: (s: object) => unknown) =>

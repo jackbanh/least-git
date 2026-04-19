@@ -169,8 +169,10 @@
 }
 
 .diff-loading {
-  padding: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
   font-size: 12px;
   color: var(--mantine-color-dimmed);
-  font-style: italic;
 }

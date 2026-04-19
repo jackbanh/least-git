@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import Markdown from "react-markdown";
+import { Loader } from "@mantine/core";
 import { useTabStore } from "../store";
 import { useResize } from "../hooks/useResize";
 import DiffViewer from "./DiffViewer";
@@ -101,7 +102,9 @@ function CommitDetailInner({
   if (!selectedOid || !detail) {
     return (
       <div className="detail-empty">
-        {selectedOid ? "Loading…" : "Select a commit to view details"}
+        {selectedOid
+          ? <Loader size="sm" />
+          : "Select a commit to view details"}
       </div>
     );
   }
@@ -163,7 +166,7 @@ function CommitDetailInner({
 
       <div className="detail-diff">
         {diffLoading ? (
-          <div className="diff-loading">Loading diff…</div>
+          <div className="diff-loading"><Loader size="sm" /></div>
         ) : diff ? (
           <DiffViewer diff={diff} />
         ) : (
