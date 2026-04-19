@@ -12,7 +12,17 @@ interface BranchInfo {
   is_head: boolean;
 }
 
-export default function BranchSwitcher({ tabId, listKey }: { tabId: string; listKey: number }) {
+export default function BranchSwitcher({
+  tabId,
+  listKey,
+  onManualRefresh,
+}: {
+  tabId: string;
+  listKey: number;
+  /** Called just before an intentional bumpListKey so the caller can pre-arm
+   *  any throttle and suppress the redundant watcher event that follows. */
+  onManualRefresh?: () => void;
+}) {
   const [branches, setBranches] = useState<BranchInfo[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(true);
   const [filter, setFilter] = useState("");
@@ -84,6 +94,7 @@ export default function BranchSwitcher({ tabId, listKey }: { tabId: string; list
 
   function handleCheckoutSuccess() {
     logInfo(`BranchSwitcher[${tabId}] checkout success`);
+    onManualRefresh?.(); // pre-arm throttle before bumpListKey triggers watcher
     bumpListKey(tabId);
     selectCommit(tabId, null);
     // Re-fetch branch list to reflect new HEAD (reuses the same generation guard).

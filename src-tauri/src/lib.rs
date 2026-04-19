@@ -74,6 +74,10 @@ pub struct CommitInfo {
     pub author_name: String,
     pub author_email: String,
     pub timestamp: i64,
+    /// OID of this commit's first parent, or None if it is the root commit.
+    /// The frontend passes this back as `after_oid` for the next page so that
+    /// Rust can start the walk directly without decoding the cursor commit.
+    pub parent_oid: Option<String>,
 }
 
 #[derive(Serialize, Clone)]
@@ -235,31 +239,14 @@ fn load_commits(
     let repo = gix::open(&path).map_err(|e| e.to_string())?;
 
     // Determine where to start the walk.
-    // `after_oid` is the OID of the last commit already shown (the page cursor).
-    // We decode that commit to find its first parent and begin the walk there,
-    // so we never skip O(offset) commits from HEAD.
+    // `after_oid` is the first-parent OID of the last commit already shown
+    // (taken from CommitInfo.parent_oid in the previous page response).
+    // Using the parent directly means we only need one lightweight OID lookup
+    // instead of find_object + decode + rev_parse_single(parent).
     let cursor_t = std::time::Instant::now();
     let start_id = if let Some(oid_str) = after_oid {
-        let cursor_oid = gix::ObjectId::from_hex(oid_str.trim().as_bytes())
-            .map_err(|e| format!("Invalid cursor OID: {e}"))?;
-        let obj = repo.find_object(cursor_oid).map_err(|e| e.to_string())?;
-        let commit = obj.try_into_commit().map_err(|e| format!("not a commit: {e:?}"))?;
-        let decoded = commit.decode().map_err(|e| e.to_string())?;
-        // Clone the first parent OID out before decoded/commit are dropped.
-        let first_parent = decoded.parents.first().copied().map(|p| p.to_owned());
-        drop(decoded);
-        drop(commit);
-        match first_parent {
-            None => {
-                info!("load_commits cursor was root commit — no more history");
-                return Ok(vec![]);
-            }
-            Some(parent_oid) => {
-                let hex = parent_oid.to_string();
-                repo.rev_parse_single(gix::bstr::BStr::new(hex.as_bytes()))
-                    .map_err(|e| format!("cursor parent not found: {e}"))?
-            }
-        }
+        repo.rev_parse_single(gix::bstr::BStr::new(oid_str.trim().as_bytes()))
+            .map_err(|e| format!("cursor not found: {e}"))?
     } else {
         repo.head_id().map_err(|e| e.to_string())?
     };
@@ -286,6 +273,7 @@ fn load_commits(
 
         let end = decoded.message.find_byte(b'\n').unwrap_or(decoded.message.len());
         let summary = decoded.message[..end].to_str_lossy().trim().to_string();
+        let parent_oid = decoded.parents.first().map(|p| p.to_string());
 
         commits.push(CommitInfo {
             oid: oid_str,
@@ -294,6 +282,7 @@ fn load_commits(
             author_name: decoded.author.name.to_str_lossy().to_string(),
             author_email: decoded.author.email.to_str_lossy().to_string(),
             timestamp: decoded.author.time.seconds,
+            parent_oid,
         });
     }
     let walk_ms = walk_t.elapsed().as_millis();

@@ -73,6 +73,7 @@ export default function App() {
     const unlisten = listen("menu:refresh", () => {
       if (activeTabId) {
         invoke("clear_detail_cache", { tabId: activeTabId });
+        preArmThrottle(activeTabId, "refs");
         bumpListKey(activeTabId);
       }
     });
@@ -90,6 +91,15 @@ export default function App() {
     const unlisten = listen("menu:pull", () => setPullDrawerOpen(true));
     return () => { unlisten.then((fn) => fn()); };
   }, []);
+
+  // Pre-arm the throttle so the imminent watcher event (fired ~100ms after any
+  // intentional git operation) is swallowed by the 2 s cooldown window instead
+  // of triggering a redundant second refresh.
+  function preArmThrottle(tabId: string, kind: string) {
+    const key = `${tabId}:${kind}`;
+    repoChangedThrottle.current[key] = Date.now();
+    logInfo(`App preArmThrottle tab=${tabId} kind=${kind}`);
+  }
 
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? null;
 
@@ -156,7 +166,11 @@ export default function App() {
         {activeTabId ? (
           <>
             <div className="sidebar" style={{ width: sidebarWidth }}>
-              <BranchSwitcher tabId={activeTabId} listKey={activeTab?.listKey ?? 0} />
+              <BranchSwitcher
+                tabId={activeTabId}
+                listKey={activeTab?.listKey ?? 0}
+                onManualRefresh={() => preArmThrottle(activeTabId, "refs")}
+              />
             </div>
             <div className="resize-handle resize-handle--vertical" onMouseDown={startSidebarResize} />
             <div className="main-area">
@@ -187,7 +201,7 @@ export default function App() {
           tabId={activeTabId}
           opened={branchDialogOpen}
           onClose={() => setBranchDialogOpen(false)}
-          onCreated={() => bumpListKey(activeTabId)}
+          onCreated={() => { preArmThrottle(activeTabId, "refs"); bumpListKey(activeTabId); }}
         />
       )}
       {activeTabId && (
@@ -195,7 +209,7 @@ export default function App() {
           tabId={activeTabId}
           opened={pullDrawerOpen}
           onClose={() => setPullDrawerOpen(false)}
-          onSuccess={() => bumpListKey(activeTabId)}
+          onSuccess={() => { preArmThrottle(activeTabId, "refs"); bumpListKey(activeTabId); }}
         />
       )}
     </div>
