@@ -29,6 +29,10 @@ interface CommitInfo {
   author_name: string;
   author_email: string;
   timestamp: number;
+  /** First-parent OID of this commit, or null for the root commit.
+   *  Sent back as after_oid for the next page so Rust can start the walk
+   *  directly without re-decoding the cursor commit. */
+  parent_oid: string | null;
 }
 
 const PAGE_SIZE = 25;
@@ -57,10 +61,15 @@ export default function CommitList({ tabId, listKey }: { tabId: string; listKey:
   const commitsRef = useRef(commits);
   commitsRef.current = commits;
   const prevListKeyRef = useRef(listKey);
-  // Cursor for the next page: OID of the last commit already fetched.
+  // Cursor for the next page: parent_oid of the last commit already fetched.
+  // This is the OID where the next walk should start, avoiding a redundant
+  // find_object+decode step on the Rust side (saves ~200-400ms per page).
+  // null means either no commits yet or the last commit is the root (no parent).
   // Updated synchronously in render so loadMore always sees the latest value.
   const lastOidRef = useRef<string | null>(null);
-  lastOidRef.current = commits.length > 0 ? commits[commits.length - 1].oid : null;
+  lastOidRef.current = commits.length > 0
+    ? (commits[commits.length - 1].parent_oid ?? null)
+    : null;
 
   const selectedOid = useTabStore(
     (s) => s.tabs.find((t) => t.id === tabId)?.selectedOid ?? null
@@ -86,7 +95,9 @@ export default function CommitList({ tabId, listKey }: { tabId: string; listKey:
       if (next.length === 0 && cursor === null) {
         logWarn(`CommitList[${tabId}] loadMore returned 0 commits from HEAD`);
       }
-      if (next.length < PAGE_SIZE) setHasMore(false);
+      // Stop paging when fewer than a full page returned, OR when the last commit
+      // has no parent (root commit) — there is nothing further to walk.
+      if (next.length < PAGE_SIZE || next[next.length - 1]?.parent_oid === null) setHasMore(false);
     } catch (e) {
       const ms = Math.round(performance.now() - t0);
       logError(`CommitList[${tabId}] loadMore failed ms=${ms} error=${e}`);
@@ -131,7 +142,7 @@ export default function CommitList({ tabId, listKey }: { tabId: string; listKey:
         }
         staleCommitsRef.current = [];
         setCommits(fresh);
-        if (fresh.length < PAGE_SIZE) setHasMore(false);
+        if (fresh.length < PAGE_SIZE || fresh[fresh.length - 1]?.parent_oid === null) setHasMore(false);
       })
       .catch((e) => {
         const ms = Math.round(performance.now() - t0);

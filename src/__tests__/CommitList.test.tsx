@@ -45,6 +45,7 @@ const STUB_COMMIT = {
   author_name: "Jack",
   author_email: "jack@example.com",
   timestamp: 1_700_000_000,
+  parent_oid: "parentoid123parentoid1", // non-null so hasMore stays true for a single stub page
 };
 
 function renderCommitList(listKey = 0) {
