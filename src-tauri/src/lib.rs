@@ -1,6 +1,6 @@
 use dashmap::DashMap;
 use gix::bstr::ByteSlice;
-use log::{error, info, warn};
+use log::{info, warn};
 use notify_debouncer_mini::notify::RecursiveMode;
 use notify_debouncer_mini::new_debouncer;
 use serde::Serialize;
@@ -896,7 +896,10 @@ pub fn run() {
     tauri::Builder::default()
         .manage(state)
         .plugin({
+            // Builder::new() ships with implicit Stdout + LogDir defaults; clear
+            // them first so our explicit targets are the only ones active.
             let builder = tauri_plugin_log::Builder::new()
+                .clear_targets()
                 .level(log::LevelFilter::Info)
                 .target(tauri_plugin_log::Target::new(
                     tauri_plugin_log::TargetKind::LogDir {
