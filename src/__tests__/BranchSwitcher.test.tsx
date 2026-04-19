@@ -87,8 +87,7 @@ describe("BranchSwitcher", () => {
     await waitFor(() => expect(screen.getByText("main")).toBeInTheDocument());
 
     // Second refresh fires — fetch is pending
-    let resolveSecond!: (v: unknown) => void;
-    mockInvoke.mockReturnValueOnce(new Promise((res) => { resolveSecond = res; }));
+    mockInvoke.mockReturnValueOnce(new Promise(() => {})); // never resolves — superseded by listKey=2
     rerenderBranchSwitcher(rerender, 1);
 
     // Watcher fires again while second fetch is in-flight — this one CAN fire
