@@ -45,6 +45,11 @@ function renderDetail() {
   );
 }
 
+// File paths are split into dir/name spans; match by title attribute on the wrapper.
+function getFilePath(path: string) {
+  return screen.getByTitle(path);
+}
+
 describe("CommitDetail file list keyboard navigation", () => {
   beforeEach(() => {
     mockInvoke.mockReset();
@@ -57,13 +62,13 @@ describe("CommitDetail file list keyboard navigation", () => {
       return Promise.resolve(""); // get_file_diff
     });
     renderDetail();
-    await waitFor(() => expect(screen.getByText("src/alpha.ts")).toBeInTheDocument());
+    await waitFor(() => expect(getFilePath("src/alpha.ts")).toBeInTheDocument());
   }
 
   it("focuses the file list when a file row is clicked", async () => {
     await setup();
 
-    fireEvent.click(screen.getByText("src/alpha.ts"));
+    fireEvent.click(getFilePath("src/alpha.ts"));
 
     const fileList = document.querySelector(".detail-files") as HTMLElement;
     expect(document.activeElement).toBe(fileList);
@@ -72,49 +77,49 @@ describe("CommitDetail file list keyboard navigation", () => {
   it("moves selection down with ArrowDown after clicking a file", async () => {
     await setup();
 
-    fireEvent.click(screen.getByText("src/alpha.ts"));
+    fireEvent.click(getFilePath("src/alpha.ts"));
 
     const fileList = document.querySelector(".detail-files") as HTMLElement;
     fireEvent.keyDown(fileList, { key: "ArrowDown" });
 
     await waitFor(() =>
-      expect(screen.getByText("src/beta.ts").closest(".file-row")).toHaveClass("file-row--selected")
+      expect(getFilePath("src/beta.ts").closest(".file-row")).toHaveClass("file-row--selected")
     );
   });
 
   it("moves selection up with ArrowUp", async () => {
     await setup();
 
-    fireEvent.click(screen.getByText("src/beta.ts"));
+    fireEvent.click(getFilePath("src/beta.ts"));
     const fileList = document.querySelector(".detail-files") as HTMLElement;
     fireEvent.keyDown(fileList, { key: "ArrowUp" });
 
     await waitFor(() =>
-      expect(screen.getByText("src/alpha.ts").closest(".file-row")).toHaveClass("file-row--selected")
+      expect(getFilePath("src/alpha.ts").closest(".file-row")).toHaveClass("file-row--selected")
     );
   });
 
   it("does not move past the first file on ArrowUp", async () => {
     await setup();
 
-    fireEvent.click(screen.getByText("src/alpha.ts"));
+    fireEvent.click(getFilePath("src/alpha.ts"));
     const fileList = document.querySelector(".detail-files") as HTMLElement;
     fireEvent.keyDown(fileList, { key: "ArrowUp" });
 
     await waitFor(() =>
-      expect(screen.getByText("src/alpha.ts").closest(".file-row")).toHaveClass("file-row--selected")
+      expect(getFilePath("src/alpha.ts").closest(".file-row")).toHaveClass("file-row--selected")
     );
   });
 
   it("does not move past the last file on ArrowDown", async () => {
     await setup();
 
-    fireEvent.click(screen.getByText("src/gamma.ts"));
+    fireEvent.click(getFilePath("src/gamma.ts"));
     const fileList = document.querySelector(".detail-files") as HTMLElement;
     fireEvent.keyDown(fileList, { key: "ArrowDown" });
 
     await waitFor(() =>
-      expect(screen.getByText("src/gamma.ts").closest(".file-row")).toHaveClass("file-row--selected")
+      expect(getFilePath("src/gamma.ts").closest(".file-row")).toHaveClass("file-row--selected")
     );
   });
 });

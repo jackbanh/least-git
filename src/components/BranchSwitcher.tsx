@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { warn as logWarn, info as logInfo } from "@tauri-apps/plugin-log";
-import { TextInput } from "@mantine/core";
 import { useTabStore } from "../store";
 import GitOutputDrawer from "./GitOutputDrawer";
 import ProgressBar from "./ProgressBar";
@@ -12,6 +11,15 @@ interface BranchInfo {
   is_head: boolean;
 }
 
+function SearchIcon() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+      <circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M10.5 10.5L13 13" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export default function BranchSwitcher({
   tabId,
   listKey,
@@ -19,34 +27,25 @@ export default function BranchSwitcher({
 }: {
   tabId: string;
   listKey: number;
-  /** Called just before an intentional bumpListKey so the caller can pre-arm
-   *  any throttle and suppress the redundant watcher event that follows. */
   onManualRefresh?: () => void;
 }) {
   const [branches, setBranches] = useState<BranchInfo[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(true);
   const [filter, setFilter] = useState("");
+  const [filterFocused, setFilterFocused] = useState(false);
+  const [selectedName, setSelectedName] = useState<string | null>(null);
   const [checkoutBranch, setCheckoutBranch] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const bumpListKey = useTabStore((s) => s.bumpListKey);
   const selectCommit = useTabStore((s) => s.selectCommit);
-  // Generation counter: if a newer fetch starts before an older one resolves,
-  // discard the stale response instead of overwriting correct data.
   const fetchGenRef = useRef(0);
-  // Stale-while-revalidate: the last successfully loaded branches for this tab.
-  // Populated on every successful fetch so it survives across listKey refreshes
-  // even when a new refresh fires before the previous one completes.
   const lastKnownBranchesRef = useRef<BranchInfo[]>([]);
   const branchesRef = useRef(branches);
   branchesRef.current = branches;
-  // True while a fetch is in-flight and we have no data yet for this tab.
   const initialFetchInFlightRef = useRef(false);
 
   useEffect(() => {
-    // If we're still waiting for the very first load (no branches, no stale),
-    // a watcher-triggered refresh can't show anything better — skip it and let
-    // the in-flight fetch complete instead of queuing a duplicate.
     if (
       initialFetchInFlightRef.current &&
       lastKnownBranchesRef.current.length === 0
@@ -67,12 +66,13 @@ export default function BranchSwitcher({
         logInfo(`BranchSwitcher[${tabId}] refresh done count=${data.length} ms=${ms}`);
         if (data.length === 0) {
           logWarn(`BranchSwitcher[${tabId}] list_branches returned 0 — keeping lastKnown=${lastKnownBranchesRef.current.length}`);
-          // Don't replace non-empty last-known data with an empty result; the
-          // repo is almost certainly mid-operation. Let the next refresh fix it.
           if (lastKnownBranchesRef.current.length > 0) return;
         }
         lastKnownBranchesRef.current = data;
         setBranches(data);
+        // Auto-select the HEAD branch
+        const head = data.find((b) => b.is_head);
+        if (head) setSelectedName(head.name);
       })
       .catch((e) => {
         if (gen !== fetchGenRef.current) return;
@@ -85,10 +85,9 @@ export default function BranchSwitcher({
           initialFetchInFlightRef.current = false;
         }
       });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tabId, listKey]);
 
-  // Show last-known branches while a refresh is in flight so the list never blanks.
   const visibleBranches =
     branches.length === 0 && lastKnownBranchesRef.current.length > 0
       ? lastKnownBranchesRef.current
@@ -109,10 +108,9 @@ export default function BranchSwitcher({
 
   function handleCheckoutSuccess() {
     logInfo(`BranchSwitcher[${tabId}] checkout success`);
-    onManualRefresh?.(); // pre-arm throttle before bumpListKey triggers watcher
+    onManualRefresh?.();
     bumpListKey(tabId);
     selectCommit(tabId, null);
-    // Re-fetch branch list to reflect new HEAD (reuses the same generation guard).
     const gen = ++fetchGenRef.current;
     const t0 = performance.now();
     invoke<BranchInfo[]>("list_branches", { tabId }).then((data) => {
@@ -121,6 +119,8 @@ export default function BranchSwitcher({
       logInfo(`BranchSwitcher[${tabId}] post-checkout refresh done count=${data.length} ms=${ms}`);
       lastKnownBranchesRef.current = data;
       setBranches(data);
+      const head = data.find((b) => b.is_head);
+      if (head) setSelectedName(head.name);
     });
   }
 
@@ -128,39 +128,64 @@ export default function BranchSwitcher({
     setCheckoutBranch(null);
   }
 
+  // Linen-like noise texture — fine fractalNoise at low opacity
+  const linenBg = `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.05 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>")`;
+
   return (
     <div className="branch-switcher">
+      {/* Linen texture overlay */}
+      <div
+        className="branch-linen"
+        style={{ backgroundImage: linenBg }}
+      />
+
       <ProgressBar visible={isRefreshing} />
-      <div className="branch-switcher-header">Branches</div>
-      <div className="branch-filter-wrap">
-        <TextInput
-          size="xs"
-          placeholder="Filter branches…"
-          value={filter}
-          onChange={(e) => setFilter(e.currentTarget.value)}
-        />
-      </div>
-      {error && <div className="branch-error">{error}</div>}
-      <div className="branch-list">
-        {filtered.map((branch) => (
-          <div
-            key={branch.name}
-            className={[
-              "branch-row",
-              branch.is_head ? "branch-row--head" : "",
-              checkoutBranch === branch.name ? "branch-row--checking" : "",
-            ]
-              .filter(Boolean)
-              .join(" ")}
-            onClick={() => handleCheckout(branch.name)}
-          >
-            {branch.name}
+
+      <div className="branch-content">
+        {/* Header */}
+        <div className="branch-header">
+          <span className="branch-header-label">Branches</span>
+          <span className="branch-header-count">{visibleBranches.length}</span>
+        </div>
+
+        {/* Filter */}
+        <div className="branch-filter-wrap">
+          <div className={`branch-filter-box${filterFocused ? " branch-filter-box--focused" : ""}`}>
+            <span className="branch-filter-icon"><SearchIcon /></span>
+            <input
+              className="branch-filter-input"
+              value={filter}
+              onChange={(e) => setFilter(e.currentTarget.value)}
+              onFocus={() => setFilterFocused(true)}
+              onBlur={() => setFilterFocused(false)}
+              placeholder="Filter branches…"
+            />
+            {filter && (
+              <button className="branch-filter-clear" onClick={() => setFilter("")}>×</button>
+            )}
           </div>
-        ))}
-        {filtered.length === 0 && filter && (
-          <div className="branch-empty">No matches</div>
-        )}
+        </div>
+
+        {error && <div className="branch-error">{error}</div>}
+
+        {/* Branch list */}
+        <div className="branch-list">
+          {filtered.map((branch) => (
+            <BranchRow
+              key={branch.name}
+              branch={branch}
+              selected={branch.name === selectedName}
+              isChecking={checkoutBranch === branch.name}
+              onSelect={() => setSelectedName(branch.name)}
+              onDoubleClick={() => handleCheckout(branch.name)}
+            />
+          ))}
+          {filtered.length === 0 && filter && (
+            <div className="branch-empty">No matching branches.</div>
+          )}
+        </div>
       </div>
+
       <GitOutputDrawer
         tabId={tabId}
         opened={!!checkoutBranch}
@@ -171,6 +196,46 @@ export default function BranchSwitcher({
         onClose={handleCheckoutClose}
         onSuccess={handleCheckoutSuccess}
       />
+    </div>
+  );
+}
+
+function BranchRow({
+  branch,
+  selected,
+  isChecking,
+  onSelect,
+  onDoubleClick,
+}: {
+  branch: BranchInfo;
+  selected: boolean;
+  isChecking: boolean;
+  onSelect: () => void;
+  onDoubleClick: () => void;
+}) {
+  return (
+    <div
+      className={[
+        "branch-row",
+        branch.is_head ? "branch-row--head" : "",
+        selected ? "branch-row--selected" : "",
+        isChecking ? "branch-row--checking" : "",
+      ].filter(Boolean).join(" ")}
+      onClick={onSelect}
+      onDoubleClick={onDoubleClick}
+    >
+      {/* Current-branch accent bar */}
+      {branch.is_head && (
+        <div className="branch-row-accent-bar branch-row-accent-bar--head" />
+      )}
+      {/* Selection indent bar (non-HEAD) */}
+      {selected && !branch.is_head && (
+        <div className="branch-row-accent-bar branch-row-accent-bar--selected" />
+      )}
+      <span className="branch-row-name">{branch.name}</span>
+      {branch.is_head && (
+        <div className="branch-row-head-dot" />
+      )}
     </div>
   );
 }

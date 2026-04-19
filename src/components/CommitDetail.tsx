@@ -26,14 +26,14 @@ interface CommitDetailData {
   files: ChangedFile[];
 }
 
-function formatDate(ts: number): string {
-  return new Date(ts * 1000).toLocaleString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+function formatDateTime(ts: number): string {
+  const d = new Date(ts * 1000);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const min = String(d.getMinutes()).padStart(2, "0");
+  return `${yyyy}-${mm}-${day} ${hh}:${min}`;
 }
 
 // Routing shell — always calls hooks in the same order, then delegates.
@@ -49,7 +49,6 @@ export default function CommitDetail({ tabId, listKey, statusKey }: { tabId: str
   return <CommitDetailInner tabId={tabId} selectedOid={selectedOid} />;
 }
 
-// Inner component — hooks always run unconditionally here.
 function CommitDetailInner({
   tabId,
   selectedOid,
@@ -61,13 +60,13 @@ function CommitDetailInner({
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [diff, setDiff] = useState<string>("");
   const [diffLoading, setDiffLoading] = useState(false);
-  const [metaHeight, setMetaHeight] = useState(100);
+  const [metaHeight, setMetaHeight] = useState(120);
 
   const detailLeftWidth = useTabStore((s) => s.detailLeftWidth);
   const setDetailLeftWidth = useTabStore((s) => s.setDetailLeftWidth);
 
   const startLeftResize = useResize(detailLeftWidth, setDetailLeftWidth, "horizontal", 140, 9999);
-  const startMetaResize = useResize(metaHeight, setMetaHeight, "vertical", 60, 300, true);
+  const startMetaResize = useResize(metaHeight, setMetaHeight, "vertical", 80, 320, true);
 
   useEffect(() => {
     if (!selectedOid) {
@@ -131,15 +130,15 @@ function CommitDetailInner({
               key={file.path}
               className={`file-row${selectedFile === file.path ? " file-row--selected" : ""}`}
               onClick={(e) => {
-              setSelectedFile(file.path);
-              (e.currentTarget.closest(".detail-files") as HTMLElement | null)?.focus();
-            }}
+                setSelectedFile(file.path);
+                (e.currentTarget.closest(".detail-files") as HTMLElement | null)?.focus();
+              }}
             >
               <span className={`file-status file-status--${file.status.toLowerCase()}`}>
                 {file.status}
               </span>
               <span className="file-path" title={file.path}>
-                {file.path}
+                <FilePathDisplay path={file.path} />
               </span>
             </div>
           ))}
@@ -149,14 +148,20 @@ function CommitDetailInner({
 
         <div className="detail-meta" style={{ height: metaHeight }}>
           <div className="detail-message">
-            <Markdown>{detail.summary + (detail.body ? "\n\n" + detail.body : "")}</Markdown>
+            <div className="detail-commit-title">{detail.summary}</div>
+            {detail.body && (
+              <div className="detail-commit-body">
+                <Markdown>{detail.body}</Markdown>
+              </div>
+            )}
             <div className="detail-meta-footer">
               <span className="detail-oid">{detail.oid.slice(0, 7)}</span>
+              <span className="detail-meta-sep">·</span>
+              <span className="detail-date">{formatDateTime(detail.timestamp)}</span>
+              <span className="detail-meta-sep">·</span>
               <span className="detail-author">
-                {detail.author_name}{" "}
-                <span className="detail-email">&lt;{detail.author_email}&gt;</span>
+                {detail.author_name}
               </span>
-              <span className="detail-date">{formatDate(detail.timestamp)}</span>
             </div>
           </div>
         </div>
@@ -170,9 +175,23 @@ function CommitDetailInner({
         ) : diff ? (
           <DiffViewer diff={diff} />
         ) : (
-          <div className="diff-loading">Select a file to view diff</div>
+          <div className="diff-loading">
+            <span className="diff-loading-text">Select a file to view diff</span>
+          </div>
         )}
       </div>
     </div>
+  );
+}
+
+function FilePathDisplay({ path }: { path: string }) {
+  const parts = path.split("/");
+  const name = parts.pop()!;
+  const dir = parts.join("/");
+  return (
+    <>
+      {dir && <span className="file-path-dir">{dir}/</span>}
+      <span className="file-path-name">{name}</span>
+    </>
   );
 }

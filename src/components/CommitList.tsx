@@ -29,9 +29,6 @@ interface CommitInfo {
   author_name: string;
   author_email: string;
   timestamp: number;
-  /** First-parent OID of this commit, or null for the root commit.
-   *  Sent back as after_oid for the next page so Rust can start the walk
-   *  directly without re-decoding the cursor commit. */
   parent_oid: string | null;
 }
 
@@ -45,6 +42,12 @@ function formatDate(ts: number): string {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+function getInitials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  return name.slice(0, 2).toUpperCase();
+}
+
 export default function CommitList({ tabId, listKey }: { tabId: string; listKey: number }) {
   const [commits, setCommits] = useState<CommitInfo[]>([]);
   const [hasMore, setHasMore] = useState(true);
@@ -53,23 +56,12 @@ export default function CommitList({ tabId, listKey }: { tabId: string; listKey:
   const [pullDrawerOpen, setPullDrawerOpen] = useState(false);
   const bumpListKey = useTabStore((s) => s.bumpListKey);
   const parentRef = useRef<HTMLDivElement>(null);
-  // Ref-based guard so concurrent effect firings see the updated value synchronously,
-  // preventing duplicate fetches when loadMore is recreated after each page lands.
   const isLoadingRef = useRef(false);
-  // Generation counter: incremented on every listKey refresh so that in-flight
-  // loadMore calls that started before the refresh can detect they are stale and
-  // discard their results instead of appending old-page data to fresh page-1.
   const loadGenRef = useRef(0);
-  // Stale-while-revalidate: preserve previous commits for display until fresh page 0 arrives.
   const staleCommitsRef = useRef<CommitInfo[]>([]);
   const commitsRef = useRef(commits);
   commitsRef.current = commits;
   const prevListKeyRef = useRef(listKey);
-  // Cursor for the next page: parent_oid of the last commit already fetched.
-  // This is the OID where the next walk should start, avoiding a redundant
-  // find_object+decode step on the Rust side (saves ~200-400ms per page).
-  // null means either no commits yet or the last commit is the root (no parent).
-  // Updated synchronously in render so loadMore always sees the latest value.
   const lastOidRef = useRef<string | null>(null);
   lastOidRef.current = commits.length > 0
     ? (commits[commits.length - 1].parent_oid ?? null)
@@ -83,8 +75,6 @@ export default function CommitList({ tabId, listKey }: { tabId: string; listKey:
   const loadMore = useCallback(async () => {
     if (isLoadingRef.current || !hasMore) return;
     isLoadingRef.current = true;
-    // Snapshot the generation at call time — if a refresh fires mid-flight and
-    // increments loadGenRef, we'll detect it and discard the stale result.
     const gen = loadGenRef.current;
     const cursor = lastOidRef.current;
     const loadedBefore = commitsRef.current.length;
@@ -106,8 +96,6 @@ export default function CommitList({ tabId, listKey }: { tabId: string; listKey:
       if (next.length === 0 && cursor === null) {
         logWarn(`CommitList[${tabId}] loadMore returned 0 commits from HEAD`);
       }
-      // Stop paging when fewer than a full page returned, OR when the last commit
-      // has no parent (root commit) — there is nothing further to walk.
       if (next.length < PAGE_SIZE || next[next.length - 1]?.parent_oid === null) setHasMore(false);
     } catch (e) {
       const ms = Math.round(performance.now() - t0);
@@ -123,26 +111,19 @@ export default function CommitList({ tabId, listKey }: { tabId: string; listKey:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // When listKey changes (refresh signal), keep showing current commits until fresh
-  // page 0 arrives, then replace them.
   useEffect(() => {
     if (listKey === prevListKeyRef.current) return;
     prevListKeyRef.current = listKey;
 
-    // Bump the generation so any in-flight loadMore calls from before this
-    // refresh detect they are stale and discard their results.
     loadGenRef.current += 1;
 
-    // Only overwrite stale if there's actually something to preserve.
-    // On a rapid double-bump, commitsRef is already [] (cleared by the first bump),
-    // so we must not overwrite the stale data we already saved.
     const currentCount = commitsRef.current.length;
     const savingStale = currentCount > 0;
     if (savingStale) {
       staleCommitsRef.current = commitsRef.current;
     }
     logInfo(`CommitList[${tabId}] refresh listKey=${listKey} current=${currentCount} savingStale=${savingStale} staleNow=${staleCommitsRef.current.length}`);
-    lastOidRef.current = null; // reset cursor so the refresh starts from HEAD
+    lastOidRef.current = null;
     setCommits([]);
     setHasMore(true);
     isLoadingRef.current = true;
@@ -161,18 +142,15 @@ export default function CommitList({ tabId, listKey }: { tabId: string; listKey:
       })
       .catch((e) => {
         const ms = Math.round(performance.now() - t0);
-        // Do NOT clear staleCommitsRef here — keep stale data visible on error.
         logWarn(`CommitList[${tabId}] refresh failed ms=${ms} stale=${staleCommitsRef.current.length} error=${e}`);
         setHasMore(false);
       })
       .finally(() => {
         isLoadingRef.current = false;
       });
-  // tabId is stable for the component lifetime (key={activeTabId} remounts on tab change)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listKey]);
 
-  // Show stale commits while fresh page 0 is in flight, then switch to fresh commits.
   const visibleCommits =
     commits.length === 0 && staleCommitsRef.current.length > 0
       ? staleCommitsRef.current
@@ -184,13 +162,12 @@ export default function CommitList({ tabId, listKey }: { tabId: string; listKey:
   const virtualizer = useVirtualizer({
     count,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 32,
+    estimateSize: () => 40,
     overscan: 15,
   });
 
   const items = virtualizer.getVirtualItems();
 
-  // current flat index: 0 = uncommitted, 1..N = visibleCommits[index-1]
   const selectedIndex =
     selectedOid === UNCOMMITTED
       ? 0
@@ -199,7 +176,7 @@ export default function CommitList({ tabId, listKey }: { tabId: string; listKey:
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
     e.preventDefault();
-    const maxIndex = visibleCommits.length; // 0..visibleCommits.length (last = last commit)
+    const maxIndex = visibleCommits.length;
     const next =
       e.key === "ArrowUp"
         ? Math.max(0, selectedIndex - 1)
@@ -215,28 +192,70 @@ export default function CommitList({ tabId, listKey }: { tabId: string; listKey:
   useEffect(() => {
     const last = items[items.length - 1];
     if (!last) return;
-    // subtract 1 for the uncommitted row when checking proximity to end
     if (last.index - 1 >= commits.length - 20 && hasMore && !isLoadingRef.current) {
       loadMore();
     }
   }, [items, commits.length, hasMore, loadMore]);
 
   return (
-    <div
-      ref={parentRef}
-      className="commit-list"
-      tabIndex={0}
-      onKeyDown={handleKeyDown}
-      style={contextMenu ? { overflowY: "hidden" } : undefined}
-    >
-      <ProgressBar visible={commits.length === 0 && hasMore} />
-      <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
-        {items.map((vItem) => {
-          if (vItem.index === 0) {
+    <div className="commit-list-wrap">
+      {/* Column headers */}
+      <div className="commit-list-headers">
+        <div className="cl-col-dot" />
+        <div className="cl-col-sha">Commit</div>
+        <div className="cl-col-msg">Message</div>
+        <div className="cl-col-author">Author</div>
+        <div className="cl-col-date">Date</div>
+      </div>
+
+      <div
+        ref={parentRef}
+        className="commit-list"
+        tabIndex={0}
+        onKeyDown={handleKeyDown}
+        style={contextMenu ? { overflowY: "hidden" } : undefined}
+      >
+        <ProgressBar visible={commits.length === 0 && hasMore} />
+
+        {/* Continuous dot rail */}
+        <div className="commit-dot-rail" />
+
+        <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
+          {items.map((vItem) => {
+            if (vItem.index === 0) {
+              const isSelected = selectedOid === UNCOMMITTED;
+              return (
+                <div
+                  key={vItem.key}
+                  className={`commit-row${isSelected ? " commit-row--selected" : ""}`}
+                  style={{
+                    position: "absolute",
+                    top: vItem.start,
+                    left: 0,
+                    right: 0,
+                    height: vItem.size,
+                  }}
+                  onClick={() => selectCommit(tabId, UNCOMMITTED)}
+                >
+                  <div className="cl-col-dot">
+                    <div className="commit-dot commit-dot--uncommitted" />
+                  </div>
+                  <div className="cl-col-sha commit-sha-mono" style={{ color: "var(--lg-ink-faint)", fontStyle: "italic" }}>—</div>
+                  <div className="cl-col-msg commit-title">Uncommitted changes</div>
+                  <div className="cl-col-author commit-author-cell">
+                    <span className="commit-author-text" style={{ color: "var(--lg-ink-muted)", fontStyle: "normal" }}>working tree</span>
+                  </div>
+                  <div className="cl-col-date commit-date" />
+                </div>
+              );
+            }
+
+            const commit = visibleCommits[vItem.index - 1];
+            const isSelected = commit?.oid === selectedOid;
             return (
               <div
                 key={vItem.key}
-                className={`commit-row${selectedOid === UNCOMMITTED ? " commit-row--selected" : ""}`}
+                className={`commit-row${isSelected ? " commit-row--selected" : ""}`}
                 style={{
                   position: "absolute",
                   top: vItem.start,
@@ -244,83 +263,68 @@ export default function CommitList({ tabId, listKey }: { tabId: string; listKey:
                   right: 0,
                   height: vItem.size,
                 }}
-                onClick={() => selectCommit(tabId, UNCOMMITTED)}
+                onClick={() => commit && selectCommit(tabId, commit.oid)}
+                onContextMenu={(e) => {
+                  if (!commit) return;
+                  e.preventDefault();
+                  selectCommit(tabId, commit.oid);
+                  contextMenuOidRef.current = commit.oid;
+                  setContextMenu({ oid: commit.oid, x: e.clientX, y: e.clientY });
+                }}
               >
-                <span className="commit-oid">●</span>
-                <span className="commit-summary">Uncommitted changes</span>
+                {commit ? (
+                  <>
+                    <div className="cl-col-dot">
+                      <div className={`commit-dot${isSelected ? " commit-dot--selected" : ""}`} />
+                    </div>
+                    <div className="cl-col-sha commit-sha-mono">{commit.short_oid}</div>
+                    <div className="cl-col-msg commit-title">{commit.summary}</div>
+                    <div className="cl-col-author commit-author-cell">
+                      <div className="commit-avatar">{getInitials(commit.author_name)}</div>
+                      <span className="commit-author-text">{commit.author_name}</span>
+                    </div>
+                    <div className="cl-col-date commit-date">{formatDate(commit.timestamp)}</div>
+                  </>
+                ) : (
+                  <div className="cl-col-msg commit-loading">Loading…</div>
+                )}
               </div>
             );
-          }
-
-          const commit = visibleCommits[vItem.index - 1];
-          const isSelected = commit?.oid === selectedOid;
-          return (
+          })}
+        </div>
+        <Menu
+          opened={!!contextMenu}
+          onClose={() => setContextMenu(null)}
+          position="right-start"
+        >
+          <Menu.Target>
             <div
-              key={vItem.key}
-              className={`commit-row${isSelected ? " commit-row--selected" : ""}`}
               style={{
-                position: "absolute",
-                top: vItem.start,
-                left: 0,
-                right: 0,
-                height: vItem.size,
+                position: "fixed",
+                left: contextMenu?.x ?? 0,
+                top: contextMenu?.y ?? 0,
+                width: 0,
+                height: 0,
               }}
-              onClick={() => commit && selectCommit(tabId, commit.oid)}
-              onContextMenu={(e) => {
-                if (!commit) return;
-                e.preventDefault();
-                selectCommit(tabId, commit.oid);
-                contextMenuOidRef.current = commit.oid;
-                setContextMenu({ oid: commit.oid, x: e.clientX, y: e.clientY });
-              }}
-            >
-              {commit ? (
-                <>
-                  <span className="commit-oid">{commit.short_oid}</span>
-                  <span className="commit-summary">{commit.summary}</span>
-                  <span className="commit-author">{commit.author_name}</span>
-                  <span className="commit-date">{formatDate(commit.timestamp)}</span>
-                </>
-              ) : (
-                <span className="commit-loading">Loading…</span>
-              )}
-            </div>
-          );
-        })}
+            />
+          </Menu.Target>
+          <Menu.Dropdown>
+            <Menu.Item leftSection={<IconCopy size={14} />} onClick={() => contextMenuOidRef.current && writeText(contextMenuOidRef.current)}>
+              Copy SHA-1
+            </Menu.Item>
+            <Menu.Divider />
+            <Menu.Item leftSection={<IconGitPullRequest size={14} />} onClick={() => setPullDrawerOpen(true)}>Pull with Rebase</Menu.Item>
+            <Menu.Item leftSection={<IconRefresh size={14} />}>Rebase Interactively onto Here</Menu.Item>
+            <Menu.Item leftSection={<IconRotate2 size={14} />} color="red">Reset to Here…</Menu.Item>
+          </Menu.Dropdown>
+        </Menu>
+        <PullDrawer
+          tabId={tabId}
+          opened={pullDrawerOpen}
+          onClose={() => setPullDrawerOpen(false)}
+          onSuccess={() => bumpListKey(tabId)}
+        />
       </div>
-      <Menu
-        opened={!!contextMenu}
-        onClose={() => setContextMenu(null)}
-        position="right-start"
-      >
-        <Menu.Target>
-          {/* Zero-size anchor positioned at the right-click coordinates */}
-          <div
-            style={{
-              position: "fixed",
-              left: contextMenu?.x ?? 0,
-              top: contextMenu?.y ?? 0,
-              width: 0,
-              height: 0,
-            }}
-          />
-        </Menu.Target>
-        <Menu.Dropdown>
-          <Menu.Item leftSection={<IconCopy size={14} />} onClick={() => contextMenuOidRef.current && writeText(contextMenuOidRef.current)}>
-            Copy SHA-1
-          </Menu.Item>
-          <Menu.Divider />
-          <Menu.Item leftSection={<IconGitPullRequest size={14} />} onClick={() => setPullDrawerOpen(true)}>Pull with Rebase</Menu.Item>
-          <Menu.Item leftSection={<IconRefresh size={14} />}>Rebase Interactively onto Here</Menu.Item>
-          <Menu.Item leftSection={<IconRotate2 size={14} />} color="red">Reset to Here…</Menu.Item>
-        </Menu.Dropdown>
-      </Menu>
-      <PullDrawer
-        tabId={tabId}
-        opened={pullDrawerOpen}
-        onClose={() => setPullDrawerOpen(false)}
-        onSuccess={() => bumpListKey(tabId)}
-      />
     </div>
   );
 }
