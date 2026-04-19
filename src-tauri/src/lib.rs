@@ -241,20 +241,27 @@ fn load_commits(
     // Determine where to start the walk.
     // `after_oid` is the first-parent OID of the last commit already shown
     // (taken from CommitInfo.parent_oid in the previous page response).
-    // Using the parent directly means we only need one lightweight OID lookup
-    // instead of find_object + decode + rev_parse_single(parent).
+    // We parse the hex string directly into an ObjectId without any pack
+    // verification — rev_parse_single does an existence check that costs
+    // ~650 ms of random pack I/O on large repos. The OID came from our own
+    // walk output so it is always valid; an invalid value would surface as a
+    // walk error on the first iteration anyway.
     let cursor_t = std::time::Instant::now();
-    let start_id = if let Some(oid_str) = after_oid {
-        repo.rev_parse_single(gix::bstr::BStr::new(oid_str.trim().as_bytes()))
-            .map_err(|e| format!("cursor not found: {e}"))?
+    // Produce a plain ObjectId so both branches have the same type.
+    // For cursor pages we parse hex directly — no pack verification, no I/O.
+    // For HEAD we call head_id() (reads one symref file) and detach the lifetime.
+    let start_id: gix::ObjectId = if let Some(oid_str) = after_oid {
+        gix::ObjectId::from_hex(oid_str.trim().as_bytes())
+            .map_err(|e| format!("invalid cursor OID: {e}"))?
     } else {
-        repo.head_id().map_err(|e| e.to_string())?
+        repo.head_id().map_err(|e| e.to_string())?.detach()
     };
     let cursor_ms = cursor_t.elapsed().as_millis();
 
     let walk_t = std::time::Instant::now();
-    let walk = start_id
-        .ancestors()
+    // repo.rev_walk accepts plain ObjectId directly, unlike Id::ancestors().
+    let walk = repo
+        .rev_walk([start_id])
         .first_parent_only()
         .all()
         .map_err(|e| e.to_string())?;
