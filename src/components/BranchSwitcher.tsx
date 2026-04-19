@@ -34,34 +34,44 @@ export default function BranchSwitcher({
   // Generation counter: if a newer fetch starts before an older one resolves,
   // discard the stale response instead of overwriting correct data.
   const fetchGenRef = useRef(0);
-  // Stale-while-revalidate: preserve last known branches while a refresh is
-  // in flight so the list never goes blank.
-  const staleBranchesRef = useRef<BranchInfo[]>([]);
+  // Stale-while-revalidate: the last successfully loaded branches for this tab.
+  // Populated on every successful fetch so it survives across listKey refreshes
+  // even when a new refresh fires before the previous one completes.
+  const lastKnownBranchesRef = useRef<BranchInfo[]>([]);
   const branchesRef = useRef(branches);
   branchesRef.current = branches;
+  // True while a fetch is in-flight and we have no data yet for this tab.
+  const initialFetchInFlightRef = useRef(false);
 
   useEffect(() => {
-    const gen = ++fetchGenRef.current;
-    // Snapshot current branches as stale data before clearing (only if non-empty).
-    if (branchesRef.current.length > 0) {
-      staleBranchesRef.current = branchesRef.current;
+    // If we're still waiting for the very first load (no branches, no stale),
+    // a watcher-triggered refresh can't show anything better — skip it and let
+    // the in-flight fetch complete instead of queuing a duplicate.
+    if (
+      initialFetchInFlightRef.current &&
+      lastKnownBranchesRef.current.length === 0
+    ) {
+      logInfo(`BranchSwitcher[${tabId}] refresh skipped — initial fetch still in flight listKey=${listKey}`);
+      return;
     }
+    const gen = ++fetchGenRef.current;
     setIsRefreshing(true);
     setFilter("");
+    initialFetchInFlightRef.current = lastKnownBranchesRef.current.length === 0;
     const t0 = performance.now();
-    logInfo(`BranchSwitcher[${tabId}] refresh start listKey=${listKey} stale=${staleBranchesRef.current.length}`);
+    logInfo(`BranchSwitcher[${tabId}] refresh start listKey=${listKey} lastKnown=${lastKnownBranchesRef.current.length}`);
     invoke<BranchInfo[]>("list_branches", { tabId })
       .then((data) => {
         if (gen !== fetchGenRef.current) return;
         const ms = Math.round(performance.now() - t0);
         logInfo(`BranchSwitcher[${tabId}] refresh done count=${data.length} ms=${ms}`);
         if (data.length === 0) {
-          logWarn(`BranchSwitcher[${tabId}] list_branches returned 0 — keeping stale=${staleBranchesRef.current.length}`);
-          // Don't replace non-empty stale data with an empty result; the repo
-          // is almost certainly mid-operation. Let the next refresh correct it.
-          if (staleBranchesRef.current.length > 0) return;
+          logWarn(`BranchSwitcher[${tabId}] list_branches returned 0 — keeping lastKnown=${lastKnownBranchesRef.current.length}`);
+          // Don't replace non-empty last-known data with an empty result; the
+          // repo is almost certainly mid-operation. Let the next refresh fix it.
+          if (lastKnownBranchesRef.current.length > 0) return;
         }
-        staleBranchesRef.current = [];
+        lastKnownBranchesRef.current = data;
         setBranches(data);
       })
       .catch((e) => {
@@ -69,14 +79,19 @@ export default function BranchSwitcher({
         const ms = Math.round(performance.now() - t0);
         logWarn(`BranchSwitcher[${tabId}] refresh failed ms=${ms} error=${e}`);
       })
-      .finally(() => { if (gen === fetchGenRef.current) setIsRefreshing(false); });
+      .finally(() => {
+        if (gen === fetchGenRef.current) {
+          setIsRefreshing(false);
+          initialFetchInFlightRef.current = false;
+        }
+      });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tabId, listKey]);
 
-  // Show stale branches while a refresh is in flight so the list never blanks.
+  // Show last-known branches while a refresh is in flight so the list never blanks.
   const visibleBranches =
-    branches.length === 0 && staleBranchesRef.current.length > 0
-      ? staleBranchesRef.current
+    branches.length === 0 && lastKnownBranchesRef.current.length > 0
+      ? lastKnownBranchesRef.current
       : branches;
 
   const filtered = useMemo(() => {
@@ -104,7 +119,7 @@ export default function BranchSwitcher({
       if (gen !== fetchGenRef.current) return;
       const ms = Math.round(performance.now() - t0);
       logInfo(`BranchSwitcher[${tabId}] post-checkout refresh done count=${data.length} ms=${ms}`);
-      staleBranchesRef.current = [];
+      lastKnownBranchesRef.current = data;
       setBranches(data);
     });
   }

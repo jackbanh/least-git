@@ -56,6 +56,10 @@ export default function CommitList({ tabId, listKey }: { tabId: string; listKey:
   // Ref-based guard so concurrent effect firings see the updated value synchronously,
   // preventing duplicate fetches when loadMore is recreated after each page lands.
   const isLoadingRef = useRef(false);
+  // Generation counter: incremented on every listKey refresh so that in-flight
+  // loadMore calls that started before the refresh can detect they are stale and
+  // discard their results instead of appending old-page data to fresh page-1.
+  const loadGenRef = useRef(0);
   // Stale-while-revalidate: preserve previous commits for display until fresh page 0 arrives.
   const staleCommitsRef = useRef<CommitInfo[]>([]);
   const commitsRef = useRef(commits);
@@ -79,6 +83,9 @@ export default function CommitList({ tabId, listKey }: { tabId: string; listKey:
   const loadMore = useCallback(async () => {
     if (isLoadingRef.current || !hasMore) return;
     isLoadingRef.current = true;
+    // Snapshot the generation at call time — if a refresh fires mid-flight and
+    // increments loadGenRef, we'll detect it and discard the stale result.
+    const gen = loadGenRef.current;
     const cursor = lastOidRef.current;
     const loadedBefore = commitsRef.current.length;
     logInfo(`CommitList[${tabId}] loadMore start cursor=${cursor?.slice(0, 7) ?? "null"} loaded=${loadedBefore}`);
@@ -90,6 +97,10 @@ export default function CommitList({ tabId, listKey }: { tabId: string; listKey:
         limit: PAGE_SIZE,
       });
       const ms = Math.round(performance.now() - t0);
+      if (gen !== loadGenRef.current) {
+        logInfo(`CommitList[${tabId}] loadMore stale (gen ${gen}→${loadGenRef.current}), discarding ${next.length} commits`);
+        return;
+      }
       logInfo(`CommitList[${tabId}] loadMore done count=${next.length} ms=${ms} hasMore=${next.length >= PAGE_SIZE}`);
       setCommits((prev) => [...prev, ...next]);
       if (next.length === 0 && cursor === null) {
@@ -101,7 +112,7 @@ export default function CommitList({ tabId, listKey }: { tabId: string; listKey:
     } catch (e) {
       const ms = Math.round(performance.now() - t0);
       logError(`CommitList[${tabId}] loadMore failed ms=${ms} error=${e}`);
-      setHasMore(false);
+      if (gen === loadGenRef.current) setHasMore(false);
     } finally {
       isLoadingRef.current = false;
     }
@@ -117,6 +128,10 @@ export default function CommitList({ tabId, listKey }: { tabId: string; listKey:
   useEffect(() => {
     if (listKey === prevListKeyRef.current) return;
     prevListKeyRef.current = listKey;
+
+    // Bump the generation so any in-flight loadMore calls from before this
+    // refresh detect they are stale and discard their results.
+    loadGenRef.current += 1;
 
     // Only overwrite stale if there's actually something to preserve.
     // On a rapid double-bump, commitsRef is already [] (cleared by the first bump),
