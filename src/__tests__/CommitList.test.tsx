@@ -219,6 +219,64 @@ describe("CommitList", () => {
     expect(screen.queryByText("old commit")).not.toBeInTheDocument();
   });
 
+  it("discards a stale in-flight page-2 result when a listKey refresh fires", async () => {
+    // Regression: if a page-2 loadMore fetch is in-flight when a listKey refresh
+    // fires, the stale page-2 result used to land after fresh page-1 and call
+    // setCommits(prev => [...prev, ...stale]), appending old data on top of the
+    // fresh results. The generation counter must detect the generation changed and
+    // discard the stale result so only the fresh page-1 commits appear.
+
+    // Full PAGE_SIZE (25) triggers the scroll effect → page-2 loadMore.
+    const page1 = Array.from({ length: 25 }, (_, i) => ({
+      ...STUB_COMMIT,
+      oid: `aaa${String(i).padStart(3, "0")}`,
+      short_oid: `a${String(i).padStart(2, "0")}`,
+      summary: `page1 commit ${i}`,
+    }));
+    const stalePage2 = Array.from({ length: 25 }, (_, i) => ({
+      ...STUB_COMMIT,
+      oid: `bbb${String(i).padStart(3, "0")}`,
+      short_oid: `b${String(i).padStart(2, "0")}`,
+      summary: `stale commit ${i}`,
+    }));
+    // Fewer than PAGE_SIZE so hasMore → false after the refresh, preventing
+    // a post-refresh page-2 loadMore that would consume a 4th mock slot.
+    const refreshPage1 = Array.from({ length: 3 }, (_, i) => ({
+      ...STUB_COMMIT,
+      oid: `ccc${String(i).padStart(3, "0")}`,
+      short_oid: `c${String(i).padStart(2, "0")}`,
+      summary: `refreshed commit ${i}`,
+    }));
+
+    // All three mocks must be queued before rendering so the queue is ready
+    // for each invoke call in the order they fire:
+    //   call 1 – initial page-1 (afterOid: null, triggered by mount effect)
+    //   call 2 – stale page-2 loadMore (afterOid: cursor, triggered by scroll effect)
+    //   call 3 – refresh page-1 (afterOid: null, triggered by listKey=1 effect)
+    let resolveStalePage2!: (v: unknown) => void;
+    mockInvoke
+      .mockResolvedValueOnce(page1)
+      .mockReturnValueOnce(new Promise((res) => { resolveStalePage2 = res; }))
+      .mockResolvedValueOnce(refreshPage1);
+
+    const { rerender } = renderCommitList(0);
+    await waitFor(() => expect(screen.getByText("page1 commit 0")).toBeInTheDocument());
+    // At this point: page-1 done, page-2 loadMore in-flight (pending mock).
+
+    // Watcher / listKey bump while page-2 is still pending.
+    rerenderCommitList(rerender, 1);
+
+    // Wait for the refresh page-1 to replace the list.
+    await waitFor(() => expect(screen.getByText("refreshed commit 0")).toBeInTheDocument());
+
+    // Stale page-2 lands late — the generation counter must discard it.
+    resolveStalePage2(stalePage2);
+    await waitFor(() => expect(mockInvoke).toHaveBeenCalledTimes(3));
+
+    expect(screen.queryByText("stale commit 0")).not.toBeInTheDocument();
+    expect(screen.getByText("refreshed commit 0")).toBeInTheDocument();
+  });
+
   it("keeps previous commits visible while a listKey-triggered refresh is in flight", async () => {
     // Regression: before this fix, bumping listKey caused a key-prop remount which
     // reset commits to [] immediately, leaving the list blank until the fetch resolved.
