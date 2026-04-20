@@ -29,6 +29,57 @@ body {
   position: relative;
 }
 
+/* ── Windows custom title bar ─────────────────────────────────────── */
+
+.win-titlebar {
+  flex-shrink: 0;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 0 0 12px;
+  background: var(--lg-chrome-bg);
+  border-bottom: 0.5px solid var(--lg-border-soft);
+  user-select: none;
+}
+
+.win-titlebar-title {
+  font-family: var(--lg-font-serif);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--lg-ink-muted);
+  letter-spacing: 0.02em;
+  pointer-events: none;
+}
+
+.win-titlebar-controls {
+  display: flex;
+  height: 100%;
+}
+
+.win-titlebar-btn {
+  width: 46px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--lg-ink-muted);
+  cursor: default;
+  transition: background 100ms, color 100ms;
+}
+
+.win-titlebar-btn:hover {
+  background: var(--lg-hover-bg);
+  color: var(--lg-ink);
+}
+
+.win-titlebar-btn--close:hover {
+  background: oklch(55% 0.18 25);
+  color: #fff;
+}
+
 /* ── Tab bar ──────────────────────────────────────────────────────── */
 
 .tab-bar {
@@ -36,6 +87,25 @@ body {
   padding: 0 8px;
   border-bottom: 0.5px solid var(--lg-border);
   background: var(--lg-chrome-bg);
+}
+
+.tab-bar--macos {
+  padding-left: 80px;
+  position: relative;
+}
+
+.tab-bar-app-title {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-family: var(--lg-font-serif);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--lg-ink-muted);
+  letter-spacing: 0.02em;
+  pointer-events: none;
+  white-space: nowrap;
 }
 
 /* ── Workspace ────────────────────────────────────────────────────── */
