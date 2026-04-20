@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { info as logInfo } from "@tauri-apps/plugin-log";
 import { open } from "@tauri-apps/plugin-dialog";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Tabs, Button, ActionIcon, Group, Text } from "@mantine/core";
 import { listen } from "@tauri-apps/api/event";
 import { useTabStore, Tab } from "./store";
@@ -14,6 +15,14 @@ import CommitDetail from "./components/CommitDetail";
 import Toolbar from "./components/Toolbar";
 import TweaksPanel from "./components/TweaksPanel";
 import "./App.css";
+
+// Detected once at module load — stable for the lifetime of the app.
+const platform = (() => {
+  const ua = navigator.userAgent;
+  if (ua.includes("Windows")) return "windows";
+  if (ua.includes("Mac")) return "macos";
+  return "linux";
+})();
 
 export default function App() {
   const {
@@ -139,7 +148,38 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <div className="tab-bar">
+      {platform === "windows" && (
+        <div className="win-titlebar" data-tauri-drag-region>
+          <span className="win-titlebar-title">least-git</span>
+          <div className="win-titlebar-controls">
+            <button
+              className="win-titlebar-btn"
+              onClick={() => getCurrentWindow().minimize()}
+              aria-label="Minimize"
+            >
+              <svg width="10" height="1" viewBox="0 0 10 1"><rect width="10" height="1" fill="currentColor"/></svg>
+            </button>
+            <button
+              className="win-titlebar-btn"
+              onClick={() => getCurrentWindow().toggleMaximize()}
+              aria-label="Maximize"
+            >
+              <svg width="10" height="10" viewBox="0 0 10 10"><rect x="0.5" y="0.5" width="9" height="9" fill="none" stroke="currentColor"/></svg>
+            </button>
+            <button
+              className="win-titlebar-btn win-titlebar-btn--close"
+              onClick={() => getCurrentWindow().close()}
+              aria-label="Close"
+            >
+              <svg width="10" height="10" viewBox="0 0 10 10"><line x1="0" y1="0" x2="10" y2="10" stroke="currentColor" strokeWidth="1.2"/><line x1="10" y1="0" x2="0" y2="10" stroke="currentColor" strokeWidth="1.2"/></svg>
+            </button>
+          </div>
+        </div>
+      )}
+      <div className={`tab-bar${platform === "macos" ? " tab-bar--macos" : ""}`} data-tauri-drag-region>
+        {platform === "macos" && (
+          <span className="tab-bar-app-title">least-git</span>
+        )}
         <Tabs
           value={activeTabId}
           onChange={(v) => v && setActiveTab(v)}
