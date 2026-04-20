@@ -13,9 +13,11 @@
     "windows": [
       {
         "title": "least-git",
-        "width": 800,
-        "height": 600,
-        "backgroundColor": "#f1f3f5"
+        "width": 1280,
+        "height": 820,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "backgroundColor": "#f8f7f6"
       }
     ],
     "security": {
