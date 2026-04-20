@@ -31,10 +31,10 @@
   --lg-uncommitted: oklch(66% 0.13 70);
 
   --lg-diff-add-fg: oklch(40% 0.14 150);
-  --lg-diff-add-bg: oklch(92% 0.06 150);
+  --lg-diff-add-bg: oklch(96% 0.02 150);
   --lg-diff-add-bar: oklch(62% 0.16 150);
   --lg-diff-rem-fg: oklch(42% 0.17 25);
-  --lg-diff-rem-bg: oklch(92% 0.07 25);
+  --lg-diff-rem-bg: oklch(96% 0.022 25);
   --lg-diff-rem-bar: oklch(62% 0.20 25);
 
   --lg-font-serif: 'Fraunces', 'Iowan Old Style', Georgia, serif;
@@ -71,9 +71,9 @@
   --lg-uncommitted: oklch(76% 0.13 70);
 
   --lg-diff-add-fg: oklch(82% 0.14 150);
-  --lg-diff-add-bg: oklch(30% 0.06 150);
+  --lg-diff-add-bg: oklch(26% 0.025 150);
   --lg-diff-add-bar: oklch(68% 0.18 150);
   --lg-diff-rem-fg: oklch(78% 0.16 25);
-  --lg-diff-rem-bg: oklch(30% 0.08 25);
+  --lg-diff-rem-bg: oklch(26% 0.025 25);
   --lg-diff-rem-bar: oklch(66% 0.20 25);
 }
