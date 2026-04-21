@@ -34,3 +34,113 @@
 .diff-scroll .diff .diff-gutter-delete {
   border-left: 2px solid var(--lg-diff-rem-bar);
 }
+
+/* ── Syntax token colors ──────────────────────────────────────────── */
+
+.diff-scroll .token.keyword,
+.diff-scroll .token.important {
+  color: oklch(50% 0.13 280);
+}
+
+.diff-scroll .token.string,
+.diff-scroll .token.attr-value,
+.diff-scroll .token.char {
+  color: oklch(52% 0.14 150);
+}
+
+.diff-scroll .token.comment,
+.diff-scroll .token.prolog,
+.diff-scroll .token.doctype,
+.diff-scroll .token.cdata {
+  color: var(--lg-ink-faint);
+  font-style: italic;
+}
+
+.diff-scroll .token.number,
+.diff-scroll .token.boolean,
+.diff-scroll .token.constant {
+  color: oklch(55% 0.14 200);
+}
+
+.diff-scroll .token.function,
+.diff-scroll .token.function-name {
+  color: oklch(52% 0.12 240);
+}
+
+.diff-scroll .token.class-name,
+.diff-scroll .token.type-definition,
+.diff-scroll .token.builtin {
+  color: oklch(54% 0.12 55);
+}
+
+.diff-scroll .token.attr-name,
+.diff-scroll .token.property {
+  color: oklch(52% 0.12 220);
+}
+
+.diff-scroll .token.operator,
+.diff-scroll .token.entity,
+.diff-scroll .token.url,
+.diff-scroll .token.variable {
+  color: var(--lg-ink-soft);
+}
+
+.diff-scroll .token.punctuation {
+  color: var(--lg-ink-muted);
+}
+
+.diff-scroll .token.regex,
+.diff-scroll .token.atrule {
+  color: oklch(52% 0.13 30);
+}
+
+.diff-scroll .token.tag,
+.diff-scroll .token.selector {
+  color: oklch(50% 0.12 15);
+}
+
+/* Dark mode overrides */
+[data-theme="dark"] .diff-scroll .token.keyword,
+[data-theme="dark"] .diff-scroll .token.important {
+  color: oklch(72% 0.12 280);
+}
+
+[data-theme="dark"] .diff-scroll .token.string,
+[data-theme="dark"] .diff-scroll .token.attr-value,
+[data-theme="dark"] .diff-scroll .token.char {
+  color: oklch(72% 0.14 150);
+}
+
+[data-theme="dark"] .diff-scroll .token.comment,
+[data-theme="dark"] .diff-scroll .token.prolog,
+[data-theme="dark"] .diff-scroll .token.doctype,
+[data-theme="dark"] .diff-scroll .token.cdata {
+  color: var(--lg-ink-faint);
+}
+
+[data-theme="dark"] .diff-scroll .token.number,
+[data-theme="dark"] .diff-scroll .token.boolean,
+[data-theme="dark"] .diff-scroll .token.constant {
+  color: oklch(72% 0.13 200);
+}
+
+[data-theme="dark"] .diff-scroll .token.function,
+[data-theme="dark"] .diff-scroll .token.function-name {
+  color: oklch(72% 0.11 240);
+}
+
+[data-theme="dark"] .diff-scroll .token.class-name,
+[data-theme="dark"] .diff-scroll .token.type-definition,
+[data-theme="dark"] .diff-scroll .token.builtin {
+  color: oklch(74% 0.12 55);
+}
+
+[data-theme="dark"] .diff-scroll .token.attr-name,
+[data-theme="dark"] .diff-scroll .token.property {
+  color: oklch(72% 0.11 220);
+}
+
+[data-theme="dark"] .diff-scroll .token.tag,
+[data-theme="dark"] .diff-scroll .token.selector {
+  color: oklch(72% 0.12 15);
+}
