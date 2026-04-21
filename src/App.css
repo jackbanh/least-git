@@ -138,13 +138,13 @@ body {
 }
 
 .resize-handle--vertical {
-  width: 1px;
+  width: 4px;
   cursor: col-resize;
   background: var(--lg-border-soft);
 }
 
 .resize-handle--horizontal {
-  height: 1px;
+  height: 4px;
   cursor: row-resize;
   background: var(--lg-border-soft);
 }
@@ -152,13 +152,11 @@ body {
 .resize-handle--vertical:hover,
 .resize-handle--vertical:active {
   background: var(--lg-accent-soft);
-  width: 3px;
 }
 
 .resize-handle--horizontal:hover,
 .resize-handle--horizontal:active {
   background: var(--lg-accent-soft);
-  height: 3px;
 }
 
 /* main area: commit list (top) + detail pane (bottom) */
