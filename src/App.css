@@ -138,15 +138,28 @@ body {
 }
 
 .resize-handle--vertical {
-  width: 4px;
+  width: 1px;
   cursor: col-resize;
   background: var(--lg-border-soft);
 }
 
 .resize-handle--horizontal {
-  height: 4px;
+  height: 1px;
   cursor: row-resize;
   background: var(--lg-border-soft);
+}
+
+/* Expand the interactive hit area without changing the visible size */
+.resize-handle--vertical::after {
+  content: "";
+  position: absolute;
+  inset: 0 -4px;
+}
+
+.resize-handle--horizontal::after {
+  content: "";
+  position: absolute;
+  inset: -4px 0;
 }
 
 .resize-handle--vertical:hover,
