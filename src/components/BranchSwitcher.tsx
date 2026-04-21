@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { warn as logWarn, info as logInfo } from "@tauri-apps/plugin-log";
 import { useTabStore } from "../store";
 import GitOutputDrawer from "./GitOutputDrawer";
@@ -29,8 +30,6 @@ export default function BranchSwitcher({
   listKey: number;
   onManualRefresh?: () => void;
 }) {
-  const [branches, setBranches] = useState<BranchInfo[]>([]);
-  const [isRefreshing, setIsRefreshing] = useState(true);
   const [filter, setFilter] = useState("");
   const [filterFocused, setFilterFocused] = useState(false);
   const [selectedName, setSelectedName] = useState<string | null>(null);
@@ -39,68 +38,58 @@ export default function BranchSwitcher({
 
   const bumpListKey = useTabStore((s) => s.bumpListKey);
   const selectCommit = useTabStore((s) => s.selectCommit);
-  const fetchGenRef = useRef(0);
-  const lastKnownBranchesRef = useRef<BranchInfo[]>([]);
-  const branchesRef = useRef(branches);
-  branchesRef.current = branches;
-  const initialFetchInFlightRef = useRef(false);
+  const queryClient = useQueryClient();
 
+  // Invalidate the stable query key whenever listKey bumps.
+  // This triggers a background refetch while the previous data stays visible.
   useEffect(() => {
-    if (
-      initialFetchInFlightRef.current &&
-      lastKnownBranchesRef.current.length === 0
-    ) {
-      logInfo(`BranchSwitcher[${tabId}] refresh skipped — initial fetch still in flight listKey=${listKey}`);
-      return;
-    }
-    const gen = ++fetchGenRef.current;
-    setIsRefreshing(true);
-    setFilter("");
-    initialFetchInFlightRef.current = lastKnownBranchesRef.current.length === 0;
-    const t0 = performance.now();
-    logInfo(`BranchSwitcher[${tabId}] refresh start listKey=${listKey} lastKnown=${lastKnownBranchesRef.current.length}`);
-    invoke<BranchInfo[]>("list_branches", { tabId })
-      .then((data) => {
-        if (gen !== fetchGenRef.current) return;
+    queryClient.invalidateQueries({ queryKey: ["branches", tabId] });
+  }, [tabId, listKey, queryClient]);
+
+  // Stable query key (no listKey) so the cache persists across remounts.
+  // On a tab switch the component unmounts/remounts, but the QueryClient lives
+  // outside React — cached data survives and is shown immediately while the
+  // background refetch triggered by the invalidation above runs.
+  const { data: branches = [], isFetching } = useQuery<BranchInfo[]>({
+    queryKey: ["branches", tabId],
+    queryFn: async ({ signal }) => {
+      const t0 = performance.now();
+      logInfo(`BranchSwitcher[${tabId}] refresh start listKey=${listKey}`);
+      try {
+        const data = await invoke<BranchInfo[]>("list_branches", { tabId });
+        if (signal.aborted) return Promise.reject(new Error("aborted"));
         const ms = Math.round(performance.now() - t0);
-        logInfo(`BranchSwitcher[${tabId}] refresh done count=${data.length} ms=${ms}`);
         if (data.length === 0) {
-          logWarn(`BranchSwitcher[${tabId}] list_branches returned 0 — keeping lastKnown=${lastKnownBranchesRef.current.length}`);
-          if (lastKnownBranchesRef.current.length > 0) return;
+          logWarn(`BranchSwitcher[${tabId}] list_branches returned 0 — keeping previous`);
+          // Return the existing cached data so the list doesn't flash empty.
+          const cached = queryClient.getQueryData<BranchInfo[]>(["branches", tabId]);
+          if (cached && cached.length > 0) return cached;
         }
-        lastKnownBranchesRef.current = data;
-        setBranches(data);
-        // Auto-select the HEAD branch
+        logInfo(`BranchSwitcher[${tabId}] refresh done count=${data.length} ms=${ms}`);
+        // Auto-select the HEAD branch whenever the list refreshes
         const head = data.find((b) => b.is_head);
         if (head) setSelectedName(head.name);
-      })
-      .catch((e) => {
-        if (gen !== fetchGenRef.current) return;
+        return data;
+      } catch (e) {
         const ms = Math.round(performance.now() - t0);
         logWarn(`BranchSwitcher[${tabId}] refresh failed ms=${ms} error=${e}`);
-      })
-      .finally(() => {
-        if (gen === fetchGenRef.current) {
-          setIsRefreshing(false);
-          initialFetchInFlightRef.current = false;
-        }
-      });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tabId, listKey]);
-
-  const visibleBranches =
-    branches.length === 0 && lastKnownBranchesRef.current.length > 0
-      ? lastKnownBranchesRef.current
-      : branches;
+        throw e;
+      }
+    },
+    // Keep previous data visible while revalidating (stale-while-revalidate)
+    placeholderData: (prev) => prev,
+    // Don't refetch on window focus — we drive updates via listKey / invalidation
+    refetchOnWindowFocus: false,
+  });
 
   const filtered = useMemo(() => {
-    if (!filter.trim()) return visibleBranches;
+    if (!filter.trim()) return branches;
     const q = filter.toLowerCase();
-    return visibleBranches.filter((b) => b.name.toLowerCase().includes(q));
-  }, [visibleBranches, filter]);
+    return branches.filter((b) => b.name.toLowerCase().includes(q));
+  }, [branches, filter]);
 
   function handleCheckout(name: string) {
-    if (checkoutBranch || visibleBranches.find((b) => b.name === name)?.is_head) return;
+    if (checkoutBranch || branches.find((b) => b.name === name)?.is_head) return;
     logInfo(`BranchSwitcher[${tabId}] checkout start branch=${name}`);
     setError(null);
     setCheckoutBranch(name);
@@ -111,17 +100,6 @@ export default function BranchSwitcher({
     onManualRefresh?.();
     bumpListKey(tabId);
     selectCommit(tabId, null);
-    const gen = ++fetchGenRef.current;
-    const t0 = performance.now();
-    invoke<BranchInfo[]>("list_branches", { tabId }).then((data) => {
-      if (gen !== fetchGenRef.current) return;
-      const ms = Math.round(performance.now() - t0);
-      logInfo(`BranchSwitcher[${tabId}] post-checkout refresh done count=${data.length} ms=${ms}`);
-      lastKnownBranchesRef.current = data;
-      setBranches(data);
-      const head = data.find((b) => b.is_head);
-      if (head) setSelectedName(head.name);
-    });
   }
 
   function handleCheckoutClose() {
@@ -139,13 +117,13 @@ export default function BranchSwitcher({
         style={{ backgroundImage: linenBg }}
       />
 
-      <ProgressBar visible={isRefreshing} />
+      <ProgressBar visible={isFetching} />
 
       <div className="branch-content">
         {/* Header */}
         <div className="branch-header">
           <span className="branch-header-label">Branches</span>
-          <span className="branch-header-count">{visibleBranches.length}</span>
+          <span className="branch-header-count">{branches.length}</span>
         </div>
 
         {/* Filter */}
