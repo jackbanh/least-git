@@ -130,7 +130,7 @@ function FileView({
         selectedChanges={selectedChanges}
         gutterEvents={{ onClick: onChangeSelect }}
         renderGutter={renderGutter}
-        gutterType="default"
+        gutterType="none"
       >
         {(hunks) =>
           hunks.map((hunk) => (

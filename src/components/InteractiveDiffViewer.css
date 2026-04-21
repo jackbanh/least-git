@@ -1,3 +1,9 @@
+/* Give the empty gutter cells enough width to click for line selection. */
+.diff-scroll .diff-gutter {
+  min-width: 16px;
+  cursor: pointer;
+}
+
 .idv-hunk-header {
   display: flex;
   align-items: center;
