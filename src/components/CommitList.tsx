@@ -132,7 +132,7 @@ export default function CommitList({ tabId, listKey }: { tabId: string; listKey:
     invoke<CommitInfo[]>("load_commits", { tabId, afterOid: null, limit: PAGE_SIZE })
       .then((fresh) => {
         const ms = Math.round(performance.now() - t0);
-        logInfo(`CommitList[${tabId}] refresh done count=${fresh.length} ms=${ms}`);
+        logInfo(`CommitList[${tabId}] refresh done count=${fresh.length} ms=${ms} clearingStale=${staleCommitsRef.current.length}`);
         if (fresh.length === 0) {
           logWarn(`CommitList[${tabId}] refresh returned 0 commits — list will go empty (stale=${staleCommitsRef.current.length})`);
         }
@@ -155,6 +155,20 @@ export default function CommitList({ tabId, listKey }: { tabId: string; listKey:
     commits.length === 0 && staleCommitsRef.current.length > 0
       ? staleCommitsRef.current
       : commits;
+
+  // Detect and log every time the list transitions from visible → blank.
+  // This fires after every render so we capture the exact state snapshot
+  // (commits, stale, hasMore, gen) at the moment the blank occurs.
+  const prevVisibleCountRef = useRef(0);
+  useEffect(() => {
+    const curr = visibleCommits.length;
+    if (curr === 0 && prevVisibleCountRef.current > 0) {
+      logWarn(
+        `CommitList[${tabId}] WENT BLANK — commits=${commits.length} stale=${staleCommitsRef.current.length} hasMore=${hasMore} gen=${loadGenRef.current} isLoading=${isLoadingRef.current}`
+      );
+    }
+    prevVisibleCountRef.current = curr;
+  });
 
   // index 0 = uncommitted row, 1..N = visibleCommits[index-1], +1 more if hasMore
   const count = 1 + visibleCommits.length + (hasMore ? 1 : 0);
