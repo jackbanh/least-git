@@ -6,6 +6,12 @@
   font-size: 12px;
 }
 
+/* Prevent line wrapping — parent has overflow-x: auto for horizontal scroll */
+.diff-scroll .diff-code pre,
+.diff-scroll .diff-code span {
+  white-space: pre;
+}
+
 /* Map react-diff-view CSS vars to our design tokens */
 .diff-scroll .diff {
   --diff-font-family: var(--lg-font-mono);
