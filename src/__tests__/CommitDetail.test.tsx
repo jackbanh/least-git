@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { vi, describe, it, expect, beforeEach } from "vitest";
 import { MantineProvider } from "@mantine/core";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import CommitDetail from "../components/CommitDetail";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
@@ -38,10 +39,15 @@ const STUB_DETAIL = {
 };
 
 function renderDetail() {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   return render(
-    <MantineProvider>
-      <CommitDetail tabId="test-tab" listKey={0} statusKey={0} />
-    </MantineProvider>
+    <QueryClientProvider client={client}>
+      <MantineProvider>
+        <CommitDetail tabId="test-tab" listKey={0} statusKey={0} />
+      </MantineProvider>
+    </QueryClientProvider>
   );
 }
 

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { useQuery } from "@tanstack/react-query";
 import Markdown from "react-markdown";
 import { Loader } from "@mantine/core";
 import { useTabStore } from "../store";
@@ -56,10 +57,7 @@ function CommitDetailInner({
   tabId: string;
   selectedOid: string | null;
 }) {
-  const [detail, setDetail] = useState<CommitDetailData | null>(null);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
-  const [diff, setDiff] = useState<string>("");
-  const [diffLoading, setDiffLoading] = useState(false);
   const [metaHeight, setMetaHeight] = useState(120);
 
   const detailLeftWidth = useTabStore((s) => s.detailLeftWidth);
@@ -68,37 +66,40 @@ function CommitDetailInner({
   const startLeftResize = useResize(detailLeftWidth, setDetailLeftWidth, "horizontal", 140, 9999);
   const startMetaResize = useResize(metaHeight, setMetaHeight, "vertical", 80, 320, true);
 
+  // Reset file selection when switching commits so we don't carry over a
+  // file from the previous commit into the new one's file list.
   useEffect(() => {
-    if (!selectedOid) {
-      setDetail(null);
-      setSelectedFile(null);
-      setDiff("");
-      return;
-    }
-    setDetail(null);
     setSelectedFile(null);
-    setDiff("");
-    invoke<CommitDetailData>("get_commit_detail", { tabId, oid: selectedOid })
-      .then((d) => {
-        setDetail(d);
-        setSelectedFile(null);
-      })
-      .catch((e) => console.error("get_commit_detail failed:", e));
-  }, [tabId, selectedOid]);
+  }, [selectedOid]);
 
-  useEffect(() => {
-    if (!selectedOid || !selectedFile) {
-      setDiff("");
-      return;
-    }
-    setDiffLoading(true);
-    invoke<string>("get_file_diff", { tabId, oid: selectedOid, filePath: selectedFile })
-      .then(setDiff)
-      .catch(() => setDiff(""))
-      .finally(() => setDiffLoading(false));
-  }, [tabId, selectedOid, selectedFile]);
+  // Commit metadata — content-addressed by OID, never changes.
+  // staleTime: Infinity → no background refetch on revisit.
+  // gcTime: Infinity   → stays in memory for the whole session.
+  const { data: detail, isLoading: detailLoading } = useQuery<CommitDetailData>({
+    queryKey: ["commit-detail", tabId, selectedOid],
+    queryFn: () =>
+      invoke<CommitDetailData>("get_commit_detail", { tabId, oid: selectedOid }),
+    enabled: !!selectedOid,
+    staleTime: Infinity,
+    gcTime: Infinity,
+  });
 
-  if (!selectedOid || !detail) {
+  // File diff — also content-addressed. Revisiting any (commit, file) pair is
+  // instant after the first load.
+  const { data: diff = "", isLoading: diffLoading } = useQuery<string>({
+    queryKey: ["file-diff", tabId, selectedOid, selectedFile],
+    queryFn: () =>
+      invoke<string>("get_file_diff", {
+        tabId,
+        oid: selectedOid,
+        filePath: selectedFile,
+      }),
+    enabled: !!selectedOid && !!selectedFile,
+    staleTime: Infinity,
+    gcTime: Infinity,
+  });
+
+  if (!selectedOid || (!detail && detailLoading)) {
     return (
       <div className="detail-empty">
         {selectedOid
@@ -106,6 +107,11 @@ function CommitDetailInner({
           : "Select a commit to view details"}
       </div>
     );
+  }
+
+  if (!detail) {
+    // selectedOid set but query failed / returned nothing
+    return <div className="detail-empty">Failed to load commit.</div>;
   }
 
   return (
