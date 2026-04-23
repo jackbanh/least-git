@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { warn as logWarn, info as logInfo } from "@tauri-apps/plugin-log";
@@ -80,6 +80,21 @@ export default function BranchSwitcher({
     placeholderData: (prev) => prev,
     // Don't refetch on window focus — we drive updates via listKey / invalidation
     refetchOnWindowFocus: false,
+  });
+
+  // Detect and log every time the visible branch list transitions from non-empty
+  // to empty. Fires after every render so we capture the exact TanStack Query
+  // state (isFetching, data, placeholderData) at the moment the blank occurs.
+  const prevBranchCountRef = useRef(0);
+  useEffect(() => {
+    const curr = branches.length;
+    if (curr === 0 && prevBranchCountRef.current > 0) {
+      const cached = queryClient.getQueryData<BranchInfo[]>(["branches", tabId]);
+      logWarn(
+        `BranchSwitcher[${tabId}] WENT BLANK — isFetching=${isFetching} listKey=${listKey} cachedCount=${cached?.length ?? 0}`
+      );
+    }
+    prevBranchCountRef.current = curr;
   });
 
   const filtered = useMemo(() => {
