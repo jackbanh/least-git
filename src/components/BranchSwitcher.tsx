@@ -12,6 +12,13 @@ interface BranchInfo {
   is_head: boolean;
 }
 
+// ---------------------------------------------------------------------------
+// Module-level cache — survives tab switches (component unmount/remount).
+// Keyed by tabId. Seeded into initialData on mount so the previously-fetched
+// branches are visible immediately while the fresh fetch runs in the background.
+// ---------------------------------------------------------------------------
+const branchCache = new Map<string, BranchInfo[]>();
+
 function SearchIcon() {
   return (
     <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
@@ -46,10 +53,10 @@ export default function BranchSwitcher({
     queryClient.invalidateQueries({ queryKey: ["branches", tabId] });
   }, [tabId, listKey, queryClient]);
 
-  // Stable query key (no listKey) so the cache persists across remounts.
-  // On a tab switch the component unmounts/remounts, but the QueryClient lives
-  // outside React — cached data survives and is shown immediately while the
-  // background refetch triggered by the invalidation above runs.
+  // Stable query key (no listKey) so the TanStack Query cache persists across
+  // re-renders. initialData seeds from the module-level branchCache so that
+  // tab switches (tabId changes) or component remounts show the previous
+  // branch list immediately while the background refetch runs.
   const { data: branches = [], isFetching } = useQuery<BranchInfo[]>({
     queryKey: ["branches", tabId],
     queryFn: async ({ signal }) => {
@@ -66,7 +73,9 @@ export default function BranchSwitcher({
           if (cached && cached.length > 0) return cached;
         }
         logInfo(`BranchSwitcher[${tabId}] refresh done count=${data.length} ms=${ms}`);
-        // Auto-select the HEAD branch whenever the list refreshes
+        // Keep the module-level cache warm for future remounts / tab switches.
+        if (data.length > 0) branchCache.set(tabId, data);
+        // Auto-select the HEAD branch whenever the list refreshes.
         const head = data.find((b) => b.is_head);
         if (head) setSelectedName(head.name);
         return data;
@@ -76,9 +85,13 @@ export default function BranchSwitcher({
         throw e;
       }
     },
-    // Keep previous data visible while revalidating (stale-while-revalidate)
-    placeholderData: (prev) => prev,
-    // Don't refetch on window focus — we drive updates via listKey / invalidation
+    // Seed from module-level cache so the list is visible immediately when
+    // the TanStack Query cache is cold (first observe of this tabId).
+    // initialDataUpdatedAt: 0 marks it as instantly stale so a background
+    // refetch always runs to pick up any changes.
+    initialData: () => branchCache.get(tabId),
+    initialDataUpdatedAt: 0,
+    // Don't refetch on window focus — we drive updates via listKey / invalidation.
     refetchOnWindowFocus: false,
   });
 

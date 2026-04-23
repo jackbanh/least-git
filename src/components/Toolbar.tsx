@@ -101,6 +101,7 @@ export default function Toolbar({
 }) {
   return (
     <div className="toolbar">
+      <ToolbarBtn icon={<RefreshIcon />} label="Refresh" onClick={onRefresh} />
       <ToolbarBtn icon={<PullIcon />} label="Pull" onClick={onPull} />
       <ToolbarBtn icon={<PushIcon />} label="Push" onClick={onPush} />
       <ToolbarBtn icon={<BranchIcon />} label="Branch" onClick={onBranch} />
@@ -111,7 +112,6 @@ export default function Toolbar({
           <span className="toolbar-branch-name">{currentBranch}</span>
         </div>
       )}
-      <ToolbarIconBtn icon={<RefreshIcon />} onClick={onRefresh} title="Refresh" />
       <ToolbarIconBtn icon={<SlidersIcon />} onClick={onToggleTweaks} title="Tweaks" />
     </div>
   );
