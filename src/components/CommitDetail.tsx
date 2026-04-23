@@ -5,6 +5,7 @@ import Markdown from "react-markdown";
 import { Loader } from "@mantine/core";
 import { useTabStore } from "../store";
 import { useResize } from "../hooks/useResize";
+import DetailLayout from "./DetailLayout";
 import DiffViewer from "./DiffViewer";
 import WorkingTreeDetail from "./WorkingTreeDetail";
 import "./CommitDetail.css";
@@ -60,10 +61,6 @@ function CommitDetailInner({
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [metaHeight, setMetaHeight] = useState(120);
 
-  const detailLeftWidth = useTabStore((s) => s.detailLeftWidth);
-  const setDetailLeftWidth = useTabStore((s) => s.setDetailLeftWidth);
-
-  const startLeftResize = useResize(detailLeftWidth, setDetailLeftWidth, "horizontal", 140, 9999);
   const startMetaResize = useResize(metaHeight, setMetaHeight, "vertical", 80, 320, true);
 
   // Reset file selection when switching commits so we don't carry over a
@@ -115,68 +112,67 @@ function CommitDetailInner({
   }
 
   return (
-    <div className="commit-detail">
-      <div className="detail-left" style={{ width: detailLeftWidth }}>
-        <div
-          className="detail-files"
-          tabIndex={0}
-          onKeyDown={(e) => {
-            if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
-            e.preventDefault();
-            const idx = detail.files.findIndex((f) => f.path === selectedFile);
-            const next =
-              e.key === "ArrowUp"
-                ? Math.max(0, idx - 1)
-                : Math.min(detail.files.length - 1, idx + 1);
-            setSelectedFile(detail.files[next]?.path ?? null);
-          }}
-        >
-          {detail.files.map((file) => (
-            <div
-              key={file.path}
-              className={`file-row${selectedFile === file.path ? " file-row--selected" : ""}`}
-              onClick={(e) => {
-                setSelectedFile(file.path);
-                (e.currentTarget.closest(".detail-files") as HTMLElement | null)?.focus();
-              }}
-            >
-              <span className={`file-status file-status--${file.status.toLowerCase()}`}>
-                {file.status}
-              </span>
-              <span className="file-path" title={file.path}>
-                <FilePathDisplay path={file.path} />
-              </span>
-            </div>
-          ))}
-        </div>
-
-        <div className="resize-handle resize-handle--horizontal" onMouseDown={startMetaResize} />
-
-        <div className="detail-meta" style={{ height: metaHeight }}>
-          <div className="detail-message">
-            <div className="detail-commit-title">{detail.summary}</div>
-            {detail.body && (
-              <div className="detail-commit-body">
-                <Markdown>{detail.body}</Markdown>
+    <DetailLayout
+      left={
+        <>
+          <div
+            className="detail-files"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+              e.preventDefault();
+              const idx = detail.files.findIndex((f) => f.path === selectedFile);
+              const next =
+                e.key === "ArrowUp"
+                  ? Math.max(0, idx - 1)
+                  : Math.min(detail.files.length - 1, idx + 1);
+              setSelectedFile(detail.files[next]?.path ?? null);
+            }}
+          >
+            {detail.files.map((file) => (
+              <div
+                key={file.path}
+                className={`file-row${selectedFile === file.path ? " file-row--selected" : ""}`}
+                onClick={(e) => {
+                  setSelectedFile(file.path);
+                  (e.currentTarget.closest(".detail-files") as HTMLElement | null)?.focus();
+                }}
+              >
+                <span className={`file-status file-status--${file.status.toLowerCase()}`}>
+                  {file.status}
+                </span>
+                <span className="file-path" title={file.path}>
+                  <FilePathDisplay path={file.path} />
+                </span>
               </div>
-            )}
-            <div className="detail-meta-footer">
-              <span className="detail-oid">{detail.oid.slice(0, 7)}</span>
-              <span className="detail-meta-sep">·</span>
-              <span className="detail-date">{formatDateTime(detail.timestamp)}</span>
-              <span className="detail-meta-sep">·</span>
-              <span className="detail-author">
-                {detail.author_name}
-              </span>
+            ))}
+          </div>
+
+          <div className="resize-handle resize-handle--horizontal" onMouseDown={startMetaResize} />
+
+          <div className="detail-meta" style={{ height: metaHeight }}>
+            <div className="detail-message">
+              <div className="detail-commit-title">{detail.summary}</div>
+              {detail.body && (
+                <div className="detail-commit-body">
+                  <Markdown>{detail.body}</Markdown>
+                </div>
+              )}
+              <div className="detail-meta-footer">
+                <span className="detail-oid">{detail.oid.slice(0, 7)}</span>
+                <span className="detail-meta-sep">·</span>
+                <span className="detail-date">{formatDateTime(detail.timestamp)}</span>
+                <span className="detail-meta-sep">·</span>
+                <span className="detail-author">
+                  {detail.author_name}
+                </span>
+              </div>
             </div>
           </div>
-        </div>
-      </div>
-
-      <div className="resize-handle resize-handle--vertical" onMouseDown={startLeftResize} />
-
-      <div className="detail-diff">
-        {diffLoading ? (
+        </>
+      }
+      diff={
+        diffLoading ? (
           <div className="diff-loading"><Loader size="sm" /></div>
         ) : diff ? (
           <DiffViewer diff={diff} />
@@ -184,9 +180,9 @@ function CommitDetailInner({
           <div className="diff-loading">
             <span className="diff-loading-text">Select a file to view diff</span>
           </div>
-        )}
-      </div>
-    </div>
+        )
+      }
+    />
   );
 }
 

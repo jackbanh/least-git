@@ -8,8 +8,7 @@ import {
   IconRotate2,
   IconTrash,
 } from "@tabler/icons-react";
-import { useTabStore } from "../store";
-import { useResize } from "../hooks/useResize";
+import DetailLayout from "./DetailLayout";
 import InteractiveDiffViewer from "./InteractiveDiffViewer";
 import "./CommitDetail.css";
 import "./WorkingTreeDetail.css";
@@ -36,10 +35,6 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
   const [selected, setSelected] = useState<SelectedFile | null>(null);
   const [diff, setDiff] = useState<string>("");
   const [diffLoading, setDiffLoading] = useState(false);
-
-  const detailLeftWidth = useTabStore((s) => s.detailLeftWidth);
-  const setDetailLeftWidth = useTabStore((s) => s.setDetailLeftWidth);
-  const startLeftResize = useResize(detailLeftWidth, setDetailLeftWidth, "horizontal", 140, 9999);
 
   // ── Context menu ────────────────────────────────────────────────────────
   interface ContextMenuState { x: number; y: number; entry: StatusEntry; staged: boolean }
@@ -166,145 +161,145 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
   );
 
   return (
-    <div className="commit-detail">
-      <div className="detail-left" style={{ width: detailLeftWidth }}>
-        <div
-          className="detail-files"
-          tabIndex={0}
-          onKeyDown={(e) => {
-            if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
-            if (allFiles.length === 0) return;
-            e.preventDefault();
-            const next =
-              e.key === "ArrowUp"
-                ? Math.max(0, selectedIndex - 1)
-                : Math.min(allFiles.length - 1, selectedIndex + 1);
-            const f = allFiles[next];
-            setSelected({ path: f.path, staged: f.staged, is_untracked: f.status === "?" });
-          }}
-        >
-          {!status && <div className="wt-section-empty"><Loader size="xs" /></div>}
-          {isEmpty && (
-            <div className="wt-section-empty">Nothing to commit, working tree clean</div>
-          )}
-          {status && status.staged.length > 0 && (
-            <>
-              <div className="wt-section-header">
-                <span className="wt-section-label">Staged</span>
-                <span className="wt-section-count">{status.staged.length}</span>
-              </div>
-              {status.staged.map((f) => (
-                <FileRow
-                  key={`staged:${f.path}`}
-                  file={f}
-                  isSelected={selected?.path === f.path && selected.staged}
-                  onClick={() => selectFile(f, true)}
-                  onContextMenu={(e) => openContextMenu(e, f, true)}
-                />
-              ))}
-            </>
-          )}
-          {status && status.unstaged.length > 0 && (
-            <>
-              <div className="wt-section-header">
-                <span className="wt-section-label">Changes</span>
-                <span className="wt-section-count">{status.unstaged.length}</span>
-              </div>
-              {status.unstaged.map((f) => (
-                <FileRow
-                  key={`unstaged:${f.path}`}
-                  file={f}
-                  isSelected={selected?.path === f.path && !selected.staged}
-                  onClick={() => selectFile(f, false)}
-                  onContextMenu={(e) => openContextMenu(e, f, false)}
-                />
-              ))}
-            </>
-          )}
-        </div>
-
-        <div className="wt-meta">
-          <span className="wt-title">Uncommitted Changes</span>
-          {status && (
-            <span className="wt-counts">
-              {status.staged.length} staged · {status.unstaged.length} unstaged
-            </span>
-          )}
-        </div>
-      </div>
-
-      <Menu
-        opened={!!contextMenu}
-        onClose={() => setContextMenu(null)}
-        position="right-start"
-      >
-        <Menu.Target>
+    <DetailLayout
+      left={
+        <>
           <div
-            style={{
-              position: "fixed",
-              left: contextMenu?.x ?? 0,
-              top: contextMenu?.y ?? 0,
-              width: 0,
-              height: 0,
+            className="detail-files"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+              if (allFiles.length === 0) return;
+              e.preventDefault();
+              const next =
+                e.key === "ArrowUp"
+                  ? Math.max(0, selectedIndex - 1)
+                  : Math.min(allFiles.length - 1, selectedIndex + 1);
+              const f = allFiles[next];
+              setSelected({ path: f.path, staged: f.staged, is_untracked: f.status === "?" });
             }}
-          />
-        </Menu.Target>
-        <Menu.Dropdown>
-          {contextTargetRef.current?.staged ? (
-            // ── Staged file ──────────────────────────────────────────────
-            <Menu.Item
-              leftSection={<IconArrowBarToDown size={14} />}
-              onClick={() => runFileAction("unstage_file", contextTargetRef.current!.entry.path)}
-            >
-              Unstage
-            </Menu.Item>
-          ) : (
-            // ── Unstaged / untracked file ────────────────────────────────
-            <>
+          >
+            {!status && <div className="wt-section-empty"><Loader size="xs" /></div>}
+            {isEmpty && (
+              <div className="wt-section-empty">Nothing to commit, working tree clean</div>
+            )}
+            {status && status.staged.length > 0 && (
+              <>
+                <div className="wt-section-header">
+                  <span className="wt-section-label">Staged</span>
+                  <span className="wt-section-count">{status.staged.length}</span>
+                </div>
+                {status.staged.map((f) => (
+                  <FileRow
+                    key={`staged:${f.path}`}
+                    file={f}
+                    isSelected={selected?.path === f.path && selected.staged}
+                    onClick={() => selectFile(f, true)}
+                    onContextMenu={(e) => openContextMenu(e, f, true)}
+                  />
+                ))}
+              </>
+            )}
+            {status && status.unstaged.length > 0 && (
+              <>
+                <div className="wt-section-header">
+                  <span className="wt-section-label">Changes</span>
+                  <span className="wt-section-count">{status.unstaged.length}</span>
+                </div>
+                {status.unstaged.map((f) => (
+                  <FileRow
+                    key={`unstaged:${f.path}`}
+                    file={f}
+                    isSelected={selected?.path === f.path && !selected.staged}
+                    onClick={() => selectFile(f, false)}
+                    onContextMenu={(e) => openContextMenu(e, f, false)}
+                  />
+                ))}
+              </>
+            )}
+          </div>
+
+          <div className="wt-meta">
+            <span className="wt-title">Uncommitted Changes</span>
+            {status && (
+              <span className="wt-counts">
+                {status.staged.length} staged · {status.unstaged.length} unstaged
+              </span>
+            )}
+          </div>
+        </>
+      }
+      overlay={
+        <Menu
+          opened={!!contextMenu}
+          onClose={() => setContextMenu(null)}
+          position="right-start"
+        >
+          <Menu.Target>
+            <div
+              style={{
+                position: "fixed",
+                left: contextMenu?.x ?? 0,
+                top: contextMenu?.y ?? 0,
+                width: 0,
+                height: 0,
+              }}
+            />
+          </Menu.Target>
+          <Menu.Dropdown>
+            {contextTargetRef.current?.staged ? (
+              // ── Staged file ──────────────────────────────────────────────
               <Menu.Item
-                leftSection={<IconArrowBarToUp size={14} />}
-                onClick={() => runFileAction("stage_file", contextTargetRef.current!.entry.path)}
+                leftSection={<IconArrowBarToDown size={14} />}
+                onClick={() => runFileAction("unstage_file", contextTargetRef.current!.entry.path)}
               >
-                {contextTargetRef.current?.entry.status === "?" ? "Add File" : "Stage"}
+                Unstage
               </Menu.Item>
-              {contextTargetRef.current?.entry.status === "?" ? (
+            ) : (
+              // ── Unstaged / untracked file ────────────────────────────────
+              <>
                 <Menu.Item
-                  leftSection={<IconTrash size={14} />}
-                  color="red"
-                  onClick={() =>
-                    runFileAction(
-                      "delete_untracked",
-                      contextTargetRef.current!.entry.path,
-                      `Delete "${contextTargetRef.current!.entry.path}"? This cannot be undone.`,
-                    )
-                  }
+                  leftSection={<IconArrowBarToUp size={14} />}
+                  onClick={() => runFileAction("stage_file", contextTargetRef.current!.entry.path)}
                 >
-                  Delete File
+                  {contextTargetRef.current?.entry.status === "?" ? "Add File" : "Stage"}
                 </Menu.Item>
-              ) : (
-                <Menu.Item
-                  leftSection={<IconRotate2 size={14} />}
-                  color="red"
-                  onClick={() =>
-                    runFileAction(
-                      "discard_changes",
-                      contextTargetRef.current!.entry.path,
-                      `Discard changes to "${contextTargetRef.current!.entry.path}"? This cannot be undone.`,
-                    )
-                  }
-                >
-                  Discard Changes
-                </Menu.Item>
-              )}
-            </>
-          )}
-        </Menu.Dropdown>
-      </Menu>
-
-      <div className="resize-handle resize-handle--vertical" onMouseDown={startLeftResize} />
-
-      <div className="detail-diff">
-        {!selected ? (
+                {contextTargetRef.current?.entry.status === "?" ? (
+                  <Menu.Item
+                    leftSection={<IconTrash size={14} />}
+                    color="red"
+                    onClick={() =>
+                      runFileAction(
+                        "delete_untracked",
+                        contextTargetRef.current!.entry.path,
+                        `Delete "${contextTargetRef.current!.entry.path}"? This cannot be undone.`,
+                      )
+                    }
+                  >
+                    Delete File
+                  </Menu.Item>
+                ) : (
+                  <Menu.Item
+                    leftSection={<IconRotate2 size={14} />}
+                    color="red"
+                    onClick={() =>
+                      runFileAction(
+                        "discard_changes",
+                        contextTargetRef.current!.entry.path,
+                        `Discard changes to "${contextTargetRef.current!.entry.path}"? This cannot be undone.`,
+                      )
+                    }
+                  >
+                    Discard Changes
+                  </Menu.Item>
+                )}
+              </>
+            )}
+          </Menu.Dropdown>
+        </Menu>
+      }
+      diff={
+        !selected ? (
           <div className="diff-loading">Select a file to view diff</div>
         ) : diffLoading ? (
           <div className="diff-loading"><Loader size="sm" /></div>
@@ -317,9 +312,9 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
           />
         ) : (
           <div className="diff-loading">No diff available</div>
-        )}
-      </div>
-    </div>
+        )
+      }
+    />
   );
 }
 
