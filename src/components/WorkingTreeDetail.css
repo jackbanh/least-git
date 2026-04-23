@@ -63,4 +63,5 @@
   flex-direction: column;
   gap: 3px;
   border-top: 0.5px solid var(--lg-border-soft);
+  overflow: hidden;
 }
