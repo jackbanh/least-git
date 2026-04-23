@@ -237,7 +237,6 @@ fn load_commits(
     let t = std::time::Instant::now();
     let from_cursor = after_oid.is_some();
     let path = get_repo_path(&tab_id, &state)?;
-    let repo = gix::open(&path).map_err(|e| e.to_string())?;
 
     // Determine where to start the walk.
     // `after_oid` is the first-parent OID of the last commit already shown
@@ -247,6 +246,13 @@ fn load_commits(
     // ~650 ms of random pack I/O on large repos. The OID came from our own
     // walk output so it is always valid; an invalid value would surface as a
     // walk error on the first iteration anyway.
+    //
+    // open_ms is logged separately so we can measure the benefit of caching
+    // the gix Repository handle in RepoEntry (perf recommendation #2).
+    let open_t = std::time::Instant::now();
+    let repo = gix::open(&path).map_err(|e| e.to_string())?;
+    let open_ms = open_t.elapsed().as_millis();
+
     let cursor_t = std::time::Instant::now();
     // Produce a plain ObjectId so both branches have the same type.
     // For cursor pages we parse hex directly — no pack verification, no I/O.
@@ -297,8 +303,9 @@ fn load_commits(
     let total_ms = t.elapsed().as_millis();
 
     let msg = format!(
-        "load_commits from={} returned={} cursor_ms={} walk_ms={} total_ms={}",
+        "load_commits from={} open_ms={} returned={} cursor_ms={} walk_ms={} total_ms={}",
         if from_cursor { "cursor" } else { "HEAD" },
+        open_ms,
         commits.len(),
         cursor_ms,
         walk_ms,
@@ -317,18 +324,55 @@ fn load_commits(
 
 #[tauri::command]
 async fn list_branches(tab_id: String, state: State<'_, AppState>) -> Result<Vec<BranchInfo>, String> {
+    let t = std::time::Instant::now();
     let path = get_repo_path(&tab_id, &state)?;
-    let path_str = path.to_string_lossy().to_string();
 
-    // %(HEAD) is '*' for the current branch, ' ' for all others — one spawn instead of two.
-    let out = git_async()
-        .args(["-C", &path_str, "branch", "--format=%(HEAD)%(refname:short)"])
-        .output()
-        .await
-        .map_err(|e| e.to_string())?;
+    // Use gix directly instead of spawning `git branch` — avoids subprocess
+    // overhead (git startup, config parsing, process spawn) which is especially
+    // expensive on network shares. gix reads packed-refs in-process.
+    tokio::task::spawn_blocking(move || -> Result<Vec<BranchInfo>, String> {
+        let open_t = std::time::Instant::now();
+        let repo = gix::open(&path).map_err(|e| e.to_string())?;
+        let open_ms = open_t.elapsed().as_millis();
 
-    let raw = String::from_utf8_lossy(&out.stdout).to_string();
-    Ok(parse_branches(&raw))
+        // Resolve the current HEAD branch name; None when HEAD is detached.
+        let head_short: Option<String> = repo
+            .head_name()
+            .ok()
+            .flatten()
+            .map(|n| n.shorten().to_str_lossy().into_owned());
+
+        let refs_t = std::time::Instant::now();
+        let mut branches: Vec<BranchInfo> = repo
+            .references()
+            .map_err(|e| e.to_string())?
+            .local_branches()
+            .map_err(|e| e.to_string())?
+            .filter_map(|r| r.ok())
+            .map(|r| {
+                let name = r.name().shorten().to_str_lossy().into_owned();
+                let is_head = head_short.as_deref() == Some(name.as_str());
+                BranchInfo { name, is_head }
+            })
+            .collect();
+        let refs_ms = refs_t.elapsed().as_millis();
+
+        branches.sort_unstable_by(|a, b| {
+            let rank = |name: &str| match name { "main" | "master" => 0u8, _ => 1 };
+            rank(&a.name).cmp(&rank(&b.name)).then(a.name.cmp(&b.name))
+        });
+
+        let total_ms = t.elapsed().as_millis();
+        let msg = format!(
+            "list_branches returned={} open_ms={} refs_ms={} total_ms={}",
+            branches.len(), open_ms, refs_ms, total_ms,
+        );
+        if total_ms > 2000 { warn!("[SLOW] {msg}"); } else { info!("{msg}"); }
+
+        Ok(branches)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -445,8 +489,10 @@ async fn get_commit_detail(
     let meta_fut = tokio::task::spawn_blocking({
         let path = path.clone();
         let oid = oid.clone();
-        move || -> Result<(String, String, String, String, i64), String> {
+        move || -> Result<(String, String, String, String, i64, u128), String> {
+            let open_t = std::time::Instant::now();
             let repo = gix::open(&path).map_err(|e| e.to_string())?;
+            let open_ms = open_t.elapsed().as_millis();
             let commit_id = gix::ObjectId::from_hex(oid.trim().as_bytes())
                 .map_err(|e| format!("Invalid OID: {e}"))?;
             let object = repo.find_object(commit_id).map_err(|e| e.to_string())?;
@@ -459,6 +505,7 @@ async fn get_commit_detail(
                 decoded.author.name.to_str_lossy().to_string(),
                 decoded.author.email.to_str_lossy().to_string(),
                 decoded.author.time.seconds,
+                open_ms,
             ))
         }
     });
@@ -472,7 +519,7 @@ async fn get_commit_detail(
         async { files_fut.await.map_err(|e| e.to_string()) }
     )?;
 
-    let (summary, body, author_name, author_email, timestamp) = meta_res;
+    let (summary, body, author_name, author_email, timestamp, open_ms) = meta_res;
     let mut files = Vec::new();
     for line in String::from_utf8_lossy(&files_out.stdout).lines() {
         let parts: Vec<&str> = line.splitn(3, '\t').collect();
@@ -488,7 +535,7 @@ async fn get_commit_detail(
 
     let total_ms = t.elapsed().as_millis();
     let file_count = files.len();
-    let msg = format!("get_commit_detail oid={short} cache=miss files={file_count} total_ms={total_ms}");
+    let msg = format!("get_commit_detail oid={short} cache=miss open_ms={open_ms} files={file_count} total_ms={total_ms}");
     if total_ms > 2000 {
         warn!("[SLOW] {msg}");
     } else {
