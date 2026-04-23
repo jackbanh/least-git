@@ -34,6 +34,11 @@ interface CommitInfo {
 
 const PAGE_SIZE = 25;
 
+// Module-level cache: survives CommitList remounts on tab switch.
+// Keyed by tabId. Seeded into staleCommitsRef on mount so the previously
+// loaded commits are visible immediately while the fresh fetch runs.
+const commitCache = new Map<string, CommitInfo[]>();
+
 function formatDate(ts: number): string {
   const d = new Date(ts * 1000);
   const yyyy = d.getFullYear();
@@ -58,9 +63,19 @@ export default function CommitList({ tabId, listKey }: { tabId: string; listKey:
   const parentRef = useRef<HTMLDivElement>(null);
   const isLoadingRef = useRef(false);
   const loadGenRef = useRef(0);
-  const staleCommitsRef = useRef<CommitInfo[]>([]);
+  // Seed from module-level cache so tab-switch remounts show previous commits
+  // immediately rather than blanking for the ~300ms initial fetch.
+  const staleCommitsRef = useRef<CommitInfo[]>(commitCache.get(tabId) ?? []);
   const commitsRef = useRef(commits);
   commitsRef.current = commits;
+
+  // Keep the module-level cache current so the next mount has fresh stale data.
+  useEffect(() => {
+    if (commits.length > 0) {
+      commitCache.set(tabId, commits);
+    }
+  }, [commits, tabId]);
+
   const prevListKeyRef = useRef(listKey);
   const lastOidRef = useRef<string | null>(null);
   lastOidRef.current = commits.length > 0
