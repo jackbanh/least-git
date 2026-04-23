@@ -6,7 +6,13 @@
   font-size: 12px;
 }
 
-/* Prevent line wrapping — parent has overflow-x: auto for horizontal scroll */
+/* Prevent line wrapping — table must expand to natural content width so the
+   parent overflow-x: auto can provide a real horizontal scrollbar. */
+.diff-scroll .diff {
+  min-width: max-content;
+}
+
+.diff-scroll .diff-code,
 .diff-scroll .diff-code pre,
 .diff-scroll .diff-code span {
   white-space: pre;
