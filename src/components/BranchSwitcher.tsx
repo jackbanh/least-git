@@ -19,6 +19,9 @@ interface BranchInfo {
 // ---------------------------------------------------------------------------
 const branchCache = new Map<string, BranchInfo[]>();
 
+/** Exposed for tests only — resets the module-level cache between test cases. */
+export function __resetBranchCache() { branchCache.clear(); }
+
 function SearchIcon() {
   return (
     <svg width="11" height="11" viewBox="0 0 16 16" fill="none">

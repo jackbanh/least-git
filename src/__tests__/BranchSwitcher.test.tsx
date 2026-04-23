@@ -2,7 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { vi, describe, it, expect, beforeEach } from "vitest";
 import { MantineProvider } from "@mantine/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import BranchSwitcher from "../components/BranchSwitcher";
+import BranchSwitcher, { __resetBranchCache } from "../components/BranchSwitcher";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/plugin-log", () => ({ warn: vi.fn(), info: vi.fn(), error: vi.fn() }));
@@ -28,35 +28,35 @@ function makeQueryClient() {
   });
 }
 
-function Wrapper({ client, listKey }: { client: QueryClient; listKey: number }) {
+function Wrapper({
+  client,
+  tabId = "test-tab",
+  listKey,
+}: {
+  client: QueryClient;
+  tabId?: string;
+  listKey: number;
+}) {
   return (
     <QueryClientProvider client={client}>
       <MantineProvider>
-        <BranchSwitcher tabId="test-tab" listKey={listKey} />
+        <BranchSwitcher tabId={tabId} listKey={listKey} />
       </MantineProvider>
     </QueryClientProvider>
   );
 }
 
-function renderBranchSwitcher(listKey = 0) {
-  const client = makeQueryClient();
-  const { rerender, ...rest } = render(<Wrapper client={client} listKey={listKey} />);
-  return {
-    client,
-    rerender: (newListKey: number) => rerender(<Wrapper client={client} listKey={newListKey} />),
-    ...rest,
-  };
-}
-
 describe("BranchSwitcher", () => {
   beforeEach(() => {
     mockInvoke.mockReset();
+    __resetBranchCache();
   });
 
   it("loads and displays branches on mount", async () => {
     mockInvoke.mockResolvedValue([BRANCH_A, BRANCH_B]);
+    const client = makeQueryClient();
 
-    renderBranchSwitcher();
+    render(<Wrapper client={client} listKey={0} />);
 
     await waitFor(() => expect(screen.getByText("main")).toBeInTheDocument());
     expect(screen.getByText("feature/new-ui")).toBeInTheDocument();
@@ -64,16 +64,17 @@ describe("BranchSwitcher", () => {
 
   it("keeps previous branches visible while a listKey-triggered refresh is in flight", async () => {
     // Regression: branch list must not go blank between a listKey bump and the
-    // new list arriving. TanStack Query shows cached data (placeholderData) while
-    // the background refetch runs.
+    // new list arriving. TanStack Query shows cached data while the background
+    // refetch runs, and branchCache provides initialData if the TQ cache is cold.
+    const client = makeQueryClient();
     mockInvoke.mockResolvedValueOnce([BRANCH_A, BRANCH_B]);
-    const { rerender } = renderBranchSwitcher(0);
 
+    const { rerender } = render(<Wrapper client={client} listKey={0} />);
     await waitFor(() => expect(screen.getByText("main")).toBeInTheDocument());
 
     // Trigger refresh — fetch is pending, never resolves in this test
     mockInvoke.mockReturnValueOnce(new Promise(() => {}));
-    rerender(1);
+    rerender(<Wrapper client={client} listKey={1} />);
 
     // Both branches must still be visible while the refresh is in flight
     expect(screen.getByText("main")).toBeInTheDocument();
@@ -81,13 +82,15 @@ describe("BranchSwitcher", () => {
   });
 
   it("updates the branch list when a refresh resolves with new data", async () => {
+    const client = makeQueryClient();
     mockInvoke.mockResolvedValueOnce([BRANCH_A, BRANCH_B]);
-    const { rerender } = renderBranchSwitcher(0);
+
+    const { rerender } = render(<Wrapper client={client} listKey={0} />);
     await waitFor(() => expect(screen.getByText("feature/new-ui")).toBeInTheDocument());
 
     const updatedB = { name: "feature/redesign", is_head: false };
     mockInvoke.mockResolvedValueOnce([BRANCH_A, updatedB]);
-    rerender(1);
+    rerender(<Wrapper client={client} listKey={1} />);
 
     await waitFor(() => expect(screen.getByText("feature/redesign")).toBeInTheDocument());
     expect(screen.queryByText("feature/new-ui")).not.toBeInTheDocument();
@@ -96,7 +99,7 @@ describe("BranchSwitcher", () => {
 
   it("shows cached branches immediately on remount (simulates tab switch)", async () => {
     // Regression: before TanStack Query, lastKnownBranchesRef was component-local
-    // and reset to [] on every remount. Tab switches caused a ~700ms blank.
+    // and reset to [] on every remount. Tab switches caused a blank flash.
     // Now the QueryClient cache (gcTime: Infinity) persists outside the component
     // tree, so cached data is available the instant the component remounts.
     const client = makeQueryClient();
@@ -118,9 +121,36 @@ describe("BranchSwitcher", () => {
     expect(screen.getByText("main")).toBeInTheDocument();
     expect(screen.getByText("feature/new-ui")).toBeInTheDocument();
 
-    // Resolve with a slimmed-down list
+    // Resolve with a slimmed-down list to confirm the live update lands
     resolveRemount([BRANCH_A]);
     await waitFor(() => expect(screen.queryByText("feature/new-ui")).not.toBeInTheDocument());
     expect(screen.getByText("main")).toBeInTheDocument();
+  });
+
+  it("shows stale branches via branchCache when the TanStack Query cache is cold", async () => {
+    // This covers the specific fix: initialData seeded from the module-level
+    // branchCache. When the TQ cache is evicted (e.g. after a tab switch that
+    // caused the observer to watch a different queryKey), branchCache ensures the
+    // branch list never flashes blank on return.
+    const client = makeQueryClient();
+    mockInvoke.mockResolvedValueOnce([BRANCH_A, BRANCH_B]);
+
+    // First visit — populates both TQ cache and branchCache
+    const { rerender } = render(<Wrapper client={client} tabId="tab-a" listKey={0} />);
+    await waitFor(() => expect(screen.getByText("main")).toBeInTheDocument());
+
+    // Evict the TQ cache entry to simulate a cold cache on return
+    client.removeQueries({ queryKey: ["branches", "tab-a"] });
+
+    // Return to tab-a with a slow fetch — only branchCache can fill the gap
+    let resolveFetch!: (v: unknown) => void;
+    mockInvoke.mockReturnValueOnce(new Promise((res) => { resolveFetch = res; }));
+    rerender(<Wrapper client={client} tabId="tab-a" listKey={1} />);
+
+    // branchCache provides initialData — no blank flash despite cold TQ cache
+    expect(screen.getByText("main")).toBeInTheDocument();
+    expect(screen.getByText("feature/new-ui")).toBeInTheDocument();
+
+    resolveFetch([BRANCH_A, BRANCH_B]);
   });
 });
