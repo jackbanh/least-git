@@ -976,6 +976,16 @@ pub fn run() {
             // Menu bar is macOS-only. On Windows the native menu bar appears as
             // a second title bar when decorations:false is set, so we skip it
             // entirely — keyboard shortcuts on Windows are handled in the frontend.
+            // Belt-and-suspenders: programmatically disable decorations on Windows
+            // in case the platform config merge didn't take effect.
+            #[cfg(target_os = "windows")]
+            {
+                use tauri::Manager;
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.set_decorations(false);
+                }
+            }
+
             #[cfg(target_os = "macos")]
             {
                 let refresh_item = MenuItem::with_id(app, "refresh", "Refresh", true, Some("Cmd+R"))?;
