@@ -9,6 +9,7 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::Duration;
 #[allow(unused_imports)]
+#[cfg(target_os = "macos")]
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{Emitter, State};
 
@@ -925,32 +926,16 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
-            let refresh_item = MenuItem::with_id(
-                app,
-                "refresh",
-                "Refresh",
-                true,
-                if cfg!(target_os = "macos") { Some("Cmd+R") } else { Some("F5") },
-            )?;
-            let branch_item = MenuItem::with_id(
-                app,
-                "branch",
-                "Branch…",
-                true,
-                if cfg!(target_os = "macos") { Some("CmdOrCtrl+Shift+B") } else { Some("Ctrl+Shift+B") },
-            )?;
-            let pull_item = MenuItem::with_id(
-                app,
-                "pull",
-                "Pull…",
-                true,
-                Some("CmdOrCtrl+Shift+P"),
-            )?;
-            let repo_menu = Submenu::with_items(app, "Repository", true, &[&refresh_item, &branch_item, &pull_item])?;
-
-            // macOS requires the app-name menu as the first entry or nothing renders.
+            // Menu bar is macOS-only. On Windows the native menu bar appears as
+            // a second title bar when decorations:false is set, so we skip it
+            // entirely — keyboard shortcuts on Windows are handled in the frontend.
             #[cfg(target_os = "macos")]
-            let menu = {
+            {
+                let refresh_item = MenuItem::with_id(app, "refresh", "Refresh", true, Some("Cmd+R"))?;
+                let branch_item = MenuItem::with_id(app, "branch", "Branch…", true, Some("Cmd+Shift+B"))?;
+                let pull_item = MenuItem::with_id(app, "pull", "Pull…", true, Some("Cmd+Shift+P"))?;
+                let repo_menu = Submenu::with_items(app, "Repository", true, &[&refresh_item, &branch_item, &pull_item])?;
+                // macOS requires the app-name menu as the first entry or nothing renders.
                 let app_menu = Submenu::with_items(
                     app,
                     app.package_info().name.clone(),
@@ -961,22 +946,18 @@ pub fn run() {
                         &PredefinedMenuItem::quit(app, None)?,
                     ],
                 )?;
-                Menu::with_items(app, &[&app_menu, &repo_menu])?
-            };
-
-            #[cfg(not(target_os = "macos"))]
-            let menu = Menu::with_items(app, &[&repo_menu])?;
-
-            app.set_menu(menu)?;
-            app.on_menu_event(|app, event| {
-                if event.id() == "refresh" {
-                    let _ = app.emit("menu:refresh", ());
-                } else if event.id() == "branch" {
-                    let _ = app.emit("menu:branch", ());
-                } else if event.id() == "pull" {
-                    let _ = app.emit("menu:pull", ());
-                }
-            });
+                let menu = Menu::with_items(app, &[&app_menu, &repo_menu])?;
+                app.set_menu(menu)?;
+                app.on_menu_event(|app, event| {
+                    if event.id() == "refresh" {
+                        let _ = app.emit("menu:refresh", ());
+                    } else if event.id() == "branch" {
+                        let _ = app.emit("menu:branch", ());
+                    } else if event.id() == "pull" {
+                        let _ = app.emit("menu:pull", ());
+                    }
+                });
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
