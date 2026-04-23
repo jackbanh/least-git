@@ -59,9 +59,10 @@ function CommitDetailInner({
   selectedOid: string | null;
 }) {
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
-  const [metaHeight, setMetaHeight] = useState(120);
 
-  const startMetaResize = useResize(metaHeight, setMetaHeight, "vertical", 80, 320, true);
+  const metaPanelHeight = useTabStore((s) => s.metaPanelHeight);
+  const setMetaPanelHeight = useTabStore((s) => s.setMetaPanelHeight);
+  const startMetaResize = useResize(metaPanelHeight, setMetaPanelHeight, "vertical", 80, 320, true);
 
   // Reset file selection when switching commits so we don't carry over a
   // file from the previous commit into the new one's file list.
@@ -150,7 +151,7 @@ function CommitDetailInner({
 
           <div className="resize-handle resize-handle--horizontal" onMouseDown={startMetaResize} />
 
-          <div className="detail-meta" style={{ height: metaHeight }}>
+          <div className="detail-meta" style={{ height: metaPanelHeight }}>
             <div className="detail-message">
               <div className="detail-commit-title">{detail.summary}</div>
               {detail.body && (

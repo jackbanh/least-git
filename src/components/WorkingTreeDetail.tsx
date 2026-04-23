@@ -8,6 +8,7 @@ import {
   IconRotate2,
   IconTrash,
 } from "@tabler/icons-react";
+import { useTabStore } from "../store";
 import { useResize } from "../hooks/useResize";
 import DetailLayout from "./DetailLayout";
 import InteractiveDiffViewer from "./InteractiveDiffViewer";
@@ -36,8 +37,9 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
   const [selected, setSelected] = useState<SelectedFile | null>(null);
   const [diff, setDiff] = useState<string>("");
   const [diffLoading, setDiffLoading] = useState(false);
-  const [metaHeight, setMetaHeight] = useState(60);
-  const startMetaResize = useResize(metaHeight, setMetaHeight, "vertical", 40, 320, true);
+  const metaPanelHeight = useTabStore((s) => s.metaPanelHeight);
+  const setMetaPanelHeight = useTabStore((s) => s.setMetaPanelHeight);
+  const startMetaResize = useResize(metaPanelHeight, setMetaPanelHeight, "vertical", 80, 320, true);
 
   // ── Context menu ────────────────────────────────────────────────────────
   interface ContextMenuState { x: number; y: number; entry: StatusEntry; staged: boolean }
@@ -224,7 +226,7 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
 
           <div className="resize-handle resize-handle--horizontal" onMouseDown={startMetaResize} />
 
-          <div className="wt-meta" style={{ height: metaHeight }}>
+          <div className="wt-meta" style={{ height: metaPanelHeight }}>
             <span className="wt-title">Uncommitted Changes</span>
             {status && (
               <span className="wt-counts">
