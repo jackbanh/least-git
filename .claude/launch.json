@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Vite (browser mock)",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 5173
+    },
+    {
+      "name": "Tauri dev (full app)",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "tauri", "--", "dev"],
+      "port": 1420
+    }
+  ]
+}
