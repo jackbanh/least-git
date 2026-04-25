@@ -13,28 +13,13 @@ use std::time::Duration;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{Emitter, State};
 
-/// Spawn a synchronous git process. On Windows, `CREATE_NO_WINDOW` prevents a
+/// Spawn an async git process. On Windows, `CREATE_NO_WINDOW` prevents a
 /// console window from flashing when the app is launched as a GUI executable.
-fn git() -> std::process::Command {
-    #[allow(unused_mut)]
-    let mut cmd = std::process::Command::new("git");
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
-    }
-    cmd
-}
-
-/// Same as `git()` but returns a `tokio::process::Command` for async callers.
 fn git_async() -> tokio::process::Command {
     #[allow(unused_mut)]
     let mut cmd = tokio::process::Command::new("git");
     #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
-    }
+    cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
     cmd
 }
 
@@ -604,6 +589,7 @@ fn split_message(msg: &[u8]) -> (String, String) {
     (summary, body)
 }
 
+#[cfg(test)]
 fn parse_branches(raw: &str) -> Vec<BranchInfo> {
     let mut branches: Vec<BranchInfo> = raw
         .lines()
