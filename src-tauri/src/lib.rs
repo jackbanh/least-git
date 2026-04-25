@@ -955,7 +955,17 @@ pub fn run() {
             builder.build()
         })
         .plugin(tauri_plugin_clipboard_manager::init())
-        .plugin(tauri_plugin_window_state::Builder::default().build())
+        .plugin(
+            // Exclude DECORATIONS from saved/restored state: we manage decorations
+            // via config (decorations:false on Windows) and never want a stale
+            // "decorations:true" entry from a previous run to override that.
+            tauri_plugin_window_state::Builder::default()
+                .with_state_flags(
+                    tauri_plugin_window_state::StateFlags::all()
+                        & !tauri_plugin_window_state::StateFlags::DECORATIONS,
+                )
+                .build(),
+        )
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
