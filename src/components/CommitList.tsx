@@ -86,6 +86,10 @@ export default function CommitList({ tabId, listKey }: { tabId: string; listKey:
     (s) => s.tabs.find((t) => t.id === tabId)?.selectedOid ?? null
   );
   const selectCommit = useTabStore((s) => s.selectCommit);
+  // Ref so async refresh callbacks can read the current selectedOid without
+  // capturing a stale closure value.
+  const selectedOidRef = useRef(selectedOid);
+  selectedOidRef.current = selectedOid;
 
   const loadMore = useCallback(async () => {
     if (isLoadingRef.current || !hasMore) return;
@@ -154,6 +158,13 @@ export default function CommitList({ tabId, listKey }: { tabId: string; listKey:
         staleCommitsRef.current = [];
         setCommits(fresh);
         if (fresh.length < PAGE_SIZE || fresh[fresh.length - 1]?.parent_oid === null) setHasMore(false);
+        // Re-validate selection: if the previously selected OID is no longer in
+        // the fresh list, clear it. UNCOMMITTED is always kept — the working tree
+        // is valid regardless of which commits are visible.
+        const oid = selectedOidRef.current;
+        if (oid && oid !== UNCOMMITTED && !fresh.some((c) => c.oid === oid)) {
+          selectCommit(tabId, null);
+        }
       })
       .catch((e) => {
         const ms = Math.round(performance.now() - t0);

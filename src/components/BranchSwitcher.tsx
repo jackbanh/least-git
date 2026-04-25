@@ -47,7 +47,6 @@ export default function BranchSwitcher({
   const [error, setError] = useState<string | null>(null);
 
   const bumpListKey = useTabStore((s) => s.bumpListKey);
-  const selectCommit = useTabStore((s) => s.selectCommit);
   const queryClient = useQueryClient();
 
   // Invalidate the stable query key whenever listKey bumps.
@@ -130,7 +129,8 @@ export default function BranchSwitcher({
     logInfo(`BranchSwitcher[${tabId}] checkout success`);
     onManualRefresh?.();
     bumpListKey(tabId);
-    selectCommit(tabId, null);
+    // Don't clear selectedOid here — CommitList will validate the selection
+    // once fresh commits arrive and clear it only if the OID is no longer present.
   }
 
   function handleCheckoutClose() {
