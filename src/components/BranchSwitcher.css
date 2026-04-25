@@ -183,7 +183,6 @@
 }
 
 .branch-row--selected:not(.branch-row--head) .branch-row-name {
-  font-weight: 500;
   color: var(--lg-ink);
 }
 
