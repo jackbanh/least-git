@@ -1000,6 +1000,10 @@ pub fn run() {
                     &[
                         &PredefinedMenuItem::about(app, None, None)?,
                         &PredefinedMenuItem::separator(app)?,
+                        &PredefinedMenuItem::hide(app, None)?,
+                        &PredefinedMenuItem::hide_others(app, None)?,
+                        &PredefinedMenuItem::show_all(app, None)?,
+                        &PredefinedMenuItem::separator(app)?,
                         &PredefinedMenuItem::quit(app, None)?,
                     ],
                 )?;

@@ -39,7 +39,7 @@ body {
   justify-content: space-between;
   padding: 0 0 0 12px;
   background: var(--lg-chrome-bg);
-  border-bottom: 0.5px solid var(--lg-border-soft);
+  border-bottom: 0.5px solid var(--lg-chrome-border);
   user-select: none;
 }
 
@@ -47,7 +47,7 @@ body {
   font-family: var(--lg-font-serif);
   font-size: 12px;
   font-weight: 500;
-  color: var(--lg-ink-muted);
+  color: var(--lg-chrome-ink-soft);
   letter-spacing: 0.02em;
   pointer-events: none;
 }
@@ -65,14 +65,14 @@ body {
   justify-content: center;
   border: none;
   background: transparent;
-  color: var(--lg-ink-muted);
+  color: var(--lg-chrome-ink-soft);
   cursor: default;
   transition: background 100ms, color 100ms;
 }
 
 .win-titlebar-btn:hover {
-  background: var(--lg-hover-bg);
-  color: var(--lg-ink);
+  background: var(--lg-chrome-hover);
+  color: var(--lg-chrome-ink);
 }
 
 .win-titlebar-btn--close:hover {
@@ -84,9 +84,18 @@ body {
 
 .tab-bar {
   flex-shrink: 0;
+  height: 38px;
+  display: flex;
+  align-items: flex-end;
   padding: 0 8px;
-  border-bottom: 0.5px solid var(--lg-border);
+  border-bottom: 0.5px solid var(--lg-chrome-border);
   background: var(--lg-chrome-bg);
+}
+
+.tab-bar-drag-region {
+  flex: 1;
+  min-width: 0;
+  align-self: stretch;
 }
 
 .tab-bar--macos {
@@ -102,10 +111,82 @@ body {
   font-family: var(--lg-font-serif);
   font-size: 12px;
   font-weight: 500;
-  color: var(--lg-ink-muted);
+  color: var(--lg-chrome-ink-faint);
   letter-spacing: 0.02em;
   pointer-events: none;
   white-space: nowrap;
+}
+
+/* ── Mantine tab overrides ────────────────────────────────────────── */
+
+.tab-bar .mantine-Tabs-list {
+  border-bottom: none;
+  gap: 1px;
+  align-items: flex-end;
+}
+
+.tab-bar .mantine-Tabs-list::before {
+  display: none;
+}
+
+.tab-bar .mantine-Tabs-tab {
+  border-radius: 8px 8px 0 0;
+  padding: 0 14px;
+  height: 30px;
+  min-width: unset;
+  background: transparent;
+  border: none !important;
+  color: var(--lg-chrome-ink-soft);
+  font-family: var(--lg-font-sans);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0.1px;
+  white-space: nowrap;
+  transition: background 80ms ease, color 80ms ease;
+}
+
+.tab-bar .mantine-Tabs-tab:hover:not([data-active]) {
+  background: var(--lg-chrome-hover);
+  color: var(--lg-chrome-ink);
+}
+
+.tab-bar .mantine-Tabs-tab[data-active] {
+  background: var(--lg-chrome-tab-bg);
+  color: var(--lg-ink);
+  font-weight: 500;
+  margin-bottom: -0.5px;
+}
+
+/* ── Tab label (plain span inherits all tab font styles) ──────────── */
+
+.tab-label {
+  white-space: nowrap;
+  letter-spacing: 0.1px;
+}
+
+/* ── Tab bar + button ─────────────────────────────────────────────── */
+
+.tab-bar-new-btn {
+  align-self: flex-end;
+  margin-left: 4px;
+  margin-bottom: 3px;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--lg-chrome-ink-soft);
+  border-radius: 5px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.tab-bar-new-btn:hover {
+  background: var(--lg-chrome-hover);
+  color: var(--lg-chrome-ink);
 }
 
 /* ── Workspace ────────────────────────────────────────────────────── */

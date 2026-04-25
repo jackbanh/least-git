@@ -176,49 +176,49 @@ export default function App() {
           </div>
         </div>
       )}
-      <div className={`tab-bar${platform === "macos" ? " tab-bar--macos" : ""}`} data-tauri-drag-region>
+      <div className={`tab-bar${platform === "macos" ? " tab-bar--macos" : ""}`}>
         {platform === "macos" && (
           <span className="tab-bar-app-title">least-git</span>
         )}
         <Tabs
+          variant="outline"
           value={activeTabId}
           onChange={(v) => v && setActiveTab(v)}
         >
           <Group gap={0} wrap="nowrap" align="flex-end">
-            <Tabs.List style={{ flexShrink: 0 }}>
+            <Tabs.List style={{ flexShrink: 0, borderBottom: "none" }}>
               {tabs.map((tab) => (
                 <Tabs.Tab key={tab.id} value={tab.id}>
-                  <Group gap={6} wrap="nowrap">
-                    <Text size="sm" fw={activeTabId === tab.id ? 600 : 400}>
-                      {tab.name}
-                    </Text>
-                    <ActionIcon
-                      size={14}
-                      variant="transparent"
-                      c="dimmed"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        invoke("close_tab", { tabId: tab.id });
-                        closeTab(tab.id);
-                      }}
-                      aria-label={`Close ${tab.name}`}
-                    >
-                      ✕
-                    </ActionIcon>
-                  </Group>
+                  <span className="tab-label">{tab.name}</span>
+                  <ActionIcon
+                    size={14}
+                    variant="transparent"
+                    c="dimmed"
+                    style={{ marginLeft: 6, color: "inherit", opacity: 0.6 }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      invoke("close_tab", { tabId: tab.id });
+                      closeTab(tab.id);
+                    }}
+                    aria-label={`Close ${tab.name}`}
+                  >
+                    ✕
+                  </ActionIcon>
                 </Tabs.Tab>
               ))}
             </Tabs.List>
-            <Button
-              size="xs"
-              variant="subtle"
+            <button
+              className="tab-bar-new-btn"
               onClick={handleOpenFolder}
-              style={{ marginLeft: 4, marginBottom: 2 }}
+              title="Open repo…"
             >
-              + Open Repo
-            </Button>
+              <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+                <path d="M6 1.5v9M1.5 6h9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+              </svg>
+            </button>
           </Group>
         </Tabs>
+        <div className="tab-bar-drag-region" data-tauri-drag-region />
       </div>
 
       <Toolbar

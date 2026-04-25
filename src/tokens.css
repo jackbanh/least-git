@@ -2,7 +2,6 @@
 
 :root {
   --lg-page-bg: oklch(97.5% 0.004 80);
-  --lg-chrome-bg: oklch(96.5% 0.005 80);
   --lg-panel-bg: oklch(98.5% 0.003 80);
   --lg-sidebar-bg: oklch(95.5% 0.007 70);
   --lg-hover-bg: oklch(94% 0.009 70);
@@ -17,11 +16,20 @@
   --lg-ink-muted: oklch(57% 0.012 60);
   --lg-ink-faint: oklch(70% 0.010 65);
 
-  /* Accent — sass default hue 155, overridable via JS on :root */
+  /* Accent — default hue 155 (sage), overridable via JS on :root */
   --lg-accent-hue: 155;
   --lg-accent: oklch(55% 0.07 var(--lg-accent-hue));
   --lg-accent-soft: oklch(88% 0.04 var(--lg-accent-hue));
   --lg-accent-text: oklch(40% 0.07 var(--lg-accent-hue));
+
+  /* Chrome (title bar / tab bar) — sage tinted, follows accent hue */
+  --lg-chrome-bg: oklch(74% 0.045 var(--lg-accent-hue));
+  --lg-chrome-ink: oklch(18% 0.06 var(--lg-accent-hue));
+  --lg-chrome-ink-soft: oklch(28% 0.05 var(--lg-accent-hue));
+  --lg-chrome-ink-faint: oklch(40% 0.04 var(--lg-accent-hue));
+  --lg-chrome-border: oklch(62% 0.06 var(--lg-accent-hue));
+  --lg-chrome-hover: oklch(68% 0.055 var(--lg-accent-hue));
+  --lg-chrome-tab-bg: oklch(98.5% 0.003 80);
 
   --lg-sha: oklch(52% 0.11 38);
 
@@ -44,7 +52,6 @@
 
 [data-theme="dark"] {
   --lg-page-bg: oklch(19% 0.008 60);
-  --lg-chrome-bg: oklch(22% 0.010 60);
   --lg-panel-bg: oklch(24% 0.009 60);
   --lg-sidebar-bg: oklch(21% 0.012 55);
   --lg-hover-bg: oklch(27% 0.012 60);
@@ -62,6 +69,15 @@
   --lg-accent: oklch(72% 0.08 var(--lg-accent-hue));
   --lg-accent-soft: oklch(32% 0.05 var(--lg-accent-hue));
   --lg-accent-text: oklch(78% 0.08 var(--lg-accent-hue));
+
+  /* Chrome — deep sage for dark mode */
+  --lg-chrome-bg: oklch(34% 0.05 var(--lg-accent-hue));
+  --lg-chrome-ink: oklch(96% 0.018 var(--lg-accent-hue));
+  --lg-chrome-ink-soft: oklch(84% 0.025 var(--lg-accent-hue));
+  --lg-chrome-ink-faint: oklch(68% 0.030 var(--lg-accent-hue));
+  --lg-chrome-border: oklch(26% 0.05 var(--lg-accent-hue));
+  --lg-chrome-hover: oklch(40% 0.055 var(--lg-accent-hue));
+  --lg-chrome-tab-bg: oklch(24% 0.009 60);
 
   --lg-sha: oklch(72% 0.11 38);
 
