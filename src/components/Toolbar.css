@@ -86,3 +86,75 @@
 .toolbar-icon-btn--hover {
   background: var(--lg-hover-bg);
 }
+
+/* ── Pull dropdown ────────────────────────────────────────────────── */
+
+.pull-menu-wrap {
+  position: relative;
+}
+
+.pull-menu-btn {
+  gap: 5px;
+}
+
+.pull-menu-chevron {
+  color: var(--lg-ink-faint);
+  transition: transform 120ms ease;
+  flex-shrink: 0;
+}
+
+.pull-menu-chevron--open {
+  transform: rotate(180deg);
+}
+
+.pull-menu-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 200;
+  min-width: 230px;
+  background: var(--lg-panel-bg);
+  border: 0.5px solid var(--lg-border);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.10), 0 1px 4px rgba(0, 0, 0, 0.06);
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+[data-theme="dark"] .pull-menu-dropdown {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35), 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+
+.pull-menu-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  transition: background 80ms ease;
+}
+
+.pull-menu-item:hover {
+  background: var(--lg-hover-bg);
+}
+
+.pull-menu-item-label {
+  font-family: var(--lg-font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--lg-ink);
+  letter-spacing: 0.1px;
+}
+
+.pull-menu-item-sublabel {
+  font-family: var(--lg-font-mono);
+  font-size: 10.5px;
+  color: var(--lg-ink-faint);
+}

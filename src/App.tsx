@@ -9,7 +9,7 @@ import { useTabStore, Tab } from "./store";
 import { useResize } from "./hooks/useResize";
 import BranchSwitcher from "./components/BranchSwitcher";
 import BranchDialog from "./components/BranchDialog";
-import PullDrawer from "./components/PullDrawer";
+import PullDrawer, { type PullTarget } from "./components/PullDrawer";
 import CommitList from "./components/CommitList";
 import CommitDetail from "./components/CommitDetail";
 import Toolbar from "./components/Toolbar";
@@ -37,6 +37,7 @@ export default function App() {
 
   const [branchDialogOpen, setBranchDialogOpen] = useState(false);
   const [pullDrawerOpen, setPullDrawerOpen] = useState(false);
+  const [pullTarget, setPullTarget] = useState<PullTarget | undefined>(undefined);
   const [tweaksOpen, setTweaksOpen] = useState(false);
 
   // Theme state
@@ -122,7 +123,8 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const unlisten = listen("menu:pull", () => setPullDrawerOpen(true));
+    // macOS menu bar pulls current branch (no explicit target)
+    const unlisten = listen("menu:pull", () => { setPullTarget(undefined); setPullDrawerOpen(true); });
     return () => { unlisten.then((fn) => fn()); };
   }, []);
 
@@ -231,7 +233,7 @@ export default function App() {
       </div>
 
       <Toolbar
-        onPull={() => setPullDrawerOpen(true)}
+        onPull={(target) => { setPullTarget(target); setPullDrawerOpen(true); }}
         onBranch={() => setBranchDialogOpen(true)}
         onRefresh={() => {
           if (activeTabId) {
@@ -290,6 +292,7 @@ export default function App() {
         <PullDrawer
           tabId={activeTabId}
           opened={pullDrawerOpen}
+          target={pullTarget}
           onClose={() => setPullDrawerOpen(false)}
           onSuccess={() => { preArmThrottle(activeTabId, "refs"); bumpListKey(activeTabId); }}
         />

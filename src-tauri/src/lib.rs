@@ -872,7 +872,11 @@ struct PullDone {
 
 #[tauri::command]
 async fn pull_with_rebase(
+    // When remote+branch are Some, passes them explicitly to git pull.
+    // When None, uses the current branch's configured upstream.
     tab_id: String,
+    remote: Option<String>,
+    branch: Option<String>,
     app: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
@@ -881,18 +885,22 @@ async fn pull_with_rebase(
     let path = get_repo_path(&tab_id, &state)?;
     let path_str = path.to_string_lossy().to_string();
 
-    // Detect whether origin tracks main or master by checking local tracking refs —
-    // a local file read, no network round-trip required.
-    let probe = git_async()
-        .args(["-C", &path_str, "rev-parse", "--verify", "--quiet", "refs/remotes/origin/main"])
-        .output()
-        .await
-        .map_err(|e| e.to_string())?;
-    let branch = if probe.status.success() { "main" } else { "master" };
-    info!("pull_with_rebase: origin/{branch}");
+    let mut args = vec!["-C", &path_str, "pull", "--rebase", "--autostash"];
+    // Borrow remote/branch as &str so they live long enough for the args slice.
+    let remote_str;
+    let branch_str;
+    if let (Some(r), Some(b)) = (&remote, &branch) {
+        remote_str = r.as_str();
+        branch_str = b.as_str();
+        args.push(remote_str);
+        args.push(branch_str);
+        info!("pull_with_rebase: {remote_str}/{branch_str}");
+    } else {
+        info!("pull_with_rebase: current branch upstream");
+    }
 
     let mut child = git_async()
-        .args(["-C", &path_str, "pull", "--rebase", "--autostash", "origin", branch])
+        .args(&args)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
