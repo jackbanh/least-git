@@ -158,3 +158,12 @@
   font-size: 10.5px;
   color: var(--lg-ink-faint);
 }
+
+.pull-menu-item--disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.pull-menu-item--disabled:hover {
+  background: transparent;
+}

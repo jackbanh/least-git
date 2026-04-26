@@ -43,25 +43,16 @@ function ToolbarIconBtn({ icon, onClick, title }: { icon: React.ReactNode; onCli
   );
 }
 
-const PULL_OPTIONS: { label: string; sublabel: string; target?: PullTarget }[] = [
-  {
-    label: "Pull current branch",
-    sublabel: "git pull --rebase --autostash",
-    target: undefined,
-  },
-  {
-    label: "Pull origin/main",
-    sublabel: "--rebase --autostash",
-    target: { remote: "origin", branch: "main" },
-  },
-  {
-    label: "Pull origin/master",
-    sublabel: "--rebase --autostash",
-    target: { remote: "origin", branch: "master" },
-  },
-];
+interface PullBranchInfo {
+  hasMain: boolean;
+  hasMaster: boolean;
+  headBranch: string | null;
+}
 
-function PullMenuBtn({ onPull }: { onPull?: (target?: PullTarget) => void }) {
+function PullMenuBtn({ onPull, pullBranchInfo }: {
+  onPull?: (target?: PullTarget) => void;
+  pullBranchInfo?: PullBranchInfo;
+}) {
   const [open, setOpen] = useState(false);
   const [hover, setHover] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -77,6 +68,31 @@ function PullMenuBtn({ onPull }: { onPull?: (target?: PullTarget) => void }) {
     return () => document.removeEventListener("mousedown", handleClick);
   }, [open]);
 
+  const { hasMain, hasMaster, headBranch } = pullBranchInfo ?? {
+    hasMain: false, hasMaster: false, headBranch: null,
+  };
+
+  type PullOption = { label: string; sublabel: string; target?: PullTarget; disabled?: boolean };
+  const options: PullOption[] = [
+    {
+      label: "Pull current branch",
+      sublabel: "git pull --rebase --autostash",
+      target: undefined,
+    },
+    ...(hasMain ? [{
+      label: "Pull origin/main",
+      sublabel: "--rebase --autostash",
+      target: { remote: "origin", branch: "main" } as PullTarget,
+      disabled: headBranch === "main",
+    }] : []),
+    ...(hasMaster ? [{
+      label: "Pull origin/master",
+      sublabel: "--rebase --autostash",
+      target: { remote: "origin", branch: "master" } as PullTarget,
+      disabled: headBranch === "master",
+    }] : []),
+  ];
+
   return (
     <div ref={ref} className="pull-menu-wrap">
       <button
@@ -91,10 +107,11 @@ function PullMenuBtn({ onPull }: { onPull?: (target?: PullTarget) => void }) {
       </button>
       {open && (
         <div className="pull-menu-dropdown">
-          {PULL_OPTIONS.map((opt) => (
+          {options.map((opt) => (
             <button
               key={opt.label}
-              className="pull-menu-item"
+              className={`pull-menu-item${opt.disabled ? " pull-menu-item--disabled" : ""}`}
+              disabled={opt.disabled}
               onClick={() => {
                 setOpen(false);
                 onPull?.(opt.target);
@@ -112,6 +129,7 @@ function PullMenuBtn({ onPull }: { onPull?: (target?: PullTarget) => void }) {
 
 export default function Toolbar({
   currentBranch,
+  pullBranchInfo,
   onPull,
   onPush,
   onBranch,
@@ -119,6 +137,7 @@ export default function Toolbar({
   onToggleTweaks,
 }: {
   currentBranch?: string;
+  pullBranchInfo?: PullBranchInfo;
   onPull?: (target?: PullTarget) => void;
   onPush?: () => void;
   onBranch?: () => void;
@@ -128,7 +147,7 @@ export default function Toolbar({
   return (
     <div className="toolbar">
       <ToolbarBtn icon={<IconRefresh size={ICON_SIZE} />} label="Refresh" onClick={onRefresh} />
-      <PullMenuBtn onPull={onPull} />
+      <PullMenuBtn onPull={onPull} pullBranchInfo={pullBranchInfo} />
       <ToolbarBtn icon={<IconArrowBarUp size={ICON_SIZE} />} label="Push" onClick={onPush} />
       <ToolbarBtn icon={<IconGitBranch size={ICON_SIZE} />} label="Branch" onClick={onBranch} />
       <div className="toolbar-spacer" />

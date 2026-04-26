@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { info as logInfo } from "@tauri-apps/plugin-log";
 import { open } from "@tauri-apps/plugin-dialog";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Tabs, Button, ActionIcon, Group, Text } from "@mantine/core";
 import { listen } from "@tauri-apps/api/event";
+import { useQuery } from "@tanstack/react-query";
 import { useTabStore, Tab } from "./store";
 import { useResize } from "./hooks/useResize";
 import BranchSwitcher from "./components/BranchSwitcher";
@@ -136,6 +137,22 @@ export default function App() {
 
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? null;
 
+  // Read the branch list from the shared TanStack Query cache (populated by
+  // BranchSwitcher). No extra fetch — just subscribes to the same cache entry.
+  interface BranchInfo { name: string; is_head: boolean; }
+  const { data: branches = [] } = useQuery<BranchInfo[]>({
+    queryKey: ["branches", activeTabId ?? ""],
+    enabled: false, // never fetch from here — BranchSwitcher owns fetching
+  });
+  const pullBranchInfo = useMemo(() => {
+    const head = branches.find((b) => b.is_head)?.name ?? null;
+    return {
+      hasMain: branches.some((b) => b.name === "main"),
+      hasMaster: branches.some((b) => b.name === "master"),
+      headBranch: head,
+    };
+  }, [branches]);
+
   const startSidebarResize = useResize(sidebarWidth, setSidebarWidth, "horizontal", 150, 500);
   const startDetailResize = useResize(detailHeight, setDetailHeight, "vertical", 120, 600, true);
 
@@ -233,6 +250,7 @@ export default function App() {
       </div>
 
       <Toolbar
+        pullBranchInfo={pullBranchInfo}
         onPull={(target) => { setPullTarget(target); setPullDrawerOpen(true); }}
         onBranch={() => setBranchDialogOpen(true)}
         onRefresh={() => {
