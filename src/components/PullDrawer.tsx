@@ -9,6 +9,7 @@ export default function PullDrawer({
   tabId,
   opened,
   target,
+  rebase = false,
   onClose,
   onSuccess,
 }: {
@@ -16,12 +17,15 @@ export default function PullDrawer({
   opened: boolean;
   /** When undefined, pulls the current branch from its configured upstream. */
   target?: PullTarget;
+  /** Whether to pass --rebase --autostash. Defaults to false for current-branch pulls. */
+  rebase?: boolean;
   onClose: () => void;
   onSuccess: () => void;
 }) {
+  const rebaseFlags = rebase ? " --rebase --autostash" : "";
   const displayCommand = target
-    ? `git pull --rebase --autostash ${target.remote} ${target.branch}`
-    : "git pull --rebase --autostash";
+    ? `git pull${rebaseFlags} ${target.remote} ${target.branch}`
+    : `git pull${rebaseFlags}`;
 
   return (
     <GitOutputDrawer
@@ -29,7 +33,7 @@ export default function PullDrawer({
       opened={opened}
       title={target ? `Pull ${target.remote}/${target.branch}` : "Pull"}
       command="pull_with_rebase"
-      commandArgs={target ? { remote: target.remote, branch: target.branch } : { remote: null, branch: null }}
+      commandArgs={{ rebase, remote: target?.remote ?? null, branch: target?.branch ?? null }}
       eventPrefix="pull"
       displayCommand={displayCommand}
       onClose={onClose}

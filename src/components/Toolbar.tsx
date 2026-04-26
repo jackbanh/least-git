@@ -8,6 +8,8 @@ import {
   IconChevronDown,
 } from "@tabler/icons-react";
 import type { PullTarget } from "./PullDrawer";
+export type { PullTarget };
+export interface PullRequest { target?: PullTarget; rebase: boolean; }
 import "./Toolbar.css";
 
 const ICON_SIZE = 14;
@@ -50,7 +52,7 @@ interface PullBranchInfo {
 }
 
 function PullMenuBtn({ onPull, pullBranchInfo }: {
-  onPull?: (target?: PullTarget) => void;
+  onPull?: (req: PullRequest) => void;
   pullBranchInfo?: PullBranchInfo;
 }) {
   const [open, setOpen] = useState(false);
@@ -72,23 +74,23 @@ function PullMenuBtn({ onPull, pullBranchInfo }: {
     hasMain: false, hasMaster: false, headBranch: null,
   };
 
-  type PullOption = { label: string; sublabel: string; target?: PullTarget; disabled?: boolean };
+  type PullOption = { label: string; sublabel: string; req: PullRequest; disabled?: boolean };
   const options: PullOption[] = [
     {
       label: "Pull current branch",
-      sublabel: "git pull --rebase --autostash",
-      target: undefined,
+      sublabel: "git pull",
+      req: { rebase: false },
     },
     ...(hasMain ? [{
       label: "Pull origin/main",
       sublabel: "--rebase --autostash",
-      target: { remote: "origin", branch: "main" } as PullTarget,
+      req: { target: { remote: "origin", branch: "main" }, rebase: true },
       disabled: headBranch === "main",
     }] : []),
     ...(hasMaster ? [{
       label: "Pull origin/master",
       sublabel: "--rebase --autostash",
-      target: { remote: "origin", branch: "master" } as PullTarget,
+      req: { target: { remote: "origin", branch: "master" }, rebase: true },
       disabled: headBranch === "master",
     }] : []),
   ];
@@ -114,7 +116,7 @@ function PullMenuBtn({ onPull, pullBranchInfo }: {
               disabled={opt.disabled}
               onClick={() => {
                 setOpen(false);
-                onPull?.(opt.target);
+                onPull?.(opt.req);
               }}
             >
               <span className="pull-menu-item-label">{opt.label}</span>
@@ -138,7 +140,7 @@ export default function Toolbar({
 }: {
   currentBranch?: string;
   pullBranchInfo?: PullBranchInfo;
-  onPull?: (target?: PullTarget) => void;
+  onPull?: (req: PullRequest) => void;
   onPush?: () => void;
   onBranch?: () => void;
   onRefresh?: () => void;

@@ -875,6 +875,7 @@ async fn pull_with_rebase(
     // When remote+branch are Some, passes them explicitly to git pull.
     // When None, uses the current branch's configured upstream.
     tab_id: String,
+    rebase: bool,
     remote: Option<String>,
     branch: Option<String>,
     app: tauri::AppHandle,
@@ -885,7 +886,11 @@ async fn pull_with_rebase(
     let path = get_repo_path(&tab_id, &state)?;
     let path_str = path.to_string_lossy().to_string();
 
-    let mut args = vec!["-C", &path_str, "pull", "--rebase", "--autostash"];
+    let mut args = vec!["-C", &path_str, "pull"];
+    if rebase {
+        args.push("--rebase");
+        args.push("--autostash");
+    }
     // Borrow remote/branch as &str so they live long enough for the args slice.
     let remote_str;
     let branch_str;
@@ -894,9 +899,9 @@ async fn pull_with_rebase(
         branch_str = b.as_str();
         args.push(remote_str);
         args.push(branch_str);
-        info!("pull_with_rebase: {remote_str}/{branch_str}");
+        info!("pull rebase={rebase} {remote_str}/{branch_str}");
     } else {
-        info!("pull_with_rebase: current branch upstream");
+        info!("pull rebase={rebase} current branch upstream");
     }
 
     let mut child = git_async()
