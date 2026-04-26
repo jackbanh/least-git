@@ -1,4 +1,23 @@
-/* Design tokens — Nordic/warm-neutral palette, oklch throughout */
+/*
+ * Design tokens — Nordic/warm-neutral palette, oklch throughout
+ *
+ * Naming convention:  --lg-<category>[-<variant>]
+ *
+ * SURFACES  --lg-page-bg / panel-bg / sidebar-bg / hover-bg / selected-bg
+ * BORDERS   --lg-border / border-soft / border-strong
+ * INK       --lg-ink / ink-soft / ink-muted / ink-faint        ← content areas & toolbar
+ * ACCENT    --lg-accent / accent-soft / accent-text             ← follows --lg-accent-hue
+ * CHROME    --lg-chrome-bg/ink/ink-soft/ink-faint/border/hover/tab-bg
+ *             ↳ title bar & tab bar ONLY. Do NOT use chrome tokens in content areas.
+ * DIFF      --lg-diff-{add,rem}-{fg,bg,bar}
+ * STATUS    --lg-added / modified / deleted / uncommitted / sha
+ * FONTS     --lg-font-serif / sans / mono
+ *
+ * Rule of thumb:
+ *   Content rows / panels  → --lg-hover-bg, --lg-ink-*
+ *   Title/tab bar          → --lg-chrome-*
+ *   Win window controls    → --lg-ink-soft + --lg-hover-bg  (not chrome variants)
+ */
 
 :root {
   --lg-page-bg: oklch(97.5% 0.004 80);
