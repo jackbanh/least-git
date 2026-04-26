@@ -17,7 +17,10 @@ import TweaksPanel from "./components/TweaksPanel";
 import "./App.css";
 
 // Detected once at module load — stable for the lifetime of the app.
+// In browser mock mode (no Tauri context) default to "windows" so the
+// Windows chrome is visible for styling work.
 const platform = (() => {
+  if (!(window as any).__TAURI_INTERNALS__) return "windows";
   const ua = navigator.userAgent;
   if (ua.includes("Windows")) return "windows";
   if (ua.includes("Mac")) return "macos";
