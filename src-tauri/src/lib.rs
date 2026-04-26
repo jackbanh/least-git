@@ -495,8 +495,11 @@ async fn get_commit_detail(
         }
     });
 
+    // --first-parent: on merge commits, only diff against the first parent.
+    // Without this, diff-tree outputs files changed relative to ALL parents,
+    // which on a large monorepo merge can be thousands of entries.
     let files_fut = git_async()
-        .args(["-C", &path_str, "diff-tree", "--no-commit-id", "-r", "--name-status", &oid_clone])
+        .args(["-C", &path_str, "diff-tree", "--no-commit-id", "-r", "--name-status", "--first-parent", &oid_clone])
         .output();
 
     let (meta_res, files_out) = tokio::try_join!(
@@ -638,11 +641,16 @@ async fn get_working_tree_status(
     let path = get_repo_path(&tab_id, &state)?;
     let path_str = path.to_string_lossy().to_string();
 
+    // --ignore-submodules=all: skip submodule state checks entirely.
+    // Without this, git recurses into every submodule directory which can
+    // add several seconds in a monorepo with many submodules.
+    // --no-renames: disable O(n²) rename detection (compare all deleted vs
+    // added blobs). We only need file paths and statuses here.
     let staged_fut = git_async()
-        .args(["-C", &path_str, "diff", "--cached", "--name-status"])
+        .args(["-C", &path_str, "diff", "--cached", "--name-status", "--no-renames", "--ignore-submodules=all"])
         .output();
     let unstaged_fut = git_async()
-        .args(["-C", &path_str, "diff", "--name-status"])
+        .args(["-C", &path_str, "diff", "--name-status", "--no-renames", "--ignore-submodules=all"])
         .output();
     let untracked_fut = git_async()
         .args(["-C", &path_str, "ls-files", "--others", "--exclude-standard"])

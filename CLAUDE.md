@@ -28,10 +28,25 @@ Minimal Git GUI (5 operations only: history, branch switch, commit, pull, push) 
 
 ## Scope limits (do not add without discussion)
 
-- Remote branches are not shown anywhere — local branches only
-- No tab persistence across restarts (deferred)
-- No credential UI — assume creds pre-configured in system git
-- No diff view beyond what's needed for the commit panel
+### Features explicitly excluded
+- **Remote branches** — local branches only, no ahead/behind counts
+- **Tag display** — adds object-dereference overhead and noise
+- **Merge graph / commit graph visualisation** — first-parent walk only; showing all parents requires walking the full DAG and is prohibitively slow in large monorepos
+- **Per-commit insertion/deletion stats in the list** — `git log --stat` / `--shortstat` diffs every commit's tree; never add stat columns to `CommitList` rows
+- **`git blame`** — extremely slow on large files with deep history
+- **Commit search** — `git log --grep` is slow without a commit-graph cache
+- **Stash management** — minor complexity, out of scope for the 5-operation goal
+- **Submodule status** — submodule recursion is a major source of latency; all git commands use `--ignore-submodules=all` where applicable
+- **Tab persistence across restarts** (deferred)
+- **Credential UI** — assume creds pre-configured in system git
+- **Diff view beyond the commit panel**
+
+### Performance-driven implementation choices
+These aren't missing features — they're deliberate decisions that keep the app fast:
+- `load_commits` uses `.first_parent_only()` — never remove this
+- `get_commit_detail` passes `--first-parent` to `diff-tree` — merge commits only diff against their first parent; without this a large monorepo merge can return thousands of file entries
+- `get_working_tree_status` passes `--no-renames` — disables O(n²) rename detection across all changed files
+- `get_working_tree_status` passes `--ignore-submodules=all` — prevents recursing into submodule directories
 
 ## Frontend structure
 
