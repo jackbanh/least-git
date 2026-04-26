@@ -29,35 +29,15 @@ body {
   position: relative;
 }
 
-/* ── Windows custom title bar ─────────────────────────────────────── */
+/* ── Windows window controls (inline in tab bar) ──────────────────── */
 
-.win-titlebar {
+.win-controls {
+  display: flex;
+  align-self: stretch;
   flex-shrink: 0;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 0 0 12px;
-  background: var(--lg-chrome-bg);
-  border-bottom: 0.5px solid var(--lg-chrome-border);
-  user-select: none;
 }
 
-.win-titlebar-title {
-  font-family: var(--lg-font-serif);
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--lg-chrome-ink-soft);
-  letter-spacing: 0.02em;
-  pointer-events: none;
-}
-
-.win-titlebar-controls {
-  display: flex;
-  height: 100%;
-}
-
-.win-titlebar-btn {
+.win-controls-btn {
   width: 46px;
   height: 100%;
   display: flex;
@@ -65,18 +45,18 @@ body {
   justify-content: center;
   border: none;
   background: transparent;
-  color: var(--lg-chrome-ink-soft);
+  color: var(--lg-ink-soft);
   cursor: default;
   transition: background 100ms, color 100ms;
+  flex-shrink: 0;
 }
 
-.win-titlebar-btn:hover {
-  background: var(--lg-chrome-hover);
-  color: var(--lg-chrome-ink);
+.win-controls-btn:hover {
+  background: var(--lg-hover-bg);
 }
 
-.win-titlebar-btn--close:hover {
-  background: oklch(55% 0.18 25);
+.win-controls-btn--close:hover {
+  background: #e81123;
   color: #fff;
 }
 
@@ -90,6 +70,14 @@ body {
   padding: 0 8px;
   border-bottom: 0.5px solid var(--lg-chrome-border);
   background: var(--lg-chrome-bg);
+  user-select: none;
+}
+
+/* Windows: 40px height, no left padding (title provides its own) */
+.tab-bar--windows {
+  height: 40px;
+  padding-left: 0;
+  align-items: stretch;
 }
 
 .tab-bar-drag-region {
@@ -115,6 +103,21 @@ body {
   letter-spacing: 0.02em;
   pointer-events: none;
   white-space: nowrap;
+}
+
+/* Windows: app title inline on the left */
+.win-tab-title {
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  font-family: var(--lg-font-serif);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--lg-chrome-ink-soft);
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  pointer-events: none;
+  flex-shrink: 0;
 }
 
 /* ── Mantine tab overrides ────────────────────────────────────────── */
@@ -143,6 +146,10 @@ body {
   letter-spacing: 0.1px;
   white-space: nowrap;
   transition: background 80ms ease, color 80ms ease;
+}
+
+.tab-bar--windows .mantine-Tabs-tab {
+  border-radius: 6px 6px 0 0;
 }
 
 .tab-bar .mantine-Tabs-tab:hover:not([data-active]) {

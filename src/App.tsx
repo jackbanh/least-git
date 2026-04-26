@@ -148,37 +148,12 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      {platform === "windows" && (
-        <div className="win-titlebar" data-tauri-drag-region>
-          <span className="win-titlebar-title">least-git</span>
-          <div className="win-titlebar-controls">
-            <button
-              className="win-titlebar-btn"
-              onClick={() => getCurrentWindow().minimize()}
-              aria-label="Minimize"
-            >
-              <svg width="10" height="1" viewBox="0 0 10 1"><rect width="10" height="1" fill="currentColor"/></svg>
-            </button>
-            <button
-              className="win-titlebar-btn"
-              onClick={() => getCurrentWindow().toggleMaximize()}
-              aria-label="Maximize"
-            >
-              <svg width="10" height="10" viewBox="0 0 10 10"><rect x="0.5" y="0.5" width="9" height="9" fill="none" stroke="currentColor"/></svg>
-            </button>
-            <button
-              className="win-titlebar-btn win-titlebar-btn--close"
-              onClick={() => getCurrentWindow().close()}
-              aria-label="Close"
-            >
-              <svg width="10" height="10" viewBox="0 0 10 10"><line x1="0" y1="0" x2="10" y2="10" stroke="currentColor" strokeWidth="1.2"/><line x1="10" y1="0" x2="0" y2="10" stroke="currentColor" strokeWidth="1.2"/></svg>
-            </button>
-          </div>
-        </div>
-      )}
-      <div className={`tab-bar${platform === "macos" ? " tab-bar--macos" : ""}`}>
+      <div className={`tab-bar${platform === "macos" ? " tab-bar--macos" : ""}${platform === "windows" ? " tab-bar--windows" : ""}`}>
         {platform === "macos" && (
           <span className="tab-bar-app-title">least-git</span>
+        )}
+        {platform === "windows" && (
+          <span className="win-tab-title" data-tauri-drag-region>least-git</span>
         )}
         <Tabs
           variant="outline"
@@ -219,6 +194,37 @@ export default function App() {
           </Group>
         </Tabs>
         <div className="tab-bar-drag-region" data-tauri-drag-region />
+        {platform === "windows" && (
+          <div className="win-controls">
+            <button
+              className="win-controls-btn"
+              onClick={() => getCurrentWindow().minimize()}
+              aria-label="Minimize"
+            >
+              <svg width="10" height="10" viewBox="0 0 10 10">
+                <path d="M0 5h10" stroke="currentColor" strokeWidth="1" />
+              </svg>
+            </button>
+            <button
+              className="win-controls-btn"
+              onClick={() => getCurrentWindow().toggleMaximize()}
+              aria-label="Maximize"
+            >
+              <svg width="10" height="10" viewBox="0 0 10 10">
+                <rect x="0.5" y="0.5" width="9" height="9" stroke="currentColor" strokeWidth="1" fill="none" />
+              </svg>
+            </button>
+            <button
+              className="win-controls-btn win-controls-btn--close"
+              onClick={() => getCurrentWindow().close()}
+              aria-label="Close"
+            >
+              <svg width="10" height="10" viewBox="0 0 10 10">
+                <path d="M0 0l10 10M10 0L0 10" stroke="currentColor" strokeWidth="1" />
+              </svg>
+            </button>
+          </div>
+        )}
       </div>
 
       <Toolbar
