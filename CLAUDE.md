@@ -9,7 +9,7 @@ Minimal Git GUI (5 operations only: history, branch switch, commit, pull, push) 
 - **Rust + Tokio** — all Git logic in `src-tauri/src/`
 - **gix** — Git backend (not libgit2)
 - **System git binary** — push/pull only (no reimplementing transport)
-- **Mantine v7** — UI components for app chrome only
+- **Mantine v9** — UI components for app chrome only
 - **Zustand** — tab state
 - **@tanstack/react-virtual** — virtualised lists
 

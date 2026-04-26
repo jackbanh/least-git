@@ -14,8 +14,8 @@
     "lint:rust": "cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings"
   },
   "dependencies": {
-    "@mantine/core": "^8.3.18",
-    "@mantine/hooks": "^8.3.18",
+    "@mantine/core": "^9.1.0",
+    "@mantine/hooks": "^9.1.0",
     "@tabler/icons-react": "^3.41.1",
     "@tanstack/react-query": "^5.99.2",
     "@tanstack/react-virtual": "^3.13.23",
@@ -28,9 +28,9 @@
     "postcss": "^8.5.8",
     "postcss-preset-mantine": "^1.18.0",
     "postcss-simple-vars": "^7.0.1",
-    "react": "^19.1.0",
+    "react": "^19.2.5",
     "react-diff-view": "^3.3.3",
-    "react-dom": "^19.1.0",
+    "react-dom": "^19.2.5",
     "react-markdown": "^10.1.0",
     "refractor": "^3.6.0",
     "zustand": "^5.0.12"
