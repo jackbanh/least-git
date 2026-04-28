@@ -34,6 +34,7 @@ interface SelectedFile {
 
 export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId: string; listKey: number; statusKey: number }) {
   const [status, setStatus] = useState<WorkingTreeStatus | null>(null);
+  const [statusError, setStatusError] = useState<string | null>(null);
   const [selected, setSelected] = useState<SelectedFile | null>(null);
   const [diff, setDiff] = useState<string>("");
   const [diffLoading, setDiffLoading] = useState(false);
@@ -90,11 +91,13 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
       .then((s) => {
         const ms = Math.round(performance.now() - t0);
         logInfo(`WorkingTreeDetail[${tabId}] refreshStatus done staged=${s.staged.length} unstaged=${s.unstaged.length} ms=${ms}`);
+        setStatusError(null);
         setStatus(s);
       })
       .catch((e) => {
         const ms = Math.round(performance.now() - t0);
         logWarn(`WorkingTreeDetail[${tabId}] refreshStatus failed ms=${ms} error=${e}`);
+        setStatusError(String(e));
       })
       .finally(() => {
         isRefreshingRef.current = false;
@@ -184,7 +187,10 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
               setSelected({ path: f.path, staged: f.staged, is_untracked: f.status === "?" });
             }}
           >
-            {!status && <div className="wt-section-empty"><Loader size="xs" /></div>}
+            {!status && !statusError && <div className="wt-section-empty"><Loader size="xs" /></div>}
+            {statusError && (
+              <div className="wt-section-empty wt-section-error">{statusError}</div>
+            )}
             {isEmpty && (
               <div className="wt-section-empty">Nothing to commit, working tree clean</div>
             )}

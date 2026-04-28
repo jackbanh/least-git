@@ -37,6 +37,23 @@ function renderWTD() {
   );
 }
 
+describe("WorkingTreeDetail error state", () => {
+  it("shows the error message when get_working_tree_status fails", async () => {
+    mockInvoke.mockReset();
+    mockInvoke.mockImplementation((cmd: string) => {
+      if (cmd === "get_working_tree_status")
+        return Promise.reject("git status failed: error: unknown option `no-renames'");
+      return Promise.resolve("");
+    });
+    renderWTD();
+    await waitFor(() =>
+      expect(screen.getByText(/git status failed/)).toBeInTheDocument()
+    );
+    // The spinner must not still be present once the error is shown
+    expect(document.querySelector(".mantine-Loader-root")).toBeNull();
+  });
+});
+
 describe("WorkingTreeDetail file list keyboard navigation", () => {
   beforeEach(() => {
     mockInvoke.mockReset();

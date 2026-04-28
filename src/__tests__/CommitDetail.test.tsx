@@ -2,7 +2,7 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { vi, describe, it, expect, beforeEach } from "vitest";
 import { MantineProvider } from "@mantine/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import CommitDetail from "../components/CommitDetail";
+import CommitDetail, { UNCOMMITTED } from "../components/CommitDetail";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 vi.mock("react-markdown", () => ({ default: ({ children }: { children: string }) => <p>{children}</p> }));
@@ -127,5 +127,24 @@ describe("CommitDetail file list keyboard navigation", () => {
     await waitFor(() =>
       expect(getFilePath("src/gamma.ts").closest(".file-row")).toHaveClass("file-row--selected")
     );
+  });
+});
+
+describe("CommitDetail UNCOMMITTED routing", () => {
+  beforeEach(() => {
+    mockInvoke.mockReset();
+    mockSelectedOid.mockReturnValue(UNCOMMITTED);
+  });
+
+  it("renders WorkingTreeDetail and not CommitDetailInner when selectedOid is UNCOMMITTED", async () => {
+    renderDetail();
+    // WorkingTreeDetail mock renders "working tree"; this should appear immediately.
+    await waitFor(() => expect(screen.getByText("working tree")).toBeInTheDocument());
+  });
+
+  it("does not call get_commit_detail when selectedOid is UNCOMMITTED", async () => {
+    renderDetail();
+    await waitFor(() => expect(screen.getByText("working tree")).toBeInTheDocument());
+    expect(mockInvoke).not.toHaveBeenCalledWith("get_commit_detail", expect.anything());
   });
 });

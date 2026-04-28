@@ -7,5 +7,10 @@ export default defineConfig({
     environment: "jsdom",
     setupFiles: ["./src/test/setup.ts"],
     globals: true,
+    exclude: [
+      "**/node_modules/**",
+      "**/.claude/**",   // exclude worktrees created by Claude Code agents
+      "**/dist/**",
+    ],
   },
 });

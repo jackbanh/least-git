@@ -711,6 +711,12 @@ async fn get_working_tree_status(
         .await
         .map_err(|e| e.to_string())?;
 
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        warn!("get_working_tree_status git status failed: {stderr}");
+        return Err(format!("git status failed: {stderr}"));
+    }
+
     let raw = String::from_utf8_lossy(&output.stdout);
     let (staged, unstaged) = parse_porcelain_status(&raw);
     let untracked_count = unstaged.iter().filter(|e| e.status == "?").count();

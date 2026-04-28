@@ -54,6 +54,13 @@
   font-style: italic;
 }
 
+.wt-section-error {
+  color: var(--mantine-color-red-6);
+  font-style: normal;
+  text-align: center;
+  word-break: break-word;
+}
+
 /* ── Working tree detail-meta (title + counts) ───────────────────── */
 
 .wt-meta {
