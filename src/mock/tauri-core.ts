@@ -20,17 +20,18 @@ const MOCK_TAB = {
 
 const PAGE_SIZE = 25;
 
-// Latencies sampled from real app logs on a large monorepo (Windows, Q: drive).
+// Latencies averaged from real app logs on a large monorepo (Windows, Q: drive, ~31 branches).
+// Last updated from least-git9.log (2026-04-28).
 const LATENCY: Record<string, number> = {
   open_repo:                100,
-  list_branches:            150,
-  load_commits_head:        450,  // first page (from HEAD)
-  load_commits_cursor:      350,  // subsequent pages (from cursor)
-  get_commit_detail:       1000,
+  list_branches:            300,  // avg 292ms (n=7)
+  load_commits_head:        900,  // avg 892ms (n=7) — first page from HEAD
+  load_commits_cursor:     1000,  // avg 1016ms (n=8) — subsequent pages
+  get_commit_detail:        950,  // avg 949ms (n=2)
   get_file_diff:            120,
   get_staged_diff:          120,
   get_unstaged_diff:        120,
-  get_working_tree_status: 4200,
+  get_working_tree_status: 8500,  // avg 8540ms (n=5) — large untracked tree
   default:                   60,
 };
 

@@ -51,5 +51,7 @@ Prefixes: `checkout`, `pull`. `GitOutputDrawer` handles this pattern generically
 These are deliberate — do not remove:
 - `load_commits` uses `.first_parent_only()` — never walk the full DAG
 - `get_commit_detail` passes `--first-parent` to `diff-tree` — without this a large monorepo merge commit can return thousands of file entries (one per parent)
+- `get_working_tree_status` uses `git status --porcelain=v1 -z` (single process) instead of three separate `diff`/`ls-files` calls — reads the index once, is FSMonitor-aware, and avoids 2 extra process spawns (~400–800 ms on Windows)
+- `get_working_tree_status` passes `--no-optional-locks` — skips acquiring `index.lock` for this read-only check
 - `get_working_tree_status` passes `--no-renames` — disables O(n²) rename detection across all changed files
 - `get_working_tree_status` passes `--ignore-submodules=all` — prevents recursing into submodule directories

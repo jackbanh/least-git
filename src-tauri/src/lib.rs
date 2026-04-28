@@ -612,6 +612,53 @@ fn parse_branches(raw: &str) -> Vec<BranchInfo> {
     branches
 }
 
+/// Parse `git status --porcelain=v1 -z` output into (staged, unstaged) lists.
+///
+/// With `-z` the stream is NUL-terminated: `"XY path\0"` for ordinary entries and
+/// `"XY new\0old\0"` for renames (only possible without `--no-renames`, kept for
+/// safety). `X` = index status, `Y` = worktree status; `' '` means clean, `'?'`
+/// means untracked. Untracked entries (`??`) go into `unstaged`.
+fn parse_porcelain_status(raw: &str) -> (Vec<StatusEntry>, Vec<StatusEntry>) {
+    let mut staged: Vec<StatusEntry> = Vec::new();
+    let mut unstaged: Vec<StatusEntry> = Vec::new();
+    let mut iter = raw.split('\0').peekable();
+    while let Some(record) = iter.next() {
+        if record.len() < 4 { continue; } // need "XY " + at least one path char
+        let x = record.as_bytes()[0] as char;
+        let y = record.as_bytes()[1] as char;
+        // byte 2 is a space separator
+        let path = record[3..].to_string();
+
+        // Rename/copy in index: next NUL record is the original path.
+        // Shouldn't happen with --no-renames, but handle gracefully.
+        let old_path: Option<String> = if (x == 'R' || x == 'C')
+            && iter.peek().map_or(false, |s| !s.is_empty())
+        {
+            iter.next().map(|s| s.to_string())
+        } else {
+            None
+        };
+
+        if x == '?' && y == '?' {
+            // Untracked file
+            unstaged.push(StatusEntry { path, old_path: None, status: "?".to_string() });
+        } else {
+            if x != ' ' && x != '?' {
+                staged.push(StatusEntry {
+                    path: path.clone(),
+                    old_path: old_path.clone(),
+                    status: x.to_string(),
+                });
+            }
+            if y != ' ' && y != '?' {
+                unstaged.push(StatusEntry { path, old_path: None, status: y.to_string() });
+            }
+        }
+    }
+    (staged, unstaged)
+}
+
+#[cfg(test)]
 fn parse_name_status(output: &str) -> Vec<StatusEntry> {
     output
         .lines()
@@ -641,34 +688,32 @@ async fn get_working_tree_status(
     let path = get_repo_path(&tab_id, &state)?;
     let path_str = path.to_string_lossy().to_string();
 
-    // --ignore-submodules=all: skip submodule state checks entirely.
-    // Without this, git recurses into every submodule directory which can
-    // add several seconds in a monorepo with many submodules.
-    // --no-renames: disable O(n²) rename detection (compare all deleted vs
-    // added blobs). We only need file paths and statuses here.
-    let staged_fut = git_async()
-        .args(["-C", &path_str, "diff", "--cached", "--name-status", "--no-renames", "--ignore-submodules=all"])
-        .output();
-    let unstaged_fut = git_async()
-        .args(["-C", &path_str, "diff", "--name-status", "--no-renames", "--ignore-submodules=all"])
-        .output();
-    let untracked_fut = git_async()
-        .args(["-C", &path_str, "ls-files", "--others", "--exclude-standard"])
-        .output();
+    // Single `git status` call instead of three separate processes (diff --cached,
+    // diff, ls-files --others). Benefits:
+    //   • Reads the index once — no redundant pack I/O.
+    //   • FSMonitor-aware: if core.fsmonitor is configured, git consults the daemon
+    //     and skips stat()-ing clean directories, which is the main source of the
+    //     5–14 s cost on large monorepos. The old ls-files call bypassed FSMonitor.
+    //   • Eliminates two extra git process spawns (~400–800 ms on Windows).
+    // --no-optional-locks: skip acquiring index.lock for this read-only check.
+    // --no-renames / --ignore-submodules=all carried forward from before.
+    let output = git_async()
+        .args([
+            "-C", &path_str,
+            "status",
+            "--porcelain=v1",
+            "-z",
+            "--no-optional-locks",
+            "--no-renames",
+            "--ignore-submodules=all",
+        ])
+        .output()
+        .await
+        .map_err(|e| e.to_string())?;
 
-    let (staged_out, unstaged_out, untracked_out) =
-        tokio::try_join!(staged_fut, unstaged_fut, untracked_fut)
-            .map_err(|e| e.to_string())?;
-
-    let staged = parse_name_status(&String::from_utf8_lossy(&staged_out.stdout));
-    let mut unstaged = parse_name_status(&String::from_utf8_lossy(&unstaged_out.stdout));
-    let mut untracked_count = 0usize;
-    for line in String::from_utf8_lossy(&untracked_out.stdout).lines() {
-        if !line.is_empty() {
-            unstaged.push(StatusEntry { path: line.to_string(), old_path: None, status: "?".to_string() });
-            untracked_count += 1;
-        }
-    }
+    let raw = String::from_utf8_lossy(&output.stdout);
+    let (staged, unstaged) = parse_porcelain_status(&raw);
+    let untracked_count = unstaged.iter().filter(|e| e.status == "?").count();
 
     let total_ms = t.elapsed().as_millis();
     let msg = format!(
@@ -1222,5 +1267,110 @@ mod tests {
         let entries = parse_name_status(out);
         assert_eq!(entries.len(), 4);
         assert_eq!(entries[3].old_path.as_deref(), Some("old.rs"));
+    }
+
+    // ── parse_porcelain_status ───────────────────────────────────────────────
+
+    #[test]
+    fn porcelain_untracked() {
+        // "?? path\0" → unstaged with status "?"
+        let raw = "?? new_file.rs\0";
+        let (staged, unstaged) = parse_porcelain_status(raw);
+        assert!(staged.is_empty());
+        assert_eq!(unstaged.len(), 1);
+        assert_eq!(unstaged[0].status, "?");
+        assert_eq!(unstaged[0].path, "new_file.rs");
+    }
+
+    #[test]
+    fn porcelain_staged_modified() {
+        // "M  path\0" → staged M, worktree clean
+        let raw = "M  src/lib.rs\0";
+        let (staged, unstaged) = parse_porcelain_status(raw);
+        assert_eq!(staged.len(), 1);
+        assert_eq!(staged[0].status, "M");
+        assert_eq!(staged[0].path, "src/lib.rs");
+        assert!(unstaged.is_empty());
+    }
+
+    #[test]
+    fn porcelain_worktree_modified() {
+        // " M path\0" → index clean, worktree modified
+        let raw = " M src/lib.rs\0";
+        let (staged, unstaged) = parse_porcelain_status(raw);
+        assert!(staged.is_empty());
+        assert_eq!(unstaged.len(), 1);
+        assert_eq!(unstaged[0].status, "M");
+    }
+
+    #[test]
+    fn porcelain_both_modified() {
+        // "MM path\0" → staged M and worktree M
+        let raw = "MM src/lib.rs\0";
+        let (staged, unstaged) = parse_porcelain_status(raw);
+        assert_eq!(staged.len(), 1);
+        assert_eq!(staged[0].status, "M");
+        assert_eq!(unstaged.len(), 1);
+        assert_eq!(unstaged[0].status, "M");
+    }
+
+    #[test]
+    fn porcelain_staged_added() {
+        let raw = "A  new.rs\0";
+        let (staged, unstaged) = parse_porcelain_status(raw);
+        assert_eq!(staged.len(), 1);
+        assert_eq!(staged[0].status, "A");
+        assert!(unstaged.is_empty());
+    }
+
+    #[test]
+    fn porcelain_staged_deleted() {
+        let raw = "D  gone.rs\0";
+        let (staged, unstaged) = parse_porcelain_status(raw);
+        assert_eq!(staged.len(), 1);
+        assert_eq!(staged[0].status, "D");
+        assert!(unstaged.is_empty());
+    }
+
+    #[test]
+    fn porcelain_rename_in_index() {
+        // "R  new\0old\0" — rename in index
+        let raw = "R  new.rs\0old.rs\0";
+        let (staged, unstaged) = parse_porcelain_status(raw);
+        assert_eq!(staged.len(), 1);
+        assert_eq!(staged[0].status, "R");
+        assert_eq!(staged[0].path, "new.rs");
+        assert_eq!(staged[0].old_path.as_deref(), Some("old.rs"));
+        assert!(unstaged.is_empty());
+    }
+
+    #[test]
+    fn porcelain_mixed_batch() {
+        // staged A, worktree M untracked
+        let raw = "A  added.rs\0 M modified.rs\0?? untracked.rs\0";
+        let (staged, unstaged) = parse_porcelain_status(raw);
+        assert_eq!(staged.len(), 1);
+        assert_eq!(staged[0].path, "added.rs");
+        assert_eq!(unstaged.len(), 2);
+        let untracked: Vec<_> = unstaged.iter().filter(|e| e.status == "?").collect();
+        let modified: Vec<_> = unstaged.iter().filter(|e| e.status == "M").collect();
+        assert_eq!(untracked.len(), 1);
+        assert_eq!(modified.len(), 1);
+    }
+
+    #[test]
+    fn porcelain_empty_input() {
+        let (staged, unstaged) = parse_porcelain_status("");
+        assert!(staged.is_empty());
+        assert!(unstaged.is_empty());
+    }
+
+    #[test]
+    fn porcelain_skips_short_records() {
+        // Records shorter than 4 bytes are silently skipped
+        let raw = "XY\0?? valid.rs\0";
+        let (staged, unstaged) = parse_porcelain_status(raw);
+        assert!(staged.is_empty());
+        assert_eq!(unstaged.len(), 1);
     }
 }
