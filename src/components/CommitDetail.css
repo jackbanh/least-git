@@ -177,7 +177,7 @@
 .file-status--\? { color: var(--lg-ink-faint); }
 
 .file-path {
-  font-family: var(--lg-font-mono);
+  font-family: var(--lg-font-sans);
   font-size: 11.5px;
   color: var(--lg-ink);
   overflow: hidden;
