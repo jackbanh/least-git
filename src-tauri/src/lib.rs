@@ -931,7 +931,10 @@ async fn pull_with_rebase(
     let path = get_repo_path(&tab_id, &state)?;
     let path_str = path.to_string_lossy().to_string();
 
-    let mut args = vec!["-C", &path_str, "pull"];
+    // --progress forces git to emit remote/receiving progress lines even when
+    // stdout is not a TTY. Without it git stays silent until the operation
+    // finishes, so the drawer shows "Starting…" for the entire network round-trip.
+    let mut args = vec!["-C", &path_str, "pull", "--progress"];
     if rebase {
         args.push("--rebase");
         args.push("--autostash");

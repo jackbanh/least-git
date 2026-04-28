@@ -93,6 +93,7 @@ export default function GitOutputDrawer({
       onClose={onClose}
       position="bottom"
       size="md"
+      transitionProps={{ duration: 150 }}
       title={
         <span className="pull-drawer-title">
           {title}
