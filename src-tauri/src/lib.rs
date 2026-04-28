@@ -695,15 +695,16 @@ async fn get_working_tree_status(
     //     and skips stat()-ing clean directories, which is the main source of the
     //     5–14 s cost on large monorepos. The old ls-files call bypassed FSMonitor.
     //   • Eliminates two extra git process spawns (~400–800 ms on Windows).
-    // --no-optional-locks: skip acquiring index.lock for this read-only check.
+    // --no-optional-locks: top-level git flag (must precede subcommand) — skips
+    //   acquiring index.lock for this read-only check.
     // --no-renames / --ignore-submodules=all carried forward from before.
     let output = git_async()
         .args([
+            "--no-optional-locks",
             "-C", &path_str,
             "status",
             "--porcelain=v1",
             "-z",
-            "--no-optional-locks",
             "--no-renames",
             "--ignore-submodules=all",
         ])
