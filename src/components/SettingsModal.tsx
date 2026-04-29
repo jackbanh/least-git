@@ -135,7 +135,7 @@ function GitConfigSection() {
         return (
           <div key={setting.key} className="gc-row">
             <div className="gc-row-text">
-              <Text className="gc-label">{setting.label}</Text>
+              <Text className="gc-label">{setting.key}</Text>
               <Text className="gc-description">{setting.description}</Text>
               <Anchor
                 href={setting.docsUrl}
