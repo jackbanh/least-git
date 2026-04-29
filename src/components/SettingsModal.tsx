@@ -50,7 +50,9 @@ const GIT_CONFIG_SETTINGS: GitConfigSetting[] = [
       "Caches the result of the untracked-file scan per directory, keyed by " +
       "mtime. Avoids re-scanning directories whose timestamps haven't changed. " +
       "Works synergistically with FSMonitor — together they make git status " +
-      "nearly instant after the first run.",
+      "nearly instant after the first run. " +
+      "⚠ Avoid on network drives or WSL↔Windows paths — unreliable timestamps " +
+      "can cause git status to miss changes.",
     docsUrl: "https://git-scm.com/docs/git-config#Documentation/git-config.txt-coreuntrackedCache",
     onValue: "true",
     isOn: (v) => v === "true",
