@@ -111,60 +111,148 @@ export const MOCK_COMMIT_DETAIL = {
 // ---------------------------------------------------------------------------
 
 export const MOCK_DIFF = `\
-diff --git a/src-tauri/src/lib.rs b/src-tauri/src/lib.rs
+diff --git a/src/components/DiffViewer.tsx b/src/components/DiffViewer.tsx
 index a1b2c3d..b2c3d4e 100644
---- a/src-tauri/src/lib.rs
-+++ b/src-tauri/src/lib.rs
-@@ -58,12 +58,47 @@ pub fn get_working_tree_status(
-     Ok(status)
+--- a/src/components/DiffViewer.tsx
++++ b/src/components/DiffViewer.tsx
+@@ -1,7 +1,8 @@
+-import { useMemo, useEffect, useRef } from "react";
+-import { parseDiff, Diff, Hunk } from "react-diff-view";
++import { useMemo, useEffect, useRef, useState } from "react";
++import { parseDiff, Diff, Hunk, tokenize } from "react-diff-view";
++import type { HunkData, HunkTokens, RenderGutter } from "react-diff-view";
+ import "react-diff-view/style/index.css";
+ import "./DiffViewer.css";
+-import { tokenizeSync } from "../lib/tokenize";
++import { tokenizeHunks } from "../lib/tokenize";
+ import TokenizeWorker from "../workers/tokenize.worker?worker";
+
+@@ -14,22 +15,40 @@ function getWorker(): Worker {
+   return _worker;
  }
 
-+#[tauri::command]
-+pub fn apply_patch(
-+    tab_id: String,
-+    patch: String,
-+    reverse: bool,
-+    state: tauri::State<AppState>,
-+) -> Result<(), String> {
-+    let entry = state
-+        .get(&tab_id)
-+        .ok_or_else(|| format!("tab not found: {tab_id}"))?;
-+    let repo_path = entry.path.clone();
-+    drop(entry);
+-// Simple LRU — evict oldest entry when full.
+-const TOKEN_CACHE = new Map<string, HunkTokens>();
+-const CACHE_MAX   = 50;
++// Module-level LRU cache (survives component remounts)
++const TOKEN_CACHE = new Map<string, HunkTokens>();
++const CACHE_MAX = 100;
+
+ function cacheGet(key: string): HunkTokens | undefined {
+   return TOKEN_CACHE.get(key);
+ }
+
+ function cacheSet(key: string, tokens: HunkTokens): void {
+-  if (TOKEN_CACHE.size >= CACHE_MAX) TOKEN_CACHE.delete(TOKEN_CACHE.keys().next().value);
++  if (TOKEN_CACHE.size >= CACHE_MAX) {
++    TOKEN_CACHE.delete(TOKEN_CACHE.keys().next().value!);
++  }
+   TOKEN_CACHE.set(key, tokens);
+ }
+
++// Diffs with <= this many changed lines are tokenized synchronously to
++// avoid a brief flash of unhighlighted text on the first render.
++const SYNC_THRESHOLD = 50;
 +
-+    let mut cmd = std::process::Command::new("git");
-+    cmd.current_dir(&repo_path)
-+        .args(["apply", "--cached"])
-+        .stdin(std::process::Stdio::piped());
++const renderGutter: RenderGutter = ({ renderDefault }) =>
++  renderDefault() ?? null;
 +
-+    if reverse {
-+        cmd.arg("--reverse");
-+    }
+ export default function DiffViewer({ diff }: { diff: string }) {
+   const files = useMemo(() => {
+     if (!diff.trim()) return [];
+-    return parseDiff(diff);
++    try { return parseDiff(diff); } catch { return []; }
+   }, [diff]);
+
++  const [tokensMap, setTokensMap] = useState<Map<string, HunkTokens>>(new Map());
 +
-+    let mut child = cmd.spawn().map_err(|e| e.to_string())?;
-+    if let Some(stdin) = child.stdin.take() {
-+        use std::io::Write;
-+        let mut stdin = stdin;
-+        stdin.write_all(patch.as_bytes()).map_err(|e| e.to_string())?;
-+    }
-+    let status = child.wait().map_err(|e| e.to_string())?;
-+    if !status.success() {
-+        return Err(format!("git apply exited with {status}"));
-+    }
-+    Ok(())
+diff --git a/src/components/DiffViewer.css b/src/components/DiffViewer.css
+index c3d4e5f..d4e5f6a 100644
+--- a/src/components/DiffViewer.css
++++ b/src/components/DiffViewer.css
+@@ -1,8 +1,19 @@
+ .diff-scroll {
+   flex: 1;
+   min-height: 0;
+   overflow-y: auto;
+   overflow-x: auto;
+-  font-size: 13px;
++  font-size: 12px;
+ }
+
++/* Gutter (line numbers) */
++.diff-scroll .diff-gutter {
++  width: 3.5em;
++  min-width: 3.5em;
++  padding: 0 8px;
++  text-align: right;
++  color: var(--lg-ink-faint);
++  font-size: 11px;
++  user-select: none;
++  cursor: default;
 +}
 +
- #[tauri::command]
- pub fn load_commits(
+@@ -10,6 +21,7 @@ .diff-scroll .diff {
+   min-width: max-content;
+ }
+
++/* Override react-diff-view defaults */
+ .diff-scroll .diff-code,
+ .diff-scroll .diff-code pre,
+ .diff-scroll .diff-code span {
+diff --git a/src-tauri/src/lib.rs b/src-tauri/src/lib.rs
+index e5f6a7b..f6a7b8c 100644
+--- a/src-tauri/src/lib.rs
++++ b/src-tauri/src/lib.rs
+@@ -1,6 +1,6 @@
+ use std::collections::HashMap;
+-use std::sync::Mutex;
++use std::sync::{Arc, Mutex};
+ use tauri::Manager;
+
+ // Performance-critical path — avoid allocations in the hot loop.
+@@ -42,19 +42,18 @@ pub struct AppState {
+ }
+
+ impl AppState {
+-    pub fn new() -> Self {
+-        Self {
+-            tabs: DashMap::new(),
+-        }
++    pub fn new() -> Arc<Self> {
++        Arc::new(Self {
++            tabs: DashMap::new(),
++        })
+     }
+
+-    // Returns true if the tab was newly inserted.
+-    pub fn open_tab(&self, id: String, path: PathBuf, name: String) -> bool {
++    /// Opens or re-opens a tab. Returns true if newly inserted.
++    pub fn open_tab(&self, id: String, path: PathBuf, name: String) -> bool {
+         self.tabs
+             .entry(id)
+             .or_insert_with(|| RepoEntry { path, name })
+             .is_new()
+     }
+-
+ }
+
+@@ -88,8 +87,10 @@ pub async fn get_working_tree_status(
      tab_id: String,
-@@ -71,6 +106,7 @@ pub fn load_commits(
-     limit: usize,
-     state: tauri::State<AppState>,
- ) -> Result<Vec<CommitInfo>, String> {
-+    let _span = tracing::info_span!("load_commits").entered();
-     let entry = state
-         .get(&tab_id)
-         .ok_or_else(|| format!("tab not found: {tab_id}"))?;
+     state: tauri::State<'_, AppState>,
+ ) -> Result<WorkingTreeStatus, String> {
++    // --no-optional-locks must be a top-level flag (before the subcommand)
+     let output = git_async()
+         .arg("--no-optional-locks")
++        .arg("-C")
++        .arg(&repo_path)
+         .arg("status")
+         .arg("--porcelain=v1")
+-        .arg("-C")
+-        .arg(&repo_path)
+         .output()
+         .await
+         .map_err(|e| e.to_string())?;
 `;
 
 // ---------------------------------------------------------------------------
