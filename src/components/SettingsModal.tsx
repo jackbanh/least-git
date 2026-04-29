@@ -242,7 +242,7 @@ export default function SettingsModal({
         {/* ── Right: scrollable sections ────────────────────────────── */}
         <ScrollArea
           className="settings-scroll"
-          h={440}
+          h="calc(max(500px, 75vh) - 60px)"
           viewportRef={scrollRef}
           offsetScrollbars
         >

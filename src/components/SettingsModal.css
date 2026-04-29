@@ -3,7 +3,6 @@
 .settings-layout {
   display: flex;
   align-items: stretch;
-  min-height: 440px;
 }
 
 .settings-nav {
