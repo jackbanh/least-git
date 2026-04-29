@@ -50,13 +50,13 @@
   cursor: default;
 }
 
-/* Left color bars for add/remove lines */
+/* Darker gutter background for add/remove lines */
 .diff-scroll .diff .diff-gutter-insert {
-  border-left: 2px solid var(--lg-diff-add-bar);
+  background-color: oklch(from var(--lg-diff-add-bg) calc(l - 0.06) c h);
 }
 
 .diff-scroll .diff .diff-gutter-delete {
-  border-left: 2px solid var(--lg-diff-rem-bar);
+  background-color: oklch(from var(--lg-diff-rem-bg) calc(l - 0.06) c h);
 }
 
 /* ── Syntax token colors ──────────────────────────────────────────── */
