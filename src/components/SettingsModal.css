@@ -134,14 +134,48 @@
   color: var(--lg-ink-faint);
 }
 
-/* ── Placeholder ────────────────────────────────────────────────────────── */
+/* ── Git config rows ────────────────────────────────────────────────────── */
 
-.settings-placeholder {
-  font-family: var(--lg-font-sans);
-  font-size: 12px;
-  color: var(--lg-ink-faint);
-  font-style: italic;
+.gc-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.gc-row-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.gc-label {
+  font-family: var(--lg-font-sans) !important;
+  font-size: 12.5px !important;
+  font-weight: 500 !important;
+  color: var(--lg-ink) !important;
   margin: 0;
+}
+
+.gc-description {
+  font-family: var(--lg-font-sans) !important;
+  font-size: 11.5px !important;
+  color: var(--lg-ink-muted) !important;
+  line-height: 1.5 !important;
+  margin: 0;
+}
+
+.gc-docs-link {
+  font-family: var(--lg-font-sans) !important;
+  font-size: 11px !important;
+  color: var(--lg-accent) !important;
+  text-decoration: none !important;
+  align-self: flex-start;
+}
+
+.gc-docs-link:hover {
+  text-decoration: underline !important;
 }
 
 /* ── About ──────────────────────────────────────────────────────────────── */

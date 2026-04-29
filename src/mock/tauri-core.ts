@@ -92,6 +92,17 @@ export async function invoke<T = unknown>(cmd: string, _args?: Record<string, un
       await delay(2000);
       return "" as T;
 
+    case "get_git_config_globals": {
+      // Return all keys as unset so every switch starts off in the browser mock.
+      const keys = (_args?.keys as string[]) ?? [];
+      const map: Record<string, string | null> = {};
+      keys.forEach((k) => { map[k] = null; });
+      return map as T;
+    }
+
+    case "set_git_config_global":
+      return undefined as T;
+
     default:
       console.warn(`[mock] unhandled invoke: ${cmd}`, _args);
       return undefined as T;
