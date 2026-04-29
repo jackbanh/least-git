@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Menu } from "@mantine/core";
+import CommitAvatar from "./CommitAvatar";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { warn as logWarn, info as logInfo, error as logError } from "@tauri-apps/plugin-log";
 import {
@@ -47,11 +48,6 @@ function formatDate(ts: number): string {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-function getInitials(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-  return name.slice(0, 2).toUpperCase();
-}
 
 export default function CommitList({ tabId, listKey }: { tabId: string; listKey: number }) {
   const [commits, setCommits] = useState<CommitInfo[]>([]);
@@ -320,7 +316,7 @@ export default function CommitList({ tabId, listKey }: { tabId: string; listKey:
                     <div className="cl-col-sha commit-sha-mono">{commit.short_oid}</div>
                     <div className="cl-col-msg commit-title">{commit.summary}</div>
                     <div className="cl-col-author commit-author-cell">
-                      <div className="commit-avatar">{getInitials(commit.author_name)}</div>
+                      <CommitAvatar name={commit.author_name} email={commit.author_email} />
                       <span className="commit-author-text">{commit.author_name}</span>
                     </div>
                     <div className="cl-col-date commit-date">{formatDate(commit.timestamp)}</div>

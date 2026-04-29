@@ -167,21 +167,6 @@
   overflow: hidden;
 }
 
-.commit-avatar {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: var(--lg-accent-soft);
-  color: var(--lg-accent-text);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--lg-font-sans);
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 0.3px;
-  flex-shrink: 0;
-}
 
 .commit-author-text {
   font-family: var(--lg-font-sans);

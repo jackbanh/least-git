@@ -159,7 +159,7 @@ export default function Toolbar({
           <span className="toolbar-branch-name">{currentBranch}</span>
         </div>
       )}
-      <ToolbarIconBtn icon={<IconAdjustments size={ICON_SIZE} />} onClick={onToggleTweaks} title="Tweaks" />
+      <ToolbarIconBtn icon={<IconAdjustments size={ICON_SIZE} />} onClick={onToggleTweaks} title="Settings" />
     </div>
   );
 }

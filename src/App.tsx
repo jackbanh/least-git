@@ -15,7 +15,7 @@ import { type PullRequest } from "./components/Toolbar";
 import CommitList from "./components/CommitList";
 import CommitDetail from "./components/CommitDetail";
 import Toolbar from "./components/Toolbar";
-import TweaksPanel from "./components/TweaksPanel";
+import SettingsModal from "./components/SettingsModal";
 import "./App.css";
 
 // Detected once at module load — stable for the lifetime of the app.
@@ -318,8 +318,8 @@ export default function App() {
         />
       )}
 
-      <TweaksPanel
-        open={tweaksOpen}
+      <SettingsModal
+        opened={tweaksOpen}
         onClose={() => setTweaksOpen(false)}
         theme={theme}
         setTheme={setTheme}
