@@ -111,6 +111,10 @@ export const MOCK_COMMIT_DETAIL = {
 // ---------------------------------------------------------------------------
 
 export const MOCK_DIFF = `\
+diff --git a/src-tauri/src/lib.rs b/src-tauri/src/lib.rs
+index a1b2c3d..b2c3d4e 100644
+--- a/src-tauri/src/lib.rs
++++ b/src-tauri/src/lib.rs
 @@ -58,12 +58,47 @@ pub fn get_working_tree_status(
      Ok(status)
  }

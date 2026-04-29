@@ -1,6 +1,6 @@
 import { useMemo, useEffect, useRef, useState } from "react";
 import { parseDiff, Diff, Hunk } from "react-diff-view";
-import type { HunkData, HunkTokens } from "react-diff-view";
+import type { HunkData, HunkTokens, RenderGutter } from "react-diff-view";
 import "react-diff-view/style/index.css";
 import "./DiffViewer.css";
 import { tokenizeHunks } from "../lib/tokenize";
@@ -70,12 +70,15 @@ function countLines(hunks: HunkData[]): number {
 // avoid a brief flash of unhighlighted text on the first render.
 const SYNC_THRESHOLD = 50;
 
+// ── Gutter renderer ───────────────────────────────────────────────
+const renderGutter: RenderGutter = ({ renderDefault }) => renderDefault() ?? null;
+
 // ── Component ──────────────────────────────────────────────────────
 export default function DiffViewer({ diff }: { diff: string }) {
-  const files = useMemo(
-    () => (diff.trim() ? parseDiff(diff) : []),
-    [diff]
-  );
+  const files = useMemo(() => {
+    if (!diff.trim()) return [];
+    try { return parseDiff(diff); } catch { return []; }
+  }, [diff]);
 
   const [tokensMap, setTokensMap] = useState<Map<string, HunkTokens>>(new Map());
   const pendingRef = useRef<Set<number>>(new Set());
@@ -157,7 +160,7 @@ export default function DiffViewer({ diff }: { diff: string }) {
             diffType={file.type}
             hunks={file.hunks}
             tokens={tokensMap.get(key) ?? null}
-            gutterType="none"
+            renderGutter={renderGutter}
           >
             {(hunks) => hunks.map((hunk) => <Hunk key={hunk.content} hunk={hunk} />)}
           </Diff>
