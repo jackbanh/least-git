@@ -885,15 +885,17 @@ async fn open_diff_external(
     let path = get_repo_path(&tab_id, &state)?;
     let path_str = path.to_string_lossy().to_string();
 
-    // `<oid>^..<oid>` compares the parent to this commit for the given file.
-    // For newly-added files git automatically uses an empty left side.
+    let parent = format!("{}^", oid);
+    let args = [
+        "-C", &path_str,
+        "difftool", "--no-prompt", "--tool=bc",
+        &parent, &oid,
+        "--", &file_path,
+    ];
+    info!("open_diff_external: git {}", args.join(" "));
+
     std::process::Command::new("git")
-        .args([
-            "-C", &path_str,
-            "difftool", "--no-prompt", "--tool=bc",
-            &format!("{}^", oid), &oid,
-            "--", &file_path,
-        ])
+        .args(args)
         .spawn()
         .map_err(|e| e.to_string())?;
 
