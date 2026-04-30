@@ -103,6 +103,9 @@ export async function invoke<T = unknown>(cmd: string, _args?: Record<string, un
     case "set_git_config_global":
       return undefined as T;
 
+    case "open_diff_external":
+      return undefined as T;
+
     default:
       console.warn(`[mock] unhandled invoke: ${cmd}`, _args);
       return undefined as T;

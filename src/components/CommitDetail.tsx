@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useQuery } from "@tanstack/react-query";
 import Markdown from "react-markdown";
-import { Loader } from "@mantine/core";
+import { Loader, Menu } from "@mantine/core";
+import { IconCopy, IconGitCompare } from "@tabler/icons-react";
 import { useTabStore } from "../store";
 import { useResize } from "../hooks/useResize";
 import DetailLayout from "./DetailLayout";
@@ -60,6 +61,17 @@ function CommitDetailInner({
 }) {
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
 
+  interface ContextMenuState { x: number; y: number; file: ChangedFile }
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const contextTargetRef = useRef<ContextMenuState | null>(null);
+
+  function openContextMenu(e: React.MouseEvent, file: ChangedFile) {
+    e.preventDefault();
+    const state = { x: e.clientX, y: e.clientY, file };
+    contextTargetRef.current = state;
+    setContextMenu(state);
+  }
+
   const metaPanelHeight = useTabStore((s) => s.metaPanelHeight);
   const setMetaPanelHeight = useTabStore((s) => s.setMetaPanelHeight);
   const startMetaResize = useResize(metaPanelHeight, setMetaPanelHeight, "vertical", 80, 320, true);
@@ -114,6 +126,40 @@ function CommitDetailInner({
 
   return (
     <DetailLayout
+      overlay={
+        <Menu
+          opened={!!contextMenu}
+          onClose={() => setContextMenu(null)}
+          position="right-start"
+        >
+          <Menu.Target>
+            <div style={{
+              position: "fixed",
+              left: contextMenu?.x ?? 0,
+              top: contextMenu?.y ?? 0,
+              width: 0, height: 0,
+            }} />
+          </Menu.Target>
+          <Menu.Dropdown>
+            <Menu.Item
+              leftSection={<IconCopy size={14} />}
+              onClick={() => navigator.clipboard.writeText(contextTargetRef.current!.file.path)}
+            >
+              Copy Path
+            </Menu.Item>
+            <Menu.Item
+              leftSection={<IconGitCompare size={14} />}
+              onClick={() => invoke("open_diff_external", {
+                tabId,
+                oid: detail.oid,
+                filePath: contextTargetRef.current!.file.path,
+              })}
+            >
+              Diff in External App
+            </Menu.Item>
+          </Menu.Dropdown>
+        </Menu>
+      }
       left={
         <>
           <div
@@ -138,6 +184,7 @@ function CommitDetailInner({
                   setSelectedFile(file.path);
                   (e.currentTarget.closest(".detail-files") as HTMLElement | null)?.focus();
                 }}
+                onContextMenu={(e) => openContextMenu(e, file)}
               >
                 <span className={`file-status file-status--${file.status.toLowerCase()}`}>
                   {file.status}

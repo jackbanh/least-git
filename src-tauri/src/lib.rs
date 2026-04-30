@@ -872,6 +872,34 @@ async fn get_unstaged_diff(
     Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
+/// Open the diff for a specific file at a specific commit in the user's
+/// configured external diff tool (`git difftool`).
+/// Spawns detached so the UI is never blocked waiting for the tool to close.
+#[tauri::command]
+async fn open_diff_external(
+    tab_id: String,
+    oid: String,
+    file_path: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let path = get_repo_path(&tab_id, &state)?;
+    let path_str = path.to_string_lossy().to_string();
+
+    // `<oid>^..<oid>` compares the parent to this commit for the given file.
+    // For newly-added files git automatically uses an empty left side.
+    std::process::Command::new("git")
+        .args([
+            "-C", &path_str,
+            "difftool", "--no-prompt",
+            &format!("{}^", oid), &oid,
+            "--", &file_path,
+        ])
+        .spawn()
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
 /// Apply a patch string via `git apply`.
 /// `reverse = true` → `git apply --reverse` (unstage a staged chunk).
 /// Always uses `--cached` so only the index is touched, never the working tree.
@@ -1096,6 +1124,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             open_repo,
             close_tab,
+            open_diff_external,
             clear_detail_cache,
             load_commits,
             list_branches,
