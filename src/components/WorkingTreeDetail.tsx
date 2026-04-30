@@ -5,6 +5,8 @@ import { Loader, Menu } from "@mantine/core";
 import {
   IconArrowBarToDown,
   IconArrowBarToUp,
+  IconCopy,
+  IconGitCompare,
   IconRotate2,
   IconTrash,
 } from "@tabler/icons-react";
@@ -330,6 +332,23 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
                 )}
               </>
             )}
+            <Menu.Divider />
+            <Menu.Item
+              leftSection={<IconCopy size={14} />}
+              onClick={() => navigator.clipboard.writeText(contextTargetRef.current!.entry.path)}
+            >
+              Copy Path
+            </Menu.Item>
+            <Menu.Item
+              leftSection={<IconGitCompare size={14} />}
+              onClick={() => invoke("open_working_tree_diff_external", {
+                tabId,
+                filePath: contextTargetRef.current!.entry.path,
+                staged: contextTargetRef.current!.staged,
+              })}
+            >
+              Diff in External App
+            </Menu.Item>
           </Menu.Dropdown>
         </Menu>
       }

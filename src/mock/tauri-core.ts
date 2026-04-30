@@ -104,6 +104,7 @@ export async function invoke<T = unknown>(cmd: string, _args?: Record<string, un
       return undefined as T;
 
     case "open_diff_external":
+    case "open_working_tree_diff_external":
       return undefined as T;
 
     default:

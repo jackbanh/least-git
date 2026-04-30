@@ -902,6 +902,35 @@ async fn open_diff_external(
     Ok(())
 }
 
+/// Open the current working-tree diff for a file in Beyond Compare.
+/// `staged = true`  → compare HEAD vs index  (`git difftool --cached`)
+/// `staged = false` → compare index vs working tree (`git difftool`)
+#[tauri::command]
+async fn open_working_tree_diff_external(
+    tab_id: String,
+    file_path: String,
+    staged: bool,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let path = get_repo_path(&tab_id, &state)?;
+    let path_str = path.to_string_lossy().to_string();
+
+    let mut args = vec!["-C", &path_str, "difftool", "--no-prompt", "--tool=bc"];
+    if staged {
+        args.push("--cached");
+    }
+    args.extend_from_slice(&["--", &file_path]);
+
+    info!("open_working_tree_diff_external: git {}", args.join(" "));
+
+    std::process::Command::new("git")
+        .args(&args)
+        .spawn()
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
 /// Apply a patch string via `git apply`.
 /// `reverse = true` → `git apply --reverse` (unstage a staged chunk).
 /// Always uses `--cached` so only the index is touched, never the working tree.
@@ -1127,6 +1156,7 @@ pub fn run() {
             open_repo,
             close_tab,
             open_diff_external,
+            open_working_tree_diff_external,
             clear_detail_cache,
             load_commits,
             list_branches,
