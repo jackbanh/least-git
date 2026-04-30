@@ -142,7 +142,7 @@ fn open_repo(
                 // the real file write, which will fire its own event.
                 let events: Vec<_> = events
                     .iter()
-                    .filter(|ev| ev.path.extension().map_or(true, |e| e != "lock"))
+                    .filter(|ev| ev.path.extension().is_none_or(|e| e != "lock"))
                     .collect();
                 if events.is_empty() {
                     return;
@@ -632,7 +632,7 @@ fn parse_porcelain_status(raw: &str) -> (Vec<StatusEntry>, Vec<StatusEntry>) {
         // Rename/copy in index: next NUL record is the original path.
         // Shouldn't happen with --no-renames, but handle gracefully.
         let old_path: Option<String> = if (x == 'R' || x == 'C')
-            && iter.peek().map_or(false, |s| !s.is_empty())
+            && iter.peek().is_some_and(|s| !s.is_empty())
         {
             iter.next().map(|s| s.to_string())
         } else {
