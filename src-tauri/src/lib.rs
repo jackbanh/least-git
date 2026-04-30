@@ -890,7 +890,7 @@ async fn open_diff_external(
     std::process::Command::new("git")
         .args([
             "-C", &path_str,
-            "difftool", "--no-prompt",
+            "difftool", "--no-prompt", "--tool=bc",
             &format!("{}^", oid), &oid,
             "--", &file_path,
         ])
