@@ -32,3 +32,13 @@ tauri-plugin-clipboard-manager = "2.3.2"
 tauri-plugin-log = "2.8.0"
 log = "0.4.29"
 
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+# Better format strings: format!("{x}") instead of format!("{}", x)
+uninlined_format_args = "warn"
+# Avoid wrapping method refs in pointless closures: Result::ok instead of |r| r.ok()
+redundant_closure_for_method_calls = "warn"
+# Use Display (path.display()) instead of Debug ({path:?}) in log output
+unnecessary_debug_formatting = "warn"
