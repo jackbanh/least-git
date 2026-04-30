@@ -35,6 +35,8 @@ interface SelectedFile {
 export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId: string; listKey: number; statusKey: number }) {
   const [status, setStatus] = useState<WorkingTreeStatus | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
+  const [loadingMs, setLoadingMs] = useState(0);
+  const loadingStartRef = useRef<number | null>(null);
   const [selected, setSelected] = useState<SelectedFile | null>(null);
   const [diff, setDiff] = useState<string>("");
   const [diffLoading, setDiffLoading] = useState(false);
@@ -85,6 +87,9 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
       return;
     }
     isRefreshingRef.current = true;
+    setStatus(null);
+    setLoadingMs(0);
+    loadingStartRef.current = performance.now();
     const t0 = performance.now();
     logInfo(`WorkingTreeDetail[${tabId}] refreshStatus start`);
     invoke<WorkingTreeStatus>("get_working_tree_status", { tabId })
@@ -101,8 +106,20 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
       })
       .finally(() => {
         isRefreshingRef.current = false;
+        loadingStartRef.current = null;
       });
   }, [tabId]);
+
+  // Tick the elapsed timer while a refresh is in flight.
+  useEffect(() => {
+    if (status !== null || statusError !== null) return;
+    const id = setInterval(() => {
+      if (loadingStartRef.current !== null) {
+        setLoadingMs(Math.round(performance.now() - loadingStartRef.current));
+      }
+    }, 100);
+    return () => clearInterval(id);
+  }, [status, statusError]);
 
   useEffect(() => {
     setStatus(null);
@@ -187,7 +204,12 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
               setSelected({ path: f.path, staged: f.staged, is_untracked: f.status === "?" });
             }}
           >
-            {!status && !statusError && <div className="wt-section-empty"><Loader size="xs" /></div>}
+            {!status && !statusError && (
+              <div className="wt-section-empty">
+                <Loader size="xs" />
+                <span className="wt-loading-timer">{(loadingMs / 1000).toFixed(1)}s</span>
+              </div>
+            )}
             {statusError && (
               <div className="wt-section-empty wt-section-error">{statusError}</div>
             )}

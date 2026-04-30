@@ -47,11 +47,19 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 8px;
   padding: 16px 12px;
   font-family: var(--lg-font-sans);
   font-size: 11.5px;
   color: var(--lg-ink-faint);
   font-style: italic;
+}
+
+.wt-loading-timer {
+  font-family: var(--lg-font-mono);
+  font-size: 11px;
+  font-style: normal;
+  color: var(--lg-ink-faint);
 }
 
 .wt-section-error {
