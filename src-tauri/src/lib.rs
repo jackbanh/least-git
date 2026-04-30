@@ -872,48 +872,9 @@ async fn get_unstaged_diff(
     Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
-/// Locate the Beyond Compare executable.
-/// Checks PATH first (handles cases where BC is on PATH), then falls back to
-/// the default Windows installation directories.
-fn find_bcompare() -> Option<std::path::PathBuf> {
-    // Names to try on PATH (Windows search is case-insensitive, but be explicit).
-    let path_names: &[&str] = if cfg!(windows) {
-        &["BCompare.exe", "bcompare.exe"]
-    } else {
-        &["bcompare", "BCompare"]
-    };
-    for name in path_names {
-        if let Ok(paths) = std::env::var("PATH") {
-            for dir in std::env::split_paths(&paths) {
-                let candidate = dir.join(name);
-                if candidate.exists() {
-                    return Some(candidate);
-                }
-            }
-        }
-    }
-    // Fallback: well-known Windows installation paths.
-    #[cfg(windows)]
-    {
-        let installs = [
-            r"C:\Program Files\Beyond Compare 5\BCompare.exe",
-            r"C:\Program Files\Beyond Compare 4\BCompare.exe",
-            r"C:\Program Files (x86)\Beyond Compare 4\BCompare.exe",
-        ];
-        for p in &installs {
-            let pb = std::path::Path::new(p);
-            if pb.exists() {
-                return Some(pb.to_path_buf());
-            }
-        }
-    }
-    None
-}
-
-/// Open the diff for a specific file at a specific commit in Beyond Compare.
-/// Extracts both file versions via `git show` to temp files and launches BC
-/// directly — avoids relying on git difftool presets or PATH config.
-/// Spawns detached so the UI is never blocked waiting for BC to close.
+/// Open the diff for a specific file at a specific commit in the user's
+/// configured external diff tool (`git difftool`).
+/// Spawns detached so the UI is never blocked waiting for the tool to close.
 #[tauri::command]
 async fn open_diff_external(
     tab_id: String,
@@ -924,37 +885,15 @@ async fn open_diff_external(
     let path = get_repo_path(&tab_id, &state)?;
     let path_str = path.to_string_lossy().to_string();
 
-    let bc_exe = find_bcompare().ok_or("Beyond Compare not found. Install it or add it to PATH.")?;
-
-    // Preserve the filename for readability in BC's title bar.
-    let base_name = std::path::Path::new(&file_path)
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("file");
-
-    let tmp = std::env::temp_dir();
-    let old_path = tmp.join(format!("lg_old_{}", base_name));
-    let new_path = tmp.join(format!("lg_new_{}", base_name));
-
-    // Extract old version (parent commit). Empty content for newly-added files.
-    let old_out = git_async()
-        .args(["-C", &path_str, "show", &format!("{}^:{}", oid, file_path)])
-        .output()
-        .await
-        .map_err(|e| e.to_string())?;
-    std::fs::write(&old_path, &old_out.stdout).map_err(|e| e.to_string())?;
-
-    // Extract new version (this commit). Empty content for deleted files.
-    let new_out = git_async()
-        .args(["-C", &path_str, "show", &format!("{}:{}", oid, file_path)])
-        .output()
-        .await
-        .map_err(|e| e.to_string())?;
-    std::fs::write(&new_path, &new_out.stdout).map_err(|e| e.to_string())?;
-
-    std::process::Command::new(&bc_exe)
-        .arg(&old_path)
-        .arg(&new_path)
+    // `<oid>^..<oid>` compares the parent to this commit for the given file.
+    // For newly-added files git automatically uses an empty left side.
+    std::process::Command::new("git")
+        .args([
+            "-C", &path_str,
+            "difftool", "--no-prompt", "--tool=bc",
+            &format!("{}^", oid), &oid,
+            "--", &file_path,
+        ])
         .spawn()
         .map_err(|e| e.to_string())?;
 
