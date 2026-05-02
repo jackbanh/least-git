@@ -7,14 +7,13 @@ import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { warn as logWarn, info as logInfo, error as logError } from "@tauri-apps/plugin-log";
 import {
   IconCopy,
-  IconGitPullRequest,
   IconRefresh,
   IconRotate2,
 } from "@tabler/icons-react";
 import { useTabStore } from "../store";
 import { UNCOMMITTED } from "./CommitDetail";
 import ProgressBar from "./ProgressBar";
-import PullDrawer from "./PullDrawer";
+import GitOutputDrawer from "./GitOutputDrawer";
 import "./CommitList.css";
 
 interface ContextMenuState {
@@ -54,7 +53,8 @@ export default function CommitList({ tabId, listKey }: { tabId: string; listKey:
   const [hasMore, setHasMore] = useState(true);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const contextMenuOidRef = useRef<string | null>(null);
-  const [pullDrawerOpen, setPullDrawerOpen] = useState(false);
+  const [rebaseDrawerOpen, setRebaseDrawerOpen] = useState(false);
+  const [rebaseOid, setRebaseOid] = useState<string | null>(null);
   const bumpListKey = useTabStore((s) => s.bumpListKey);
   const parentRef = useRef<HTMLDivElement>(null);
   const isLoadingRef = useRef(false);
@@ -349,15 +349,29 @@ export default function CommitList({ tabId, listKey }: { tabId: string; listKey:
               Copy SHA-1
             </Menu.Item>
             <Menu.Divider />
-            <Menu.Item leftSection={<IconGitPullRequest size={14} />} onClick={() => setPullDrawerOpen(true)}>Pull with Rebase</Menu.Item>
-            <Menu.Item leftSection={<IconRefresh size={14} />}>Rebase Interactively onto Here</Menu.Item>
+            <Menu.Item
+              leftSection={<IconRefresh size={14} />}
+              onClick={() => {
+                if (contextMenuOidRef.current) {
+                  setRebaseOid(contextMenuOidRef.current);
+                  setRebaseDrawerOpen(true);
+                }
+              }}
+            >
+              Rebase Interactively onto Here
+            </Menu.Item>
             <Menu.Item leftSection={<IconRotate2 size={14} />} color="red">Reset to Here…</Menu.Item>
           </Menu.Dropdown>
         </Menu>
-        <PullDrawer
+        <GitOutputDrawer
           tabId={tabId}
-          opened={pullDrawerOpen}
-          onClose={() => setPullDrawerOpen(false)}
+          opened={rebaseDrawerOpen}
+          title="Rebase Interactively"
+          command="rebase_interactive"
+          commandArgs={{ oid: rebaseOid ?? "" }}
+          eventPrefix="rebase"
+          displayCommand={`git rebase -i ${rebaseOid ?? ""}`}
+          onClose={() => setRebaseDrawerOpen(false)}
           onSuccess={() => bumpListKey(tabId)}
         />
       </div>

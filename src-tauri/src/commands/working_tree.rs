@@ -76,6 +76,9 @@ pub async fn get_working_tree_status(
             "-z",
             "--no-renames",
             "--ignore-submodules=all",
+            "--untracked-files=no", // untracked scanning is the bottleneck on large monorepos
+                                    // (~2.9 s on a 300k-file repo); fetched separately via
+                                    // get_untracked_files so tracked changes appear in ~400 ms
         ])
         .output()
         .await
@@ -89,23 +92,62 @@ pub async fn get_working_tree_status(
 
     let raw = String::from_utf8_lossy(&output.stdout);
     let (staged, unstaged) = parse_porcelain_status(&raw);
-    let untracked_count = unstaged.iter().filter(|e| e.status == "?").count();
 
     let total_ms = t.elapsed().as_millis();
     let msg = format!(
-        "get_working_tree_status staged={} modified={} untracked={} total_ms={}",
+        "get_working_tree_status staged={} modified={} total_ms={}",
         staged.len(),
-        unstaged.len() - untracked_count,
-        untracked_count,
+        unstaged.len(),
         total_ms,
     );
-    if total_ms > 2000 {
+    if total_ms > 1000 {
         warn!("[SLOW] {msg}");
     } else {
         info!("{msg}");
     }
 
     Ok(WorkingTreeStatus { staged, unstaged })
+}
+
+/// Return paths of untracked (new) files — the slow part of `git status`.
+///
+/// Uses `git ls-files --others` instead of embedding untracked scanning in
+/// `get_working_tree_status`. The caller fires both commands in parallel so
+/// tracked changes (staged/modified) appear in ~400 ms while the untracked
+/// walk (~2–3 s on large monorepos) finishes in the background.
+#[tauri::command]
+pub async fn get_untracked_files(
+    tab_id: String,
+    state: State<'_, AppState>,
+) -> Result<Vec<String>, String> {
+    let t = std::time::Instant::now();
+    let path = get_repo_path(&tab_id, &state)?;
+    let path_str = path.to_string_lossy().to_string();
+
+    let output = git_async()
+        .args([
+            "--no-optional-locks",
+            "-C", &path_str,
+            "ls-files",
+            "--others",
+            "--exclude-standard",
+            "--no-empty-directory",
+            "-z",
+        ])
+        .output()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        warn!("get_untracked_files failed: {stderr}");
+        return Err(format!("git ls-files failed: {stderr}"));
+    }
+
+    let raw = String::from_utf8_lossy(&output.stdout);
+    let files: Vec<String> = raw.split('\0').filter(|s| !s.is_empty()).map(str::to_string).collect();
+    info!("get_untracked_files count={} ms={}", files.len(), t.elapsed().as_millis());
+    Ok(files)
 }
 
 /// Stage a file (or untracked file) — `git add -- <path>`.

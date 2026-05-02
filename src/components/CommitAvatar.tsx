@@ -21,11 +21,10 @@ export default function CommitAvatar({ name, email }: { name: string; email: str
   );
 
   useEffect(() => {
-    if (hash) return;
     let cancelled = false;
     getEmailHash(email).then((h) => { if (!cancelled) setHash(h); });
     return () => { cancelled = true; };
-  }, [email, hash]);
+  }, [email]);
 
   return (
     <Avatar

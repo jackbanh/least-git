@@ -271,6 +271,11 @@ export const MOCK_WORKING_TREE: {
   unstaged: [
     { path: "src/components/WorkingTreeDetail.tsx",       status: "M", is_untracked: false },
     { path: "src-tauri/src/lib.rs",                       status: "M", is_untracked: false },
-    { path: "src/mock/fixtures.ts",                       status: "A", is_untracked: true  },
   ],
 };
+
+// Returned by get_untracked_files (separate slow call).
+export const MOCK_UNTRACKED_FILES: string[] = [
+  "src/mock/fixtures.ts",
+  "notes/scratch.md",
+];

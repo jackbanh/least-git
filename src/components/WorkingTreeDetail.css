@@ -55,6 +55,12 @@
   font-style: italic;
 }
 
+.wt-progress-bar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
 .wt-loading-timer {
   font-family: var(--lg-font-mono);
   font-size: 11px;

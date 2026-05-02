@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { warn as logWarn, info as logInfo } from "@tauri-apps/plugin-log";
-import { Loader, Menu } from "@mantine/core";
+import { Loader, Menu, Progress } from "@mantine/core";
 import {
   IconArrowBarToDown,
   IconArrowBarToUp,
@@ -34,11 +34,21 @@ interface SelectedFile {
   is_untracked: boolean;
 }
 
+// Two-segment fake progress: 0→38% while phase 1 runs (~400 ms), then
+// 40→90% while phase 2 runs (~2900 ms total elapsed). Jumps to 100 when done.
+function computeProgress(ms: number, p1Done: boolean, p2Done: boolean): number {
+  if (p2Done) return 100;
+  if (!p1Done) return Math.min(38, (ms / 400) * 40);
+  return 40 + Math.min(50, ((ms - 400) / 2500) * 50);
+}
+
 export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId: string; listKey: number; statusKey: number }) {
   const [status, setStatus] = useState<WorkingTreeStatus | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
   const [loadingMs, setLoadingMs] = useState(0);
   const loadingStartRef = useRef<number | null>(null);
+  // Untracked files arrive separately (~2–3 s later). null = still loading.
+  const [untracked, setUntracked] = useState<StatusEntry[] | null>(null);
   const [selected, setSelected] = useState<SelectedFile | null>(null);
   const [diff, setDiff] = useState<string>("");
   const [diffLoading, setDiffLoading] = useState(false);
@@ -79,49 +89,61 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
     }
   }
 
-  // Synchronous guard: drops concurrent refreshes so at most one git status
-  // call is in flight at a time (important on slow monorepos).
-  const isRefreshingRef = useRef(false);
+  // Generation counter: incrementing on each refresh causes in-flight results
+  // from a previous generation to be discarded rather than overwriting fresh state.
+  const refreshGenRef = useRef(0);
 
   const refreshStatus = useCallback(() => {
-    if (isRefreshingRef.current) {
-      logWarn(`WorkingTreeDetail[${tabId}] refreshStatus skipped — already in flight`);
-      return;
-    }
-    isRefreshingRef.current = true;
+    const gen = ++refreshGenRef.current;
     setStatus(null);
+    setUntracked(null);
+    setStatusError(null);
     setLoadingMs(0);
     loadingStartRef.current = performance.now();
     const t0 = performance.now();
-    logInfo(`WorkingTreeDetail[${tabId}] refreshStatus start`);
+    logInfo(`WorkingTreeDetail[${tabId}] refreshStatus start gen=${gen}`);
+
+    // Phase 1: tracked changes only (~400 ms — untracked scanning skipped).
     invoke<WorkingTreeStatus>("get_working_tree_status", { tabId })
       .then((s) => {
+        if (refreshGenRef.current !== gen) return;
         const ms = Math.round(performance.now() - t0);
-        logInfo(`WorkingTreeDetail[${tabId}] refreshStatus done staged=${s.staged.length} unstaged=${s.unstaged.length} ms=${ms}`);
-        setStatusError(null);
+        logInfo(`WorkingTreeDetail[${tabId}] tracked done staged=${s.staged.length} modified=${s.unstaged.length} ms=${ms}`);
         setStatus(s);
       })
       .catch((e) => {
-        const ms = Math.round(performance.now() - t0);
-        logWarn(`WorkingTreeDetail[${tabId}] refreshStatus failed ms=${ms} error=${e}`);
+        if (refreshGenRef.current !== gen) return;
+        logWarn(`WorkingTreeDetail[${tabId}] refreshStatus failed error=${e}`);
         setStatusError(String(e));
       })
       .finally(() => {
-        isRefreshingRef.current = false;
-        loadingStartRef.current = null;
+        if (refreshGenRef.current === gen) loadingStartRef.current = null;
+      });
+
+    // Phase 2: untracked files (~2–3 s — runs in parallel, appended when ready).
+    invoke<string[]>("get_untracked_files", { tabId })
+      .then((paths) => {
+        if (refreshGenRef.current !== gen) return;
+        const ms = Math.round(performance.now() - t0);
+        logInfo(`WorkingTreeDetail[${tabId}] untracked done count=${paths.length} ms=${ms}`);
+        setUntracked(paths.map((path) => ({ path, old_path: null, status: "?" })));
+      })
+      .catch(() => {
+        if (refreshGenRef.current !== gen) return;
+        setUntracked([]); // fail gracefully — don't block the UI
       });
   }, [tabId]);
 
-  // Tick the elapsed timer while a refresh is in flight.
+  // Tick the elapsed timer across both phases (stops when both done or on error).
   useEffect(() => {
-    if (status !== null || statusError !== null) return;
+    if ((status !== null && untracked !== null) || statusError !== null) return;
     const id = setInterval(() => {
       if (loadingStartRef.current !== null) {
         setLoadingMs(Math.round(performance.now() - loadingStartRef.current));
       }
     }, 100);
     return () => clearInterval(id);
-  }, [status, statusError]);
+  }, [status, untracked, statusError]);
 
   useEffect(() => {
     setStatus(null);
@@ -174,13 +196,19 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
     setSelected({ path: entry.path, staged, is_untracked: entry.status === "?" });
   }
 
-  const isEmpty = status && status.staged.length === 0 && status.unstaged.length === 0;
+  const isEmpty =
+    status !== null && untracked !== null &&
+    status.staged.length === 0 && status.unstaged.length === 0 && untracked.length === 0;
+
+  const isLoading = (status === null || untracked === null) && !statusError;
+  const progressValue = computeProgress(loadingMs, status !== null, untracked !== null);
 
   // Flat ordered list used for ArrowUp/ArrowDown navigation across both sections.
   const allFiles = status
     ? [
         ...status.staged.map((f) => ({ ...f, staged: true })),
         ...status.unstaged.map((f) => ({ ...f, staged: false })),
+        ...(untracked ?? []).map((f) => ({ ...f, staged: false })),
       ]
     : [];
   const selectedIndex = allFiles.findIndex(
@@ -206,9 +234,16 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
               setSelected({ path: f.path, staged: f.staged, is_untracked: f.status === "?" });
             }}
           >
+            {isLoading && (
+              <Progress
+                value={progressValue}
+                size={3}
+                radius={0}
+                className="wt-progress-bar"
+              />
+            )}
             {!status && !statusError && (
               <div className="wt-section-empty">
-                <Loader size="xs" />
                 <span className="wt-loading-timer">{(loadingMs / 1000).toFixed(1)}s</span>
               </div>
             )}
@@ -235,15 +270,27 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
                 ))}
               </>
             )}
-            {status && status.unstaged.length > 0 && (
+            {status && (status.unstaged.length > 0 || (untracked ?? []).length > 0) && (
               <>
                 <div className="wt-section-header">
                   <span className="wt-section-label">Changes</span>
-                  <span className="wt-section-count">{status.unstaged.length}</span>
+                  <span className="wt-section-count">
+                    {status.unstaged.length + (untracked ?? []).length}
+                    {untracked === null && "+"}
+                  </span>
                 </div>
                 {status.unstaged.map((f) => (
                   <FileRow
                     key={`unstaged:${f.path}`}
+                    file={f}
+                    isSelected={selected?.path === f.path && !selected.staged}
+                    onClick={() => selectFile(f, false)}
+                    onContextMenu={(e) => openContextMenu(e, f, false)}
+                  />
+                ))}
+                {(untracked ?? []).map((f) => (
+                  <FileRow
+                    key={`untracked:${f.path}`}
                     file={f}
                     isSelected={selected?.path === f.path && !selected.staged}
                     onClick={() => selectFile(f, false)}
@@ -260,7 +307,8 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
             <span className="wt-title">Uncommitted Changes</span>
             {status && (
               <span className="wt-counts">
-                {status.staged.length} staged · {status.unstaged.length} unstaged
+                {status.staged.length} staged · {status.unstaged.length + (untracked ?? []).length} unstaged
+                {untracked === null && "…"}
               </span>
             )}
           </div>

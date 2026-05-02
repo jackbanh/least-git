@@ -106,7 +106,7 @@ pub struct WorkingTreeStatus {
     pub unstaged: Vec<StatusEntry>,
 }
 
-// ── Streaming event payloads (used by checkout_branch and pull_with_rebase) ──
+// ── Streaming event payloads (used by checkout_branch, pull_with_rebase, rebase_interactive) ──
 
 #[derive(Clone, Serialize)]
 pub(crate) struct PullLine {
@@ -118,6 +118,18 @@ pub(crate) struct PullLine {
 pub(crate) struct PullDone {
     pub(crate) tab_id: String,
     pub(crate) success: bool,
+}
+
+#[derive(Clone, Serialize)]
+struct RebaseLine {
+    tab_id: String,
+    line: String,
+}
+
+#[derive(Clone, Serialize)]
+struct RebaseDone {
+    tab_id: String,
+    success: bool,
 }
 
 // ── Watcher event classification ─────────────────────────────────────────────
@@ -347,6 +359,67 @@ async fn pull_with_rebase(
     Ok(())
 }
 
+// ── Rebase interactive ────────────────────────────────────────────────────────
+
+#[tauri::command]
+async fn rebase_interactive(
+    tab_id: String,
+    oid: String,
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    use tokio::io::{AsyncBufReadExt, BufReader};
+
+    let path = get_repo_path(&tab_id, &state)?;
+    let path_str = path.to_string_lossy().to_string();
+
+    info!("rebase_interactive onto {oid}");
+
+    let mut child = git_async()
+        .args(["-C", &path_str, "rebase", "-i", &oid])
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .map_err(|e| e.to_string())?;
+
+    let stdout = child.stdout.take().unwrap();
+    let stderr = child.stderr.take().unwrap();
+
+    let emit_line = {
+        let app = app.clone();
+        let tab_id = tab_id.clone();
+        move |line: String| {
+            let _ = app.emit("rebase:line", RebaseLine { tab_id: tab_id.clone(), line });
+        }
+    };
+    let emit_line2 = emit_line.clone();
+
+    let out_task = tokio::spawn(async move {
+        let mut lines = BufReader::new(stdout).lines();
+        while let Ok(Some(line)) = lines.next_line().await {
+            emit_line(line);
+        }
+    });
+    let err_task = tokio::spawn(async move {
+        let mut lines = BufReader::new(stderr).lines();
+        while let Ok(Some(line)) = lines.next_line().await {
+            emit_line2(line);
+        }
+    });
+
+    let status = child.wait().await.map_err(|e| e.to_string())?;
+    let _ = tokio::join!(out_task, err_task);
+
+    if status.success() {
+        info!("rebase_interactive succeeded");
+    } else {
+        warn!("rebase_interactive failed with status: {status}");
+    }
+    let _ = app.emit("rebase:done", RebaseDone { tab_id, success: status.success() });
+
+    Ok(())
+}
+
 // ── App entry point ───────────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -446,6 +519,7 @@ pub fn run() {
             branches::create_branch,
             branches::checkout_branch,
             working_tree::get_working_tree_status,
+            working_tree::get_untracked_files,
             working_tree::stage_file,
             working_tree::unstage_file,
             working_tree::discard_changes,
@@ -458,6 +532,7 @@ pub fn run() {
             config::get_git_config_globals,
             config::set_git_config_global,
             pull_with_rebase,
+            rebase_interactive,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

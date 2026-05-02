@@ -10,6 +10,7 @@ import {
   MOCK_COMMIT_DETAIL,
   MOCK_DIFF,
   MOCK_WORKING_TREE,
+  MOCK_UNTRACKED_FILES,
 } from "./fixtures";
 
 const MOCK_TAB = {
@@ -31,7 +32,8 @@ const LATENCY: Record<string, number> = {
   get_file_diff:            120,
   get_staged_diff:          120,
   get_unstaged_diff:        120,
-  get_working_tree_status: 8500,  // avg 8540ms (n=5) — large untracked tree
+  get_working_tree_status:  400,  // fast path — tracked changes only, no untracked scan
+  get_untracked_files:     2900,  // slow path — directory walk (was ~8540ms total before split)
   default:                   60,
 };
 
@@ -86,6 +88,15 @@ export async function invoke<T = unknown>(cmd: string, _args?: Record<string, un
     case "get_working_tree_status":
       await delay(LATENCY.get_working_tree_status);
       return MOCK_WORKING_TREE as T;
+
+    case "get_untracked_files":
+      await delay(LATENCY.get_untracked_files);
+      return MOCK_UNTRACKED_FILES as T;
+
+    case "rebase_interactive":
+      // Simulate: editor opens (pause), then rebase runs
+      await delay(3000);
+      return "" as T;
 
     case "git_pull":
     case "git_push":

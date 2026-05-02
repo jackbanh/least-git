@@ -24,7 +24,8 @@ get_commit_detail(tab_id, oid: String) → CommitDetail       cached per tab
 get_file_diff(tab_id, oid: String, file_path: String) → String
 
 // Working tree
-get_working_tree_status(tab_id) → WorkingTreeStatus         { staged, unstaged: Vec<StatusEntry> }
+get_working_tree_status(tab_id) → WorkingTreeStatus         { staged, unstaged: Vec<StatusEntry> } — tracked files only, no untracked scan
+get_untracked_files(tab_id) → Vec<String>                   paths only; frontend fires this in parallel with get_working_tree_status
 get_staged_diff(tab_id, file_path: String) → String
 get_unstaged_diff(tab_id, file_path: String, is_untracked: bool) → String
 stage_file(tab_id, file_path: String) → ()
@@ -55,3 +56,5 @@ These are deliberate — do not remove:
 - `get_working_tree_status` passes `--no-optional-locks` as a **top-level git flag** (before the subcommand) — skips acquiring `index.lock` for this read-only check
 - `get_working_tree_status` passes `--no-renames` — disables O(n²) rename detection across all changed files
 - `get_working_tree_status` passes `--ignore-submodules=all` — prevents recursing into submodule directories
+- `get_working_tree_status` passes `--untracked-files=no` — untracked directory scanning was the dominant latency (~2.9 s on a 300k-file monorepo even with FSMonitor); untracked paths are fetched separately via `get_untracked_files` (`git ls-files --others`) so tracked changes appear in ~400 ms
+- `get_untracked_files` uses `git ls-files --others --exclude-standard --no-empty-directory -z` — dedicated untracked scan; frontend fires it in parallel so it doesn't block the tracked-changes display
