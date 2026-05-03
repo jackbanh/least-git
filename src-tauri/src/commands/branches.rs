@@ -140,13 +140,17 @@ pub async fn checkout_branch(
     let out_task = tokio::spawn(async move {
         let mut lines = BufReader::new(stdout).lines();
         while let Ok(Some(line)) = lines.next_line().await {
-            emit_line(line);
+            for part in line.split('\r').filter(|s| !s.trim().is_empty()) {
+                emit_line(part.to_string());
+            }
         }
     });
     let err_task = tokio::spawn(async move {
         let mut lines = BufReader::new(stderr).lines();
         while let Ok(Some(line)) = lines.next_line().await {
-            emit_line2(line);
+            for part in line.split('\r').filter(|s| !s.trim().is_empty()) {
+                emit_line2(part.to_string());
+            }
         }
     });
 
