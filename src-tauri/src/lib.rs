@@ -106,30 +106,69 @@ pub struct WorkingTreeStatus {
     pub unstaged: Vec<StatusEntry>,
 }
 
-// ── Streaming event payloads (used by checkout_branch, pull_with_rebase, rebase_interactive) ──
+// ── Streaming helpers (used by checkout_branch, pull_with_rebase, rebase_interactive) ──
 
 #[derive(Clone, Serialize)]
-pub(crate) struct PullLine {
+pub(crate) struct StreamLine {
     pub(crate) tab_id: String,
     pub(crate) line: String,
 }
 
 #[derive(Clone, Serialize)]
-pub(crate) struct PullDone {
+pub(crate) struct StreamDone {
     pub(crate) tab_id: String,
     pub(crate) success: bool,
 }
 
-#[derive(Clone, Serialize)]
-struct RebaseLine {
+/// Streams stdout and stderr of an already-spawned child process, emitting each
+/// CR/LF-delimited fragment as `{prefix}:line` and a final `{prefix}:done` event.
+/// Returns `Ok(true)` on exit 0, `Ok(false)` on non-zero exit.
+pub(crate) async fn stream_child(
+    mut child: tokio::process::Child,
+    app: &tauri::AppHandle,
     tab_id: String,
-    line: String,
-}
+    event_prefix: &str,
+) -> Result<bool, String> {
+    use tokio::io::{AsyncBufReadExt, BufReader};
 
-#[derive(Clone, Serialize)]
-struct RebaseDone {
-    tab_id: String,
-    success: bool,
+    let stdout = child.stdout.take().unwrap();
+    let stderr = child.stderr.take().unwrap();
+
+    let line_event = format!("{event_prefix}:line");
+    let done_event = format!("{event_prefix}:done");
+
+    let emit = {
+        let app = app.clone();
+        let tab_id = tab_id.clone();
+        let line_event = line_event.clone();
+        move |line: String| {
+            let _ = app.emit(&line_event, StreamLine { tab_id: tab_id.clone(), line });
+        }
+    };
+    let emit2 = emit.clone();
+
+    let out_task = tokio::spawn(async move {
+        let mut lines = BufReader::new(stdout).lines();
+        while let Ok(Some(line)) = lines.next_line().await {
+            for part in line.split('\r').filter(|s| !s.trim().is_empty()) {
+                emit(part.to_string());
+            }
+        }
+    });
+    let err_task = tokio::spawn(async move {
+        let mut lines = BufReader::new(stderr).lines();
+        while let Ok(Some(line)) = lines.next_line().await {
+            for part in line.split('\r').filter(|s| !s.trim().is_empty()) {
+                emit2(part.to_string());
+            }
+        }
+    });
+
+    let status = child.wait().await.map_err(|e| e.to_string())?;
+    let _ = tokio::join!(out_task, err_task);
+    let success = status.success();
+    let _ = app.emit(&done_event, StreamDone { tab_id, success });
+    Ok(success)
 }
 
 // ── Watcher event classification ─────────────────────────────────────────────
@@ -287,8 +326,6 @@ async fn pull_with_rebase(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    use tokio::io::{AsyncBufReadExt, BufReader};
-
     let path = get_repo_path(&tab_id, &state)?;
     let path_str = path.to_string_lossy().to_string();
 
@@ -313,53 +350,15 @@ async fn pull_with_rebase(
         info!("pull rebase={rebase} current branch upstream");
     }
 
-    let mut child = git_async()
+    let child = git_async()
         .args(&args)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
         .map_err(|e| e.to_string())?;
 
-    let stdout = child.stdout.take().unwrap();
-    let stderr = child.stderr.take().unwrap();
-
-    // Stream stdout and stderr concurrently, emitting each line as an event.
-    let emit_line = {
-        let app = app.clone();
-        let tab_id = tab_id.clone();
-        move |line: String| {
-            let _ = app.emit("pull:line", PullLine { tab_id: tab_id.clone(), line });
-        }
-    };
-    let emit_line2 = emit_line.clone();
-
-    let out_task = tokio::spawn(async move {
-        let mut lines = BufReader::new(stdout).lines();
-        while let Ok(Some(line)) = lines.next_line().await {
-            for part in line.split('\r').filter(|s| !s.trim().is_empty()) {
-                emit_line(part.to_string());
-            }
-        }
-    });
-    let err_task = tokio::spawn(async move {
-        let mut lines = BufReader::new(stderr).lines();
-        while let Ok(Some(line)) = lines.next_line().await {
-            for part in line.split('\r').filter(|s| !s.trim().is_empty()) {
-                emit_line2(part.to_string());
-            }
-        }
-    });
-
-    let status = child.wait().await.map_err(|e| e.to_string())?;
-    let _ = tokio::join!(out_task, err_task);
-
-    if status.success() {
-        info!("pull_with_rebase succeeded");
-    } else {
-        warn!("pull_with_rebase failed with status: {status}");
-    }
-    let _ = app.emit("pull:done", PullDone { tab_id, success: status.success() });
-
+    let success = stream_child(child, &app, tab_id, "pull").await?;
+    if success { info!("pull_with_rebase succeeded"); } else { warn!("pull_with_rebase failed"); }
     Ok(())
 }
 
@@ -372,59 +371,19 @@ async fn rebase_interactive(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    use tokio::io::{AsyncBufReadExt, BufReader};
-
     let path = get_repo_path(&tab_id, &state)?;
     let path_str = path.to_string_lossy().to_string();
-
     info!("rebase_interactive onto {oid}");
 
-    let mut child = git_async()
+    let child = git_async()
         .args(["-C", &path_str, "rebase", "-i", &oid])
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
         .map_err(|e| e.to_string())?;
 
-    let stdout = child.stdout.take().unwrap();
-    let stderr = child.stderr.take().unwrap();
-
-    let emit_line = {
-        let app = app.clone();
-        let tab_id = tab_id.clone();
-        move |line: String| {
-            let _ = app.emit("rebase:line", RebaseLine { tab_id: tab_id.clone(), line });
-        }
-    };
-    let emit_line2 = emit_line.clone();
-
-    let out_task = tokio::spawn(async move {
-        let mut lines = BufReader::new(stdout).lines();
-        while let Ok(Some(line)) = lines.next_line().await {
-            for part in line.split('\r').filter(|s| !s.trim().is_empty()) {
-                emit_line(part.to_string());
-            }
-        }
-    });
-    let err_task = tokio::spawn(async move {
-        let mut lines = BufReader::new(stderr).lines();
-        while let Ok(Some(line)) = lines.next_line().await {
-            for part in line.split('\r').filter(|s| !s.trim().is_empty()) {
-                emit_line2(part.to_string());
-            }
-        }
-    });
-
-    let status = child.wait().await.map_err(|e| e.to_string())?;
-    let _ = tokio::join!(out_task, err_task);
-
-    if status.success() {
-        info!("rebase_interactive succeeded");
-    } else {
-        warn!("rebase_interactive failed with status: {status}");
-    }
-    let _ = app.emit("rebase:done", RebaseDone { tab_id, success: status.success() });
-
+    let success = stream_child(child, &app, tab_id, "rebase").await?;
+    if success { info!("rebase_interactive succeeded"); } else { warn!("rebase_interactive failed"); }
     Ok(())
 }
 

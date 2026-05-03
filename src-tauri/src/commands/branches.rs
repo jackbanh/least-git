@@ -1,7 +1,7 @@
-use crate::{git_async, get_repo_path, AppState, BranchInfo, PullDone, PullLine};
+use crate::{git_async, get_repo_path, stream_child, AppState, BranchInfo};
 use gix::bstr::ByteSlice;
 use log::{info, warn};
-use tauri::{Emitter, State};
+use tauri::State;
 
 /// Parse `git branch` text output into a sorted BranchInfo list.
 /// Used only in unit tests; production uses the gix API directly.
@@ -111,60 +111,25 @@ pub async fn checkout_branch(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    use tokio::io::{AsyncBufReadExt, BufReader};
-
     let path = get_repo_path(&tab_id, &state)?;
     let path_str = path.to_string_lossy().to_string();
 
     info!("checkout_branch: {branch}");
-    let checkout_start = std::time::Instant::now();
-    let mut child = git_async()
+    let t = std::time::Instant::now();
+
+    let child = git_async()
         .args(["-C", &path_str, "checkout", &branch])
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
         .map_err(|e| e.to_string())?;
 
-    let stdout = child.stdout.take().unwrap();
-    let stderr = child.stderr.take().unwrap();
-
-    let emit_line = {
-        let app = app.clone();
-        let tab_id = tab_id.clone();
-        move |line: String| {
-            let _ = app.emit("checkout:line", PullLine { tab_id: tab_id.clone(), line });
-        }
-    };
-    let emit_line2 = emit_line.clone();
-
-    let out_task = tokio::spawn(async move {
-        let mut lines = BufReader::new(stdout).lines();
-        while let Ok(Some(line)) = lines.next_line().await {
-            for part in line.split('\r').filter(|s| !s.trim().is_empty()) {
-                emit_line(part.to_string());
-            }
-        }
-    });
-    let err_task = tokio::spawn(async move {
-        let mut lines = BufReader::new(stderr).lines();
-        while let Ok(Some(line)) = lines.next_line().await {
-            for part in line.split('\r').filter(|s| !s.trim().is_empty()) {
-                emit_line2(part.to_string());
-            }
-        }
-    });
-
-    let status = child.wait().await.map_err(|e| e.to_string())?;
-    let _ = tokio::join!(out_task, err_task);
-
-    let _ = app.emit("checkout:done", PullDone { tab_id, success: status.success() });
-
-    let elapsed = checkout_start.elapsed().as_millis();
-    if !status.success() {
+    let success = stream_child(child, &app, tab_id, "checkout").await?;
+    let elapsed = t.elapsed().as_millis();
+    if !success {
         warn!("checkout_branch failed: {branch} ({elapsed}ms)");
         return Err(format!("git checkout {branch} failed"));
     }
-
     info!("checkout_branch done: {branch} ({elapsed}ms)");
     Ok(())
 }
