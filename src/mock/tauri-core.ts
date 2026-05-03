@@ -12,6 +12,7 @@ import {
   MOCK_WORKING_TREE,
   MOCK_UNTRACKED_FILES,
 } from "./fixtures";
+import { dispatchMockEvent } from "./tauri-event";
 
 const MOCK_TAB = {
   id:   MOCK_TAB_ID,
@@ -93,10 +94,25 @@ export async function invoke<T = unknown>(cmd: string, _args?: Record<string, un
       await delay(LATENCY.get_untracked_files);
       return MOCK_UNTRACKED_FILES as T;
 
-    case "rebase_interactive":
-      // Simulate: editor opens (pause), then rebase runs
-      await delay(3000);
+    case "rebase_interactive": {
+      const tabId = (_args?.tabId as string) ?? "";
+      const oid = ((_args?.oid as string) ?? "").slice(0, 7);
+      // Phase 1: git waits for the editor (user edits the todo list)
+      await delay(2500);
+      // Phase 2: git processes each pick and reports progress
+      const lines = [
+        `pick ${oid} ${MOCK_COMMITS[1]?.summary ?? "commit"}`,
+        `pick ${MOCK_COMMITS[2]?.short_oid ?? "abc1234"} ${MOCK_COMMITS[2]?.summary ?? "commit"}`,
+        `pick ${MOCK_COMMITS[3]?.short_oid ?? "def5678"} ${MOCK_COMMITS[3]?.summary ?? "commit"}`,
+        `Successfully rebased and updated refs/heads/main.`,
+      ];
+      for (const line of lines) {
+        await delay(350);
+        dispatchMockEvent("rebase:line", { tab_id: tabId, line });
+      }
+      dispatchMockEvent("rebase:done", { tab_id: tabId, success: true });
       return "" as T;
+    }
 
     case "git_pull":
     case "git_push":
