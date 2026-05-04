@@ -6,10 +6,11 @@
   font-size: 12px;
 }
 
-/* Prevent line wrapping — table must expand to natural content width so the
-   parent overflow-x: auto can provide a real horizontal scrollbar. */
+/* Table fills the scroll container when lines are short (no background cutoff
+   on the right) and expands beyond it when lines are long (horizontal scroll). */
 .diff-scroll .diff {
   min-width: max-content;
+  width: 100%;
 }
 
 .diff-scroll .diff-code,
@@ -36,12 +37,6 @@
 
   --diff-gutter-selected-background-color: var(--lg-selected-bg);
   --diff-code-selected-background-color: var(--lg-selected-bg);
-}
-
-/* Code column expands to fill full row width so add/remove background
-   covers the entire line even when scrolled horizontally past the content. */
-.diff-scroll .diff-code {
-  width: 100%;
 }
 
 /* Gutter (line numbers) */
