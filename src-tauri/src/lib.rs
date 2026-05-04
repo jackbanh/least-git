@@ -427,6 +427,16 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
+            // Plugins (including window-state) run before setup, so position/size
+            // are already restored by the time we get here. Show now to avoid the
+            // window jumping from its default position to the saved one.
+            {
+                use tauri::Manager;
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.show();
+                }
+            }
+
             // Menu bar is macOS-only. On Windows the native menu bar appears as
             // a second title bar when decorations:false is set, so we skip it
             // entirely — keyboard shortcuts on Windows are handled in the frontend.

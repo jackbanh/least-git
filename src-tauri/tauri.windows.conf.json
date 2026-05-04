@@ -6,7 +6,8 @@
         "width": 1280,
         "height": 820,
         "decorations": false,
-        "backgroundColor": "#f8f7f6"
+        "backgroundColor": "#f8f7f6",
+        "visible": false
       }
     ]
   }
