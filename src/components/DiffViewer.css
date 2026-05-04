@@ -38,6 +38,12 @@
   --diff-code-selected-background-color: var(--lg-selected-bg);
 }
 
+/* Code column expands to fill full row width so add/remove background
+   covers the entire line even when scrolled horizontally past the content. */
+.diff-scroll .diff-code {
+  width: 100%;
+}
+
 /* Gutter (line numbers) */
 .diff-scroll .diff-gutter {
   width: 3.5em;

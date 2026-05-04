@@ -152,7 +152,9 @@ function GitConfigSection() {
               checked={checked}
               disabled={values === null}
               onChange={(e) => toggle(setting, e.currentTarget.checked)}
-              size="sm"
+              size="md"
+              onLabel={setting.onValue}
+              offLabel={stored !== null ? stored : "unset"}
             />
           </div>
         );
