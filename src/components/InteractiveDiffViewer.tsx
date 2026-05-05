@@ -1,55 +1,10 @@
-import { useMemo, useEffect, useRef, useState } from "react";
+import { useMemo } from "react";
 import { parseDiff, Diff, Hunk, Decoration, getChangeKey, useChangeSelect } from "react-diff-view";
 import type { HunkData, HunkTokens, ChangeData, GutterOptions } from "react-diff-view";
 import "react-diff-view/style/index.css";
 import "./DiffViewer.css";
 import "./InteractiveDiffViewer.css";
-import { tokenizeHunks } from "../lib/tokenize";
-import TokenizeWorker from "../workers/tokenize.worker?worker";
-
-let _idvWorker: Worker | null = null;
-function getWorker(): Worker {
-  if (!_idvWorker) _idvWorker = new TokenizeWorker();
-  return _idvWorker;
-}
-
-const TOKEN_CACHE = new Map<string, HunkTokens>();
-const CACHE_MAX = 50;
-
-const EXT_LANG: Record<string, string> = {
-  js: "jsx", mjs: "jsx", cjs: "jsx",
-  jsx: "jsx",
-  ts: "tsx", mts: "tsx", cts: "tsx",
-  tsx: "tsx",
-  rs: "rust",
-  py: "python", pyi: "python",
-  go: "go",
-  java: "java",
-  css: "css", scss: "css",
-  json: "json", jsonc: "json",
-  yaml: "yaml", yml: "yaml",
-  sh: "bash", bash: "bash",
-  md: "markdown", mdx: "markdown",
-  toml: "toml",
-  c: "c", h: "c",
-  cpp: "cpp", cc: "cpp", cxx: "cpp", hpp: "cpp",
-  swift: "swift",
-  kt: "kotlin", kts: "kotlin",
-};
-
-function detectLanguage(filePath: string): string | null {
-  const ext = filePath.split(".").pop()?.toLowerCase() ?? "";
-  return EXT_LANG[ext] ?? null;
-}
-
-function fileCacheKey(file: ReturnType<typeof parseDiff>[number]): string {
-  if (file.oldRevision && file.newRevision) {
-    return `${file.oldRevision}:${file.newRevision}:${file.newPath}`;
-  }
-  return `${file.oldPath}:${file.newPath}:${file.hunks.map((h) => h.content).join("|")}`;
-}
-
-const SYNC_THRESHOLD = 50;
+import { useTokens } from "../lib/useTokens";
 
 interface Props {
   diff: string;
@@ -65,7 +20,6 @@ function buildHunkPatch(file: ReturnType<typeof parseDiff>[number], hunk: HunkDa
 
   let filteredChanges: ChangeData[];
   if (changes) {
-    // For line-level: include selected inserts/deletes + all normal (context) lines
     filteredChanges = hunk.changes.filter(
       (c) => c.type === "normal" || changes.some((sel) => getChangeKey(sel) === getChangeKey(c))
     );
@@ -89,83 +43,13 @@ function buildHunkPatch(file: ReturnType<typeof parseDiff>[number], hunk: HunkDa
   return header + hunkHeader + body;
 }
 
-function HunkActions({
-  label,
-  onClick,
-}: {
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <button className="idv-hunk-action" onClick={onClick}>
-      {label}
-    </button>
-  );
-}
-
 export default function InteractiveDiffViewer({ diff, staged, onApplyHunk, onApplyLines }: Props) {
   const files = useMemo(() => {
     if (!diff.trim()) return [];
     try { return parseDiff(diff); } catch { return []; }
   }, [diff]);
 
-  const [tokensMap, setTokensMap] = useState<Map<string, HunkTokens>>(new Map());
-  const pendingRef = useRef<Set<number>>(new Set());
-  const reqIdRef = useRef(0);
-
-  useEffect(() => {
-    pendingRef.current.clear();
-    const initial = new Map<string, HunkTokens>();
-    let hasAsync = false;
-
-    for (const file of files) {
-      const filePath = file.newPath !== "/dev/null" ? file.newPath : file.oldPath;
-      const language = detectLanguage(filePath ?? "");
-      if (!language) continue;
-
-      const renderKey = `${file.oldPath}:${file.newPath}`;
-      const cacheKey = fileCacheKey(file);
-
-      const cached = TOKEN_CACHE.get(cacheKey);
-      if (cached) { initial.set(renderKey, cached); continue; }
-
-      const lineCount = file.hunks.reduce((n, h) => n + h.changes.length, 0);
-
-      if (lineCount <= SYNC_THRESHOLD) {
-        try {
-          const tokens = tokenizeHunks(file.hunks as HunkData[], language);
-          if (TOKEN_CACHE.size >= CACHE_MAX) TOKEN_CACHE.delete(TOKEN_CACHE.keys().next().value!);
-          TOKEN_CACHE.set(cacheKey, tokens);
-          initial.set(renderKey, tokens);
-        } catch { /* unknown language */ }
-      } else {
-        const id = ++reqIdRef.current;
-        pendingRef.current.add(id);
-        hasAsync = true;
-        getWorker().postMessage({ id, key: renderKey, cacheKey, hunks: file.hunks, language });
-      }
-    }
-
-    setTokensMap(initial);
-    if (!hasAsync) return;
-
-    function handleMessage(e: MessageEvent) {
-      const { id, key, cacheKey, tokens } = e.data as {
-        id: number; key: string; cacheKey: string; tokens: HunkTokens | null;
-      };
-      if (!pendingRef.current.has(id)) return;
-      pendingRef.current.delete(id);
-      if (tokens) {
-        if (TOKEN_CACHE.size >= CACHE_MAX) TOKEN_CACHE.delete(TOKEN_CACHE.keys().next().value!);
-        TOKEN_CACHE.set(cacheKey, tokens);
-        setTokensMap((prev) => new Map(prev).set(key, tokens));
-      }
-    }
-
-    const worker = getWorker();
-    worker.addEventListener("message", handleMessage);
-    return () => worker.removeEventListener("message", handleMessage);
-  }, [files]);
+  const tokensMap = useTokens(files);
 
   if (files.length === 0) return null;
 
@@ -207,17 +91,15 @@ function FileView({
   const lineActionLabel = staged ? "Unstage lines" : "Stage lines";
 
   function renderGutter({ change }: GutterOptions) {
-    // Only show the per-line button on insert/delete lines when something is selected
     if (change.type === "normal" || selectedChanges.length === 0) return null;
     if (!selectedChanges.includes(getChangeKey(change))) return null;
-    return null; // line buttons handled via the selection bar below
+    return null;
   }
 
   const selectedChangeObjects = file.hunks
     .flatMap((h) => h.changes)
     .filter((c) => selectedChanges.includes(getChangeKey(c)));
 
-  // Find which hunk owns the first selected change (for line-level patch building)
   const hunkForSelection = file.hunks.find((h) =>
     h.changes.some((c) => selectedChanges.includes(getChangeKey(c)))
   );
@@ -253,10 +135,12 @@ function FileView({
               <Decoration key={`deco-${hunk.content}`}>
                 <div className="idv-hunk-header">
                   <span className="idv-hunk-range">{hunk.content}</span>
-                  <HunkActions
-                    label={hunkActionLabel}
+                  <button
+                    className="idv-hunk-action"
                     onClick={() => onApplyHunk(buildHunkPatch(file, hunk))}
-                  />
+                  >
+                    {hunkActionLabel}
+                  </button>
                 </div>
               </Decoration>
               <Hunk key={hunk.content} hunk={hunk} />

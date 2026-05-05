@@ -1,4 +1,4 @@
-import { tokenize } from "react-diff-view";
+import { tokenize, parseDiff } from "react-diff-view";
 import type { HunkData, HunkTokens } from "react-diff-view";
 import refractor from "refractor/core";
 import clike from "refractor/lang/clike";
@@ -32,3 +32,39 @@ for (const lang of langs) {
 export function tokenizeHunks(hunks: HunkData[], language: string): HunkTokens {
   return tokenize(hunks, { highlight: true, refractor, language }) as HunkTokens;
 }
+
+export const EXT_LANG: Record<string, string> = {
+  js: "jsx", mjs: "jsx", cjs: "jsx",
+  jsx: "jsx",
+  ts: "tsx", mts: "tsx", cts: "tsx",
+  tsx: "tsx",
+  rs: "rust",
+  py: "python", pyi: "python",
+  go: "go",
+  java: "java",
+  css: "css", scss: "css",
+  json: "json", jsonc: "json",
+  yaml: "yaml", yml: "yaml",
+  sh: "bash", bash: "bash",
+  md: "markdown", mdx: "markdown",
+  toml: "toml",
+  c: "c", h: "c",
+  cpp: "cpp", cc: "cpp", cxx: "cpp", hpp: "cpp",
+  swift: "swift",
+  kt: "kotlin", kts: "kotlin",
+};
+
+export function detectLanguage(filePath: string): string | null {
+  const ext = filePath.split(".").pop()?.toLowerCase() ?? "";
+  return EXT_LANG[ext] ?? null;
+}
+
+export function fileCacheKey(file: ReturnType<typeof parseDiff>[number]): string {
+  if (file.oldRevision && file.newRevision) {
+    return `${file.oldRevision}:${file.newRevision}:${file.newPath}`;
+  }
+  return `${file.oldPath}:${file.newPath}:${file.hunks.map((h) => h.content).join("|")}`;
+}
+
+// Diffs with ≤ this many changed lines are tokenized synchronously.
+export const SYNC_THRESHOLD = 50;
