@@ -30,9 +30,11 @@
   --diff-gutter-delete-background-color: var(--lg-diff-rem-bg);
   --diff-gutter-delete-text-color: var(--lg-diff-rem-fg);
 
-  --diff-code-insert-background-color: var(--lg-diff-add-bg);
+  /* Transparent — row background is set on <tr> so it spans the full width
+     even when scrolled horizontally past the code content. */
+  --diff-code-insert-background-color: transparent;
   --diff-code-insert-text-color: var(--lg-diff-add-fg);
-  --diff-code-delete-background-color: var(--lg-diff-rem-bg);
+  --diff-code-delete-background-color: transparent;
   --diff-code-delete-text-color: var(--lg-diff-rem-fg);
 
   --diff-gutter-selected-background-color: var(--lg-selected-bg);
@@ -51,7 +53,14 @@
   cursor: default;
 }
 
-/* Darker gutter background for add/remove lines */
+/* Row backgrounds on <tr> so they span the full table width when scrolled
+   horizontally — td backgrounds only cover cell content width.
+   react-diff-view puts insert/delete on <td>, not <tr>, so use :has(). */
+.diff-scroll .diff tr:has(.diff-code-insert) { background-color: var(--lg-diff-add-bg); }
+.diff-scroll .diff tr:has(.diff-code-delete) { background-color: var(--lg-diff-rem-bg); }
+
+/* Darker gutter background for add/remove lines — explicit td background
+   takes precedence over the tr background set above. */
 .diff-scroll .diff .diff-gutter-insert {
   background-color: oklch(from var(--lg-diff-add-bg) calc(l - 0.06) c h);
 }
