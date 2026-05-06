@@ -6,11 +6,12 @@
   font-size: 12px;
 }
 
-/* Table fills the scroll container when lines are short (no background cutoff
-   on the right) and expands beyond it when lines are long (horizontal scroll). */
+/* width:max-content sizes the table from its <pre> content outward so the
+   table actually expands to match the scrollable area. min-width:100% keeps
+   it filling the container when lines are short. */
 .diff-scroll .diff {
-  min-width: max-content;
-  width: 100%;
+  width: max-content;
+  min-width: 100%;
 }
 
 .diff-scroll .diff-code,
