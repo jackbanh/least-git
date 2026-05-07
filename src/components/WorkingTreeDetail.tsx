@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { warn as logWarn, info as logInfo } from "@tauri-apps/plugin-log";
-import { Loader, Menu, Progress } from "@mantine/core";
+import { Loader, Menu } from "@mantine/core";
 import {
   IconArrowBarToDown,
   IconArrowBarToUp,
@@ -34,19 +34,9 @@ interface SelectedFile {
   is_untracked: boolean;
 }
 
-// Two-segment fake progress: 0→38% while phase 1 runs (~400 ms), then
-// 40→90% while phase 2 runs (~2900 ms total elapsed). Jumps to 100 when done.
-function computeProgress(ms: number, p1Done: boolean, p2Done: boolean): number {
-  if (p2Done) return 100;
-  if (!p1Done) return Math.min(38, (ms / 400) * 40);
-  return 40 + Math.min(50, ((ms - 400) / 2500) * 50);
-}
-
 export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId: string; listKey: number; statusKey: number }) {
   const [status, setStatus] = useState<WorkingTreeStatus | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
-  const [loadingMs, setLoadingMs] = useState(0);
-  const loadingStartRef = useRef<number | null>(null);
   // Untracked files arrive separately (~2–3 s later). null = still loading.
   const [untracked, setUntracked] = useState<StatusEntry[] | null>(null);
   const [selected, setSelected] = useState<SelectedFile | null>(null);
@@ -98,8 +88,6 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
     setStatus(null);
     setUntracked(null);
     setStatusError(null);
-    setLoadingMs(0);
-    loadingStartRef.current = performance.now();
     const t0 = performance.now();
     logInfo(`WorkingTreeDetail[${tabId}] refreshStatus start gen=${gen}`);
 
@@ -115,9 +103,6 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
         if (refreshGenRef.current !== gen) return;
         logWarn(`WorkingTreeDetail[${tabId}] refreshStatus failed error=${e}`);
         setStatusError(String(e));
-      })
-      .finally(() => {
-        if (refreshGenRef.current === gen) loadingStartRef.current = null;
       });
 
     // Phase 2: untracked files (~2–3 s — runs in parallel, appended when ready).
@@ -133,17 +118,6 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
         setUntracked([]); // fail gracefully — don't block the UI
       });
   }, [tabId]);
-
-  // Tick the elapsed timer across both phases (stops when both done or on error).
-  useEffect(() => {
-    if ((status !== null && untracked !== null) || statusError !== null) return;
-    const id = setInterval(() => {
-      if (loadingStartRef.current !== null) {
-        setLoadingMs(Math.round(performance.now() - loadingStartRef.current));
-      }
-    }, 100);
-    return () => clearInterval(id);
-  }, [status, untracked, statusError]);
 
   useEffect(() => {
     setStatus(null);
@@ -201,7 +175,7 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
     status.staged.length === 0 && status.unstaged.length === 0 && untracked.length === 0;
 
   const isLoading = (status === null || untracked === null) && !statusError;
-  const progressValue = computeProgress(loadingMs, status !== null, untracked !== null);
+  const spinnerLabel = status === null ? "Checking tracked changes…" : "Scanning untracked files…";
 
   // Flat ordered list used for ArrowUp/ArrowDown navigation across both sections.
   const allFiles = status
@@ -234,19 +208,6 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
               setSelected({ path: f.path, staged: f.staged, is_untracked: f.status === "?" });
             }}
           >
-            {isLoading && (
-              <Progress
-                value={progressValue}
-                size={3}
-                radius={0}
-                className="wt-progress-bar"
-              />
-            )}
-            {!status && !statusError && (
-              <div className="wt-section-empty">
-                <span className="wt-loading-timer">{(loadingMs / 1000).toFixed(1)}s</span>
-              </div>
-            )}
             {statusError && (
               <div className="wt-section-empty wt-section-error">{statusError}</div>
             )}
@@ -298,6 +259,12 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
                   />
                 ))}
               </>
+            )}
+            {isLoading && (
+              <div className="wt-spinner-footer">
+                <Loader size={12} />
+                <span>{spinnerLabel}</span>
+              </div>
             )}
           </div>
 

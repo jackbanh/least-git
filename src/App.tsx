@@ -109,6 +109,14 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    getCurrentWindow().onFocusChanged(({ payload: focused }) => {
+      if (focused && activeTabId) bumpStatusKey(activeTabId);
+    }).then((fn) => { unlisten = fn; });
+    return () => { unlisten?.(); };
+  }, [activeTabId, bumpStatusKey]);
+
+  useEffect(() => {
     const unlisten = listen("menu:refresh", () => {
       if (activeTabId) {
         invoke("clear_detail_cache", { tabId: activeTabId });

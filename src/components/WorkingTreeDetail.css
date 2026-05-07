@@ -55,16 +55,13 @@
   font-style: italic;
 }
 
-.wt-progress-bar {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-}
-
-.wt-loading-timer {
-  font-family: var(--lg-font-mono);
+.wt-spinner-footer {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 14px;
+  font-family: var(--lg-font-sans);
   font-size: 11px;
-  font-style: normal;
   color: var(--lg-ink-faint);
 }
 
