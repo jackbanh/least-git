@@ -11,6 +11,7 @@ import { useResize } from "./hooks/useResize";
 import BranchSwitcher from "./components/BranchSwitcher";
 import BranchDialog from "./components/BranchDialog";
 import PullDrawer from "./components/PullDrawer";
+import GitOutputDrawer from "./components/GitOutputDrawer";
 import { type PullRequest } from "./components/Toolbar";
 import CommitList from "./components/CommitList";
 import CommitDetail from "./components/CommitDetail";
@@ -41,6 +42,9 @@ export default function App() {
   const [pullDrawerOpen, setPullDrawerOpen] = useState(false);
   const [pullReq, setPullReq] = useState<PullRequest>({ rebase: false });
   const [tweaksOpen, setTweaksOpen] = useState(false);
+  const [isRebasing, setIsRebasing] = useState(false);
+  const [rebaseDrawerOpen, setRebaseDrawerOpen] = useState(false);
+  const [rebaseAction, setRebaseAction] = useState<"continue" | "abort">("continue");
 
   // Theme state
   const [theme, setThemeState] = useState<"light" | "dark">(() => {
@@ -138,13 +142,20 @@ export default function App() {
     return () => { unlisten.then((fn) => fn()); };
   }, []);
 
+  const activeTab = tabs.find((t) => t.id === activeTabId) ?? null;
+
+  useEffect(() => {
+    if (!activeTabId) { setIsRebasing(false); return; }
+    invoke<boolean>("get_rebase_status", { tabId: activeTabId })
+      .then(setIsRebasing)
+      .catch(() => setIsRebasing(false));
+  }, [activeTabId, activeTab?.listKey, activeTab?.statusKey]);
+
   function preArmThrottle(tabId: string, kind: string) {
     const key = `${tabId}:${kind}`;
     repoChangedThrottle.current[key] = Date.now();
     logInfo(`App preArmThrottle tab=${tabId} kind=${kind}`);
   }
-
-  const activeTab = tabs.find((t) => t.id === activeTabId) ?? null;
 
   // Read the branch list from the shared TanStack Query cache (populated by
   // BranchSwitcher). No extra fetch — just subscribes to the same cache entry.
@@ -260,6 +271,7 @@ export default function App() {
 
       <Toolbar
         pullBranchInfo={pullBranchInfo}
+        isRebasing={isRebasing}
         onPull={(req) => { setPullReq(req); setPullDrawerOpen(true); }}
         onBranch={() => setBranchDialogOpen(true)}
         onRefresh={() => {
@@ -269,6 +281,8 @@ export default function App() {
             bumpListKey(activeTabId);
           }
         }}
+        onRebaseContinue={() => { setRebaseAction("continue"); setRebaseDrawerOpen(true); }}
+        onRebaseAbort={() => { setRebaseAction("abort"); setRebaseDrawerOpen(true); }}
         onToggleTweaks={() => setTweaksOpen((o) => !o)}
       />
 
@@ -323,6 +337,24 @@ export default function App() {
           rebase={pullReq.rebase}
           onClose={() => setPullDrawerOpen(false)}
           onSuccess={() => { preArmThrottle(activeTabId, "refs"); bumpListKey(activeTabId); }}
+        />
+      )}
+
+      {activeTabId && (
+        <GitOutputDrawer
+          tabId={activeTabId}
+          opened={rebaseDrawerOpen}
+          title={rebaseAction === "continue" ? "Continue Rebase" : "Abort Rebase"}
+          command={rebaseAction === "continue" ? "continue_rebase" : "abort_rebase"}
+          commandArgs={{}}
+          eventPrefix="rebase"
+          displayCommand={rebaseAction === "continue" ? "git rebase --continue" : "git rebase --abort"}
+          onClose={() => setRebaseDrawerOpen(false)}
+          onSuccess={() => {
+            preArmThrottle(activeTabId, "refs");
+            bumpListKey(activeTabId);
+            bumpStatusKey(activeTabId);
+          }}
         />
       )}
 

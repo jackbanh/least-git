@@ -130,6 +130,20 @@ export async function invoke<T = unknown>(cmd: string, _args?: Record<string, un
     case "set_git_config_global":
       return undefined as T;
 
+    case "get_rebase_status":
+      return false as T;
+
+    case "continue_rebase":
+    case "abort_rebase": {
+      const tabId = (_args?.tabId as string) ?? "";
+      const isAbort = cmd === "abort_rebase";
+      await delay(400);
+      dispatchMockEvent("rebase:line", { tab_id: tabId, line: isAbort ? "Rebase aborted." : "Applying: mock commit" });
+      await delay(300);
+      dispatchMockEvent("rebase:done", { tab_id: tabId, success: true });
+      return undefined as T;
+    }
+
     case "open_diff_external":
     case "open_working_tree_diff_external":
       return undefined as T;

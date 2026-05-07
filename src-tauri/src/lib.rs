@@ -387,6 +387,62 @@ async fn rebase_interactive(
     Ok(())
 }
 
+// ── Rebase state / continue / abort ──────────────────────────────────────────
+
+#[tauri::command]
+async fn get_rebase_status(tab_id: String, state: State<'_, AppState>) -> Result<bool, String> {
+    let path = get_repo_path(&tab_id, &state)?;
+    let git_dir = path.join(".git");
+    Ok(git_dir.join("rebase-merge").exists() || git_dir.join("rebase-apply").exists())
+}
+
+#[tauri::command]
+async fn continue_rebase(
+    tab_id: String,
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let path = get_repo_path(&tab_id, &state)?;
+    let path_str = path.to_string_lossy().to_string();
+    info!("continue_rebase tab={tab_id}");
+
+    let child = git_async()
+        .args(["-C", &path_str, "rebase", "--continue"])
+        // Suppress interactive editor — rebase --continue uses the original
+        // commit message and we have no TTY to show an editor anyway.
+        .env("GIT_EDITOR", "true")
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .map_err(|e| e.to_string())?;
+
+    let success = stream_child(child, &app, tab_id, "rebase").await?;
+    if success { info!("continue_rebase succeeded"); } else { warn!("continue_rebase failed"); }
+    Ok(())
+}
+
+#[tauri::command]
+async fn abort_rebase(
+    tab_id: String,
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let path = get_repo_path(&tab_id, &state)?;
+    let path_str = path.to_string_lossy().to_string();
+    info!("abort_rebase tab={tab_id}");
+
+    let child = git_async()
+        .args(["-C", &path_str, "rebase", "--abort"])
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .map_err(|e| e.to_string())?;
+
+    let success = stream_child(child, &app, tab_id, "rebase").await?;
+    if success { info!("abort_rebase succeeded"); } else { warn!("abort_rebase failed"); }
+    Ok(())
+}
+
 // ── App entry point ───────────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -510,6 +566,9 @@ pub fn run() {
             config::set_git_config_global,
             pull_with_rebase,
             rebase_interactive,
+            get_rebase_status,
+            continue_rebase,
+            abort_rebase,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

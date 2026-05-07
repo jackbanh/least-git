@@ -6,6 +6,7 @@ import {
   IconGitBranch,
   IconAdjustments,
   IconChevronDown,
+  IconArrowsExchange,
 } from "@tabler/icons-react";
 import type { PullTarget } from "./PullDrawer";
 export type { PullTarget };
@@ -129,21 +130,69 @@ function PullMenuBtn({ onPull, pullBranchInfo }: {
   );
 }
 
+function RebaseMenuBtn({ onContinue, onAbort }: { onContinue?: () => void; onAbort?: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [hover, setHover] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [open]);
+
+  return (
+    <div ref={ref} className="pull-menu-wrap">
+      <button
+        className={`toolbar-btn pull-menu-btn${hover || open ? " toolbar-btn--hover" : ""}`}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        onClick={() => setOpen((o) => !o)}
+      >
+        <span className="toolbar-btn-icon"><IconArrowsExchange size={ICON_SIZE} /></span>
+        Rebase
+        <IconChevronDown size={10} className={`pull-menu-chevron${open ? " pull-menu-chevron--open" : ""}`} />
+      </button>
+      {open && (
+        <div className="pull-menu-dropdown">
+          <button className="pull-menu-item" onClick={() => { setOpen(false); onContinue?.(); }}>
+            <span className="pull-menu-item-label">Continue Rebase</span>
+            <span className="pull-menu-item-sublabel">git rebase --continue</span>
+          </button>
+          <button className="pull-menu-item pull-menu-item--abort" onClick={() => { setOpen(false); onAbort?.(); }}>
+            <span className="pull-menu-item-label">Abort Rebase</span>
+            <span className="pull-menu-item-sublabel">git rebase --abort</span>
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Toolbar({
   currentBranch,
   pullBranchInfo,
+  isRebasing,
   onPull,
   onPush,
   onBranch,
   onRefresh,
+  onRebaseContinue,
+  onRebaseAbort,
   onToggleTweaks,
 }: {
   currentBranch?: string;
   pullBranchInfo?: PullBranchInfo;
+  isRebasing?: boolean;
   onPull?: (req: PullRequest) => void;
   onPush?: () => void;
   onBranch?: () => void;
   onRefresh?: () => void;
+  onRebaseContinue?: () => void;
+  onRebaseAbort?: () => void;
   onToggleTweaks?: () => void;
 }) {
   return (
@@ -152,6 +201,7 @@ export default function Toolbar({
       <PullMenuBtn onPull={onPull} pullBranchInfo={pullBranchInfo} />
       <ToolbarBtn icon={<IconArrowBarUp size={ICON_SIZE} />} label="Push" onClick={onPush} />
       <ToolbarBtn icon={<IconGitBranch size={ICON_SIZE} />} label="Branch" onClick={onBranch} />
+      {isRebasing && <RebaseMenuBtn onContinue={onRebaseContinue} onAbort={onRebaseAbort} />}
       <div className="toolbar-spacer" />
       {currentBranch && (
         <div className="toolbar-branch-pill">

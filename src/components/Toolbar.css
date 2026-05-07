@@ -167,3 +167,7 @@
 .pull-menu-item--disabled:hover {
   background: transparent;
 }
+
+.pull-menu-item--abort .pull-menu-item-label {
+  color: var(--mantine-color-red-6);
+}
