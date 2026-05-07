@@ -14,13 +14,9 @@ import { useTabStore } from "../store";
 import { UNCOMMITTED } from "./CommitDetail";
 import ProgressBar from "./ProgressBar";
 import GitOutputDrawer from "./GitOutputDrawer";
+import { useContextMenu } from "../hooks/useContextMenu";
+import { AnchoredMenuTarget } from "./FileRow";
 import "./CommitList.css";
-
-interface ContextMenuState {
-  oid: string;
-  x: number;
-  y: number;
-}
 
 interface CommitInfo {
   oid: string;
@@ -51,8 +47,7 @@ function formatDate(ts: number): string {
 export default function CommitList({ tabId, listKey }: { tabId: string; listKey: number }) {
   const [commits, setCommits] = useState<CommitInfo[]>([]);
   const [hasMore, setHasMore] = useState(true);
-  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
-  const contextMenuOidRef = useRef<string | null>(null);
+  const { contextMenu, contextTargetRef, open: openContextMenu, close: closeContextMenu } = useContextMenu<string>();
   const [rebaseDrawerOpen, setRebaseDrawerOpen] = useState(false);
   const [rebaseOid, setRebaseOid] = useState<string | null>(null);
   const bumpListKey = useTabStore((s) => s.bumpListKey);
@@ -302,10 +297,8 @@ export default function CommitList({ tabId, listKey }: { tabId: string; listKey:
                 onClick={() => commit && selectCommit(tabId, commit.oid)}
                 onContextMenu={(e) => {
                   if (!commit) return;
-                  e.preventDefault();
                   selectCommit(tabId, commit.oid);
-                  contextMenuOidRef.current = commit.oid;
-                  setContextMenu({ oid: commit.oid, x: e.clientX, y: e.clientY });
+                  openContextMenu(e, commit.oid);
                 }}
               >
                 {commit ? (
@@ -330,30 +323,20 @@ export default function CommitList({ tabId, listKey }: { tabId: string; listKey:
         </div>
         <Menu
           opened={!!contextMenu}
-          onClose={() => setContextMenu(null)}
+          onClose={closeContextMenu}
           position="right-start"
         >
-          <Menu.Target>
-            <div
-              style={{
-                position: "fixed",
-                left: contextMenu?.x ?? 0,
-                top: contextMenu?.y ?? 0,
-                width: 0,
-                height: 0,
-              }}
-            />
-          </Menu.Target>
+          <AnchoredMenuTarget contextMenu={contextMenu} />
           <Menu.Dropdown>
-            <Menu.Item leftSection={<IconCopy size={14} />} onClick={() => contextMenuOidRef.current && writeText(contextMenuOidRef.current)}>
+            <Menu.Item leftSection={<IconCopy size={14} />} onClick={() => contextTargetRef.current && writeText(contextTargetRef.current.data)}>
               Copy SHA-1
             </Menu.Item>
             <Menu.Divider />
             <Menu.Item
               leftSection={<IconRefresh size={14} />}
               onClick={() => {
-                if (contextMenuOidRef.current) {
-                  setRebaseOid(contextMenuOidRef.current);
+                if (contextTargetRef.current) {
+                  setRebaseOid(contextTargetRef.current.data);
                   setRebaseDrawerOpen(true);
                 }
               }}

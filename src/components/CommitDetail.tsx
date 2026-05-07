@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useQuery } from "@tanstack/react-query";
 import Markdown from "react-markdown";
@@ -6,7 +6,9 @@ import { Loader, Menu } from "@mantine/core";
 import { IconCopy, IconGitCompare } from "@tabler/icons-react";
 import { useTabStore } from "../store";
 import { useResize } from "../hooks/useResize";
+import { useContextMenu } from "../hooks/useContextMenu";
 import DetailLayout from "./DetailLayout";
+import { FileRow, AnchoredMenuTarget } from "./FileRow";
 import DiffViewer from "./DiffViewer";
 import WorkingTreeDetail from "./WorkingTreeDetail";
 import "./CommitDetail.css";
@@ -61,15 +63,11 @@ function CommitDetailInner({
 }) {
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
 
-  interface ContextMenuState { x: number; y: number; file: ChangedFile }
-  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
-  const contextTargetRef = useRef<ContextMenuState | null>(null);
+  const { contextMenu, contextTargetRef, open: openMenu, close: closeMenu } = useContextMenu<ChangedFile>();
 
   function openContextMenu(e: React.MouseEvent, file: ChangedFile) {
-    e.preventDefault();
-    const state = { x: e.clientX, y: e.clientY, file };
-    contextTargetRef.current = state;
-    setContextMenu(state);
+    setSelectedFile(file.path);
+    openMenu(e, file);
   }
 
   const metaPanelHeight = useTabStore((s) => s.metaPanelHeight);
@@ -124,26 +122,21 @@ function CommitDetailInner({
     return <div className="detail-empty">Failed to load commit.</div>;
   }
 
+  const ctx = contextTargetRef.current?.data;
+
   return (
     <DetailLayout
       overlay={
         <Menu
           opened={!!contextMenu}
-          onClose={() => setContextMenu(null)}
+          onClose={closeMenu}
           position="right-start"
         >
-          <Menu.Target>
-            <div style={{
-              position: "fixed",
-              left: contextMenu?.x ?? 0,
-              top: contextMenu?.y ?? 0,
-              width: 0, height: 0,
-            }} />
-          </Menu.Target>
+          <AnchoredMenuTarget contextMenu={contextMenu} />
           <Menu.Dropdown>
             <Menu.Item
               leftSection={<IconCopy size={14} />}
-              onClick={() => navigator.clipboard.writeText(contextTargetRef.current!.file.path)}
+              onClick={() => navigator.clipboard.writeText(ctx!.path)}
             >
               Copy Path
             </Menu.Item>
@@ -152,7 +145,7 @@ function CommitDetailInner({
               onClick={() => invoke("open_diff_external", {
                 tabId,
                 oid: detail.oid,
-                filePath: contextTargetRef.current!.file.path,
+                filePath: ctx!.path,
               })}
             >
               Diff in External App
@@ -183,22 +176,14 @@ function CommitDetailInner({
             }}
           >
             {detail.files.map((file) => (
-              <div
+              <FileRow
                 key={file.path}
-                className={`file-row${selectedFile === file.path ? " file-row--selected" : ""}`}
-                onClick={(e) => {
-                  setSelectedFile(file.path);
-                  (e.currentTarget.closest(".detail-files") as HTMLElement | null)?.focus();
-                }}
+                path={file.path}
+                status={file.status}
+                isSelected={selectedFile === file.path}
+                onClick={() => setSelectedFile(file.path)}
                 onContextMenu={(e) => openContextMenu(e, file)}
-              >
-                <span className={`file-status file-status--${file.status.toLowerCase()}`}>
-                  {file.status}
-                </span>
-                <span className="file-path" title={file.path}>
-                  <FilePathDisplay path={file.path} />
-                </span>
-              </div>
+              />
             ))}
           </div>
 
@@ -237,17 +222,5 @@ function CommitDetailInner({
         )
       }
     />
-  );
-}
-
-function FilePathDisplay({ path }: { path: string }) {
-  const parts = path.split("/");
-  const name = parts.pop()!;
-  const dir = parts.join("/");
-  return (
-    <>
-      {dir && <span className="file-path-dir">{dir}/</span>}
-      <span className="file-path-name">{name}</span>
-    </>
   );
 }

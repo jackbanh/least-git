@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useContextMenu } from "../hooks/useContextMenu";
+import { AnchoredMenuTarget } from "./FileRow";
 import { invoke } from "@tauri-apps/api/core";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { warn as logWarn, info as logInfo } from "@tauri-apps/plugin-log";
@@ -48,16 +50,7 @@ export default function BranchSwitcher({
   const [checkoutBranch, setCheckoutBranch] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  interface ContextMenuState { x: number; y: number; branch: BranchInfo }
-  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
-  const contextTargetRef = useRef<ContextMenuState | null>(null);
-
-  function openContextMenu(e: React.MouseEvent, branch: BranchInfo) {
-    e.preventDefault();
-    const state = { x: e.clientX, y: e.clientY, branch };
-    contextTargetRef.current = state;
-    setContextMenu(state);
-  }
+  const { contextMenu, contextTargetRef, open: openContextMenu, close: closeContextMenu } = useContextMenu<BranchInfo>();
 
   const bumpListKey = useTabStore((s) => s.bumpListKey);
   const queryClient = useQueryClient();
@@ -222,31 +215,21 @@ export default function BranchSwitcher({
 
       <Menu
         opened={!!contextMenu}
-        onClose={() => setContextMenu(null)}
+        onClose={closeContextMenu}
         position="right-start"
       >
-        <Menu.Target>
-          <div
-            style={{
-              position: "fixed",
-              left: contextMenu?.x ?? 0,
-              top: contextMenu?.y ?? 0,
-              width: 0,
-              height: 0,
-            }}
-          />
-        </Menu.Target>
+        <AnchoredMenuTarget contextMenu={contextMenu} />
         <Menu.Dropdown>
           <Menu.Item
             leftSection={<IconGitBranch size={14} />}
-            onClick={() => handleCheckout(contextTargetRef.current!.branch.name)}
-            disabled={contextTargetRef.current?.branch.is_head}
+            onClick={() => handleCheckout(contextTargetRef.current!.data.name)}
+            disabled={contextTargetRef.current?.data.is_head}
           >
-            Checkout {contextTargetRef.current?.branch.name}
+            Checkout {contextTargetRef.current?.data.name}
           </Menu.Item>
           <Menu.Item
             leftSection={<IconCopy size={14} />}
-            onClick={() => navigator.clipboard.writeText(contextTargetRef.current!.branch.name)}
+            onClick={() => navigator.clipboard.writeText(contextTargetRef.current!.data.name)}
           >
             Copy Branch Name
           </Menu.Item>

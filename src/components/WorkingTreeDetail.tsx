@@ -13,7 +13,9 @@ import {
 } from "@tabler/icons-react";
 import { useTabStore } from "../store";
 import { useResize } from "../hooks/useResize";
+import { useContextMenu } from "../hooks/useContextMenu";
 import DetailLayout from "./DetailLayout";
+import { FileRow, AnchoredMenuTarget } from "./FileRow";
 import InteractiveDiffViewer from "./InteractiveDiffViewer";
 import "./CommitDetail.css";
 import "./WorkingTreeDetail.css";
@@ -36,6 +38,8 @@ interface SelectedFile {
   is_untracked: boolean;
 }
 
+interface ContextData { entry: StatusEntry; staged: boolean }
+
 export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId: string; listKey: number; statusKey: number }) {
   const [status, setStatus] = useState<WorkingTreeStatus | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
@@ -49,18 +53,14 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
   const startMetaResize = useResize(metaPanelHeight, setMetaPanelHeight, "vertical", 80, 320, true);
 
   // ── Context menu ────────────────────────────────────────────────────────
-  interface ContextMenuState { x: number; y: number; entry: StatusEntry; staged: boolean }
-  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const { contextMenu, contextTargetRef, open: openMenu, close: closeMenu } = useContextMenu<ContextData>();
   // Ref copy so menu-item click handlers always see the latest target even
   // after the menu's onClose fires and nulls contextMenu.
-  const contextTargetRef = useRef<ContextMenuState | null>(null);
   const [conflictBranches, setConflictBranches] = useState<{ local: string; incoming: string } | null>(null);
 
   function openContextMenu(e: React.MouseEvent, entry: StatusEntry, staged: boolean) {
-    e.preventDefault();
-    const state = { x: e.clientX, y: e.clientY, entry, staged };
-    contextTargetRef.current = state;
-    setContextMenu(state);
+    selectFile(entry, staged);
+    openMenu(e, { entry, staged });
     if (entry.is_conflict) {
       setConflictBranches(null);
       invoke<{ local: string; incoming: string }>("get_conflict_branch_info", { tabId })
@@ -198,6 +198,8 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
     (f) => f.path === selected?.path && f.staged === selected?.staged
   );
 
+  const ctx = contextTargetRef.current?.data;
+
   return (
     <DetailLayout
       left={
@@ -238,8 +240,9 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
                 {status.staged.map((f) => (
                   <FileRow
                     key={`staged:${f.path}`}
-                    file={f}
-                    isSelected={selected?.path === f.path && selected.staged}
+                    path={f.path}
+                    status={f.status}
+                    isSelected={!!(selected?.path === f.path && selected.staged)}
                     onClick={() => selectFile(f, true)}
                     onContextMenu={(e) => openContextMenu(e, f, true)}
                   />
@@ -258,8 +261,9 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
                 {status.unstaged.map((f) => (
                   <FileRow
                     key={`unstaged:${f.path}`}
-                    file={f}
-                    isSelected={selected?.path === f.path && !selected.staged}
+                    path={f.path}
+                    status={f.status}
+                    isSelected={!!(selected?.path === f.path && !selected.staged)}
                     onClick={() => selectFile(f, false)}
                     onContextMenu={(e) => openContextMenu(e, f, false)}
                   />
@@ -267,8 +271,9 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
                 {(untracked ?? []).map((f) => (
                   <FileRow
                     key={`untracked:${f.path}`}
-                    file={f}
-                    isSelected={selected?.path === f.path && !selected.staged}
+                    path={f.path}
+                    status={f.status}
+                    isSelected={!!(selected?.path === f.path && !selected.staged)}
                     onClick={() => selectFile(f, false)}
                     onContextMenu={(e) => openContextMenu(e, f, false)}
                   />
@@ -299,26 +304,16 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
       overlay={
         <Menu
           opened={!!contextMenu}
-          onClose={() => setContextMenu(null)}
+          onClose={closeMenu}
           position="right-start"
         >
-          <Menu.Target>
-            <div
-              style={{
-                position: "fixed",
-                left: contextMenu?.x ?? 0,
-                top: contextMenu?.y ?? 0,
-                width: 0,
-                height: 0,
-              }}
-            />
-          </Menu.Target>
+          <AnchoredMenuTarget contextMenu={contextMenu} />
           <Menu.Dropdown>
-            {contextTargetRef.current?.staged ? (
+            {ctx?.staged ? (
               // ── Staged file ──────────────────────────────────────────────
               <Menu.Item
                 leftSection={<IconArrowBarToDown size={14} />}
-                onClick={() => runFileAction("unstage_file", contextTargetRef.current!.entry.path)}
+                onClick={() => runFileAction("unstage_file", ctx.entry.path)}
               >
                 Unstage
               </Menu.Item>
@@ -327,19 +322,19 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
               <>
                 <Menu.Item
                   leftSection={<IconArrowBarToUp size={14} />}
-                  onClick={() => runFileAction("stage_file", contextTargetRef.current!.entry.path)}
+                  onClick={() => runFileAction("stage_file", ctx!.entry.path)}
                 >
-                  {contextTargetRef.current?.entry.status === "?" ? "Add File" : "Stage"}
+                  {ctx?.entry.status === "?" ? "Add File" : "Stage"}
                 </Menu.Item>
-                {contextTargetRef.current?.entry.status === "?" ? (
+                {ctx?.entry.status === "?" ? (
                   <Menu.Item
                     leftSection={<IconTrash size={14} />}
                     color="red"
                     onClick={() =>
                       runFileAction(
                         "delete_untracked",
-                        contextTargetRef.current!.entry.path,
-                        `Delete "${contextTargetRef.current!.entry.path}"? This cannot be undone.`,
+                        ctx.entry.path,
+                        `Delete "${ctx.entry.path}"? This cannot be undone.`,
                       )
                     }
                   >
@@ -352,8 +347,8 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
                     onClick={() =>
                       runFileAction(
                         "discard_changes",
-                        contextTargetRef.current!.entry.path,
-                        `Discard changes to "${contextTargetRef.current!.entry.path}"? This cannot be undone.`,
+                        ctx!.entry.path,
+                        `Discard changes to "${ctx!.entry.path}"? This cannot be undone.`,
                       )
                     }
                   >
@@ -362,45 +357,45 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
                 )}
               </>
             )}
-            {contextTargetRef.current?.entry.is_conflict && (
+            {ctx?.entry.is_conflict && (
               <Menu.Sub>
                 <Menu.Sub.Target>
-                  <Menu.Item leftSection={<IconGitMerge size={14} />}>
+                  <Menu.Sub.Item leftSection={<IconGitMerge size={14} />}>
                     Resolve Conflicts
-                  </Menu.Item>
+                  </Menu.Sub.Item>
                 </Menu.Sub.Target>
                 <Menu.Sub.Dropdown>
-                  <Menu.Sub.Item
+                  <Menu.Item
                     onClick={() => invoke("open_mergetool_external", {
                       tabId,
-                      filePath: contextTargetRef.current!.entry.path,
+                      filePath: ctx.entry.path,
                     })}
                   >
                     Launch External Merge Tool
-                  </Menu.Sub.Item>
-                  <Menu.Sub.Item
+                  </Menu.Item>
+                  <Menu.Item
                     onClick={() => {
-                      invoke("resolve_conflict_local", { tabId, filePath: contextTargetRef.current!.entry.path })
+                      invoke("resolve_conflict_local", { tabId, filePath: ctx.entry.path })
                         .then(() => refreshStatus());
                     }}
                   >
                     Resolve Using Local ({conflictBranches?.local ?? "…"})
-                  </Menu.Sub.Item>
-                  <Menu.Sub.Item
+                  </Menu.Item>
+                  <Menu.Item
                     onClick={() => {
-                      invoke("resolve_conflict_incoming", { tabId, filePath: contextTargetRef.current!.entry.path })
+                      invoke("resolve_conflict_incoming", { tabId, filePath: ctx.entry.path })
                         .then(() => refreshStatus());
                     }}
                   >
                     Resolve Using Incoming ({conflictBranches?.incoming ?? "…"})
-                  </Menu.Sub.Item>
+                  </Menu.Item>
                 </Menu.Sub.Dropdown>
               </Menu.Sub>
             )}
             <Menu.Divider />
             <Menu.Item
               leftSection={<IconCopy size={14} />}
-              onClick={() => navigator.clipboard.writeText(contextTargetRef.current!.entry.path)}
+              onClick={() => navigator.clipboard.writeText(ctx!.entry.path)}
             >
               Copy Path
             </Menu.Item>
@@ -408,8 +403,8 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
               leftSection={<IconGitCompare size={14} />}
               onClick={() => invoke("open_working_tree_diff_external", {
                 tabId,
-                filePath: contextTargetRef.current!.entry.path,
-                staged: contextTargetRef.current!.staged,
+                filePath: ctx!.entry.path,
+                staged: ctx!.staged,
               })}
             >
               Diff in External App
@@ -434,35 +429,5 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
         )
       }
     />
-  );
-}
-
-function FileRow({
-  file,
-  isSelected,
-  onClick,
-  onContextMenu,
-}: {
-  file: StatusEntry;
-  isSelected: boolean | undefined;
-  onClick: () => void;
-  onContextMenu: (e: React.MouseEvent) => void;
-}) {
-  return (
-    <div
-      className={`file-row${isSelected ? " file-row--selected" : ""}`}
-      onClick={(e) => {
-        (e.currentTarget.closest(".detail-files") as HTMLElement | null)?.focus();
-        onClick();
-      }}
-      onContextMenu={onContextMenu}
-    >
-      <span className={`file-status file-status--${file.status.toLowerCase()}`}>
-        {file.status}
-      </span>
-      <span className="file-path" title={file.path}>
-        {file.path}
-      </span>
-    </div>
   );
 }
