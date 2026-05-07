@@ -30,6 +30,12 @@
   background: var(--lg-hover-bg);
 }
 
+.toolbar-btn--disabled,
+.toolbar-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 .toolbar-btn-icon {
   color: var(--lg-ink-muted);
   display: flex;

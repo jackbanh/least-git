@@ -130,7 +130,7 @@ function PullMenuBtn({ onPull, pullBranchInfo }: {
   );
 }
 
-function RebaseMenuBtn({ onContinue, onAbort }: { onContinue?: () => void; onAbort?: () => void }) {
+function RebaseMenuBtn({ disabled, onContinue, onAbort }: { disabled?: boolean; onContinue?: () => void; onAbort?: () => void }) {
   const [open, setOpen] = useState(false);
   const [hover, setHover] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -147,10 +147,11 @@ function RebaseMenuBtn({ onContinue, onAbort }: { onContinue?: () => void; onAbo
   return (
     <div ref={ref} className="pull-menu-wrap">
       <button
-        className={`toolbar-btn pull-menu-btn${hover || open ? " toolbar-btn--hover" : ""}`}
+        className={`toolbar-btn pull-menu-btn${hover || open ? " toolbar-btn--hover" : ""}${disabled ? " toolbar-btn--disabled" : ""}`}
         onMouseEnter={() => setHover(true)}
         onMouseLeave={() => setHover(false)}
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => !disabled && setOpen((o) => !o)}
+        disabled={disabled}
       >
         <span className="toolbar-btn-icon"><IconArrowsExchange size={ICON_SIZE} /></span>
         Rebase
@@ -201,7 +202,7 @@ export default function Toolbar({
       <PullMenuBtn onPull={onPull} pullBranchInfo={pullBranchInfo} />
       <ToolbarBtn icon={<IconArrowBarUp size={ICON_SIZE} />} label="Push" onClick={onPush} />
       <ToolbarBtn icon={<IconGitBranch size={ICON_SIZE} />} label="Branch" onClick={onBranch} />
-      {isRebasing && <RebaseMenuBtn onContinue={onRebaseContinue} onAbort={onRebaseAbort} />}
+      <RebaseMenuBtn disabled={!isRebasing} onContinue={onRebaseContinue} onAbort={onRebaseAbort} />
       <div className="toolbar-spacer" />
       {currentBranch && (
         <div className="toolbar-branch-pill">
