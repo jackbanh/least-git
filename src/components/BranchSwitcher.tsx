@@ -200,7 +200,7 @@ export default function BranchSwitcher({
               isChecking={checkoutBranch === branch.name}
               onSelect={() => setSelectedName(branch.name)}
               onDoubleClick={() => handleCheckout(branch.name)}
-              onContextMenu={(e) => openContextMenu(e, branch)}
+              onContextMenu={(e) => { setSelectedName(branch.name); openContextMenu(e, branch); }}
             />
           ))}
           {filtered.length === 0 && filter && (
