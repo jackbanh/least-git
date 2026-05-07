@@ -2,12 +2,19 @@ use crate::{git_async, get_repo_path, AppState, StatusEntry, WorkingTreeStatus};
 use log::{info, warn};
 use tauri::State;
 
+/// The 6 XY pairs that represent active merge conflicts requiring user resolution.
+/// `DD` (both deleted) is excluded — git auto-resolves it and there's nothing to merge.
+fn is_conflict_xy(x: char, y: char) -> bool {
+    matches!((x, y), ('U','U') | ('A','A') | ('A','U') | ('U','A') | ('D','U') | ('U','D'))
+}
+
 /// Parse `git status --porcelain=v1 -z` output into (staged, unstaged) lists.
 ///
 /// With `-z` the stream is NUL-terminated: `"XY path\0"` for ordinary entries and
 /// `"XY new\0old\0"` for renames (only possible without `--no-renames`, kept for
 /// safety). `X` = index status, `Y` = worktree status; `' '` means clean, `'?'`
 /// means untracked. Untracked entries (`??`) go into `unstaged`.
+/// Conflict entries appear only in `unstaged` with `is_conflict: true`.
 pub(crate) fn parse_porcelain_status(raw: &str) -> (Vec<StatusEntry>, Vec<StatusEntry>) {
     let mut staged: Vec<StatusEntry> = Vec::new();
     let mut unstaged: Vec<StatusEntry> = Vec::new();
@@ -31,17 +38,22 @@ pub(crate) fn parse_porcelain_status(raw: &str) -> (Vec<StatusEntry>, Vec<Status
 
         if x == '?' && y == '?' {
             // Untracked file
-            unstaged.push(StatusEntry { path, old_path: None, status: "?".to_string() });
+            unstaged.push(StatusEntry { path, old_path: None, status: "?".to_string(), is_conflict: false });
+        } else if is_conflict_xy(x, y) {
+            // Merge conflict — appears only in unstaged so it shows once in the UI.
+            // Status "U" is used for all conflict types as a sentinel the UI can style.
+            unstaged.push(StatusEntry { path, old_path: None, status: "U".to_string(), is_conflict: true });
         } else {
             if x != ' ' && x != '?' {
                 staged.push(StatusEntry {
                     path: path.clone(),
                     old_path: old_path.clone(),
                     status: x.to_string(),
+                    is_conflict: false,
                 });
             }
             if y != ' ' && y != '?' {
-                unstaged.push(StatusEntry { path, old_path: None, status: y.to_string() });
+                unstaged.push(StatusEntry { path, old_path: None, status: y.to_string(), is_conflict: false });
             }
         }
     }
@@ -493,6 +505,37 @@ mod tests {
         let raw = "?? untracked.rs\0";
         let (staged, _unstaged) = parse_porcelain_status(raw);
         assert!(staged.is_empty());
+    }
+
+    #[test]
+    fn porcelain_conflict_uu() {
+        // "UU path\0" — both sides modified, active conflict
+        let raw = "UU src/conflict.rs\0";
+        let (staged, unstaged) = parse_porcelain_status(raw);
+        assert!(staged.is_empty(), "conflict must not appear in staged");
+        assert_eq!(unstaged.len(), 1);
+        assert_eq!(unstaged[0].status, "U");
+        assert!(unstaged[0].is_conflict);
+    }
+
+    #[test]
+    fn porcelain_conflict_aa() {
+        // "AA path\0" — both sides added different content
+        let raw = "AA src/new.rs\0";
+        let (staged, unstaged) = parse_porcelain_status(raw);
+        assert!(staged.is_empty(), "conflict must not appear in staged");
+        assert_eq!(unstaged.len(), 1);
+        assert!(unstaged[0].is_conflict);
+    }
+
+    #[test]
+    fn porcelain_conflict_du() {
+        // "DU path\0" — deleted by us, modified by them
+        let raw = "DU src/lib.rs\0";
+        let (staged, unstaged) = parse_porcelain_status(raw);
+        assert!(staged.is_empty());
+        assert_eq!(unstaged.len(), 1);
+        assert!(unstaged[0].is_conflict);
     }
 
     #[test]

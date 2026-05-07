@@ -260,17 +260,18 @@ index e5f6a7b..f6a7b8c 100644
 // ---------------------------------------------------------------------------
 
 export const MOCK_WORKING_TREE: {
-  staged: { path: string; status: string; is_untracked: boolean }[];
-  unstaged: { path: string; status: string; is_untracked: boolean }[];
+  staged: { path: string; old_path: string | null; status: string; is_conflict: boolean }[];
+  unstaged: { path: string; old_path: string | null; status: string; is_conflict: boolean }[];
 } = {
   staged: [
-    { path: "src/components/InteractiveDiffViewer.tsx", status: "A", is_untracked: false },
-    { path: "src/components/InteractiveDiffViewer.css",  status: "A", is_untracked: false },
-    { path: "src-tauri/src/diff.rs",                     status: "A", is_untracked: false },
+    { path: "src/components/InteractiveDiffViewer.tsx", old_path: null, status: "A", is_conflict: false },
+    { path: "src/components/InteractiveDiffViewer.css",  old_path: null, status: "A", is_conflict: false },
+    { path: "src-tauri/src/diff.rs",                     old_path: null, status: "A", is_conflict: false },
   ],
   unstaged: [
-    { path: "src/components/WorkingTreeDetail.tsx",       status: "M", is_untracked: false },
-    { path: "src-tauri/src/lib.rs",                       status: "M", is_untracked: false },
+    { path: "src/components/WorkingTreeDetail.tsx",       old_path: null, status: "M", is_conflict: false },
+    { path: "src-tauri/src/lib.rs",                       old_path: null, status: "M", is_conflict: false },
+    { path: "src/components/ConflictedFile.tsx",          old_path: null, status: "U", is_conflict: true },
   ],
 };
 

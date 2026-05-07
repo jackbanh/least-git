@@ -7,6 +7,7 @@ import {
   IconArrowBarToUp,
   IconCopy,
   IconGitCompare,
+  IconGitMerge,
   IconRotate2,
   IconTrash,
 } from "@tabler/icons-react";
@@ -21,6 +22,7 @@ interface StatusEntry {
   path: string;
   old_path: string | null;
   status: string;
+  is_conflict: boolean;
 }
 
 interface WorkingTreeStatus {
@@ -111,7 +113,7 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
         if (refreshGenRef.current !== gen) return;
         const ms = Math.round(performance.now() - t0);
         logInfo(`WorkingTreeDetail[${tabId}] untracked done count=${paths.length} ms=${ms}`);
-        setUntracked(paths.map((path) => ({ path, old_path: null, status: "?" })));
+        setUntracked(paths.map((path) => ({ path, old_path: null, status: "?", is_conflict: false })));
       })
       .catch(() => {
         if (refreshGenRef.current !== gen) return;
@@ -352,6 +354,17 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
                   </Menu.Item>
                 )}
               </>
+            )}
+            {contextTargetRef.current?.entry.is_conflict && (
+              <Menu.Item
+                leftSection={<IconGitMerge size={14} />}
+                onClick={() => invoke("open_mergetool_external", {
+                  tabId,
+                  filePath: contextTargetRef.current!.entry.path,
+                })}
+              >
+                Resolve Conflicts
+              </Menu.Item>
             )}
             <Menu.Divider />
             <Menu.Item

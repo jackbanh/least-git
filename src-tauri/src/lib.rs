@@ -97,7 +97,9 @@ pub struct CommitDetail {
 pub struct StatusEntry {
     pub path: String,
     pub old_path: Option<String>,
-    pub status: String, // "M", "A", "D", "R", "?"
+    pub status: String, // "M", "A", "D", "R", "?", "U"
+    /// True for the 6 git merge-conflict XY pairs that need active resolution.
+    pub is_conflict: bool,
 }
 
 #[derive(Serialize, Clone)]
@@ -562,6 +564,7 @@ pub fn run() {
             working_tree::apply_patch,
             external::open_diff_external,
             external::open_working_tree_diff_external,
+            external::open_mergetool_external,
             config::get_git_config_globals,
             config::set_git_config_global,
             pull_with_rebase,

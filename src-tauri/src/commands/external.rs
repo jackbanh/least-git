@@ -32,6 +32,28 @@ pub async fn open_diff_external(
     Ok(())
 }
 
+/// Open a conflicted file in Beyond Compare's three-way merge mode.
+/// Runs `git mergetool --no-prompt --tool=bc -- file_path` detached.
+#[tauri::command]
+pub async fn open_mergetool_external(
+    tab_id: String,
+    file_path: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let path = get_repo_path(&tab_id, &state)?;
+    let path_str = path.to_string_lossy().to_string();
+
+    let args = ["-C", &path_str, "mergetool", "--no-prompt", "--tool=bc", "--", &file_path];
+    info!("open_mergetool_external: git {}", args.join(" "));
+
+    std::process::Command::new("git")
+        .args(args)
+        .spawn()
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
 /// Open the current working-tree diff for a file in Beyond Compare.
 /// `staged = true`  → compare HEAD vs index  (`git difftool --cached`)
 /// `staged = false` → compare index vs working tree (`git difftool`)
