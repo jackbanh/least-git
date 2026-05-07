@@ -1,5 +1,8 @@
 use crate::{git_async, get_repo_path, AppState, StatusEntry, WorkingTreeStatus};
+use gix::bstr::ByteSlice;
 use log::{info, warn};
+use serde::Serialize;
+use std::path::Path;
 use tauri::State;
 
 /// The 6 XY pairs that represent active merge conflicts requiring user resolution.
@@ -58,6 +61,134 @@ pub(crate) fn parse_porcelain_status(raw: &str) -> (Vec<StatusEntry>, Vec<Status
         }
     }
     (staged, unstaged)
+}
+
+// ── Conflict resolution helpers ───────────────────────────────────────────────
+
+#[derive(Serialize)]
+pub struct ConflictBranchInfo {
+    pub local: String,
+    pub incoming: String,
+}
+
+fn read_head_branch(git_dir: &Path) -> String {
+    std::fs::read_to_string(git_dir.join("HEAD"))
+        .ok()
+        .and_then(|s| s.trim().strip_prefix("ref: refs/heads/").map(str::to_string))
+        .unwrap_or_else(|| "HEAD".to_string())
+}
+
+fn resolve_sha_to_local_branch(repo_path: &Path, sha: &str) -> Option<String> {
+    let repo = gix::open(repo_path).ok()?;
+    let sha = sha.trim();
+    repo.references().ok()?
+        .local_branches()
+        .ok()?
+        .filter_map(Result::ok)
+        .find_map(|mut r| {
+            let id = r.peel_to_id_in_place().ok()?.to_string();
+            (id.starts_with(sha) || sha.starts_with(&id[..7.min(id.len())]))
+                .then(|| r.name().shorten().to_str_lossy().into_owned())
+        })
+}
+
+fn read_merge_incoming(git_dir: &Path) -> String {
+    std::fs::read_to_string(git_dir.join("MERGE_MSG"))
+        .ok()
+        .and_then(|msg| {
+            let line = msg.lines().next()?;
+            // "Merge branch 'foo'" / "Merge branch 'foo' into 'bar'"
+            if let Some(rest) = line.strip_prefix("Merge branch '") {
+                return rest.split('\'').next().map(str::to_string);
+            }
+            // "Merge remote-tracking branch 'origin/foo'"
+            if let Some(rest) = line.strip_prefix("Merge remote-tracking branch '") {
+                return rest.split('\'').next().map(str::to_string);
+            }
+            None
+        })
+        .unwrap_or_else(|| "incoming".to_string())
+}
+
+fn read_rebase_branches(repo_path: &Path, git_dir: &Path) -> (String, String) {
+    let local = std::fs::read_to_string(git_dir.join("rebase-merge/head-name"))
+        .ok()
+        .and_then(|s| s.trim().strip_prefix("refs/heads/").map(str::to_string))
+        .unwrap_or_else(|| "local".to_string());
+    let incoming = std::fs::read_to_string(git_dir.join("rebase-merge/onto"))
+        .ok()
+        .and_then(|sha| resolve_sha_to_local_branch(repo_path, sha.trim()))
+        .unwrap_or_else(|| "incoming".to_string());
+    (local, incoming)
+}
+
+#[tauri::command]
+pub async fn get_conflict_branch_info(
+    tab_id: String,
+    state: State<'_, AppState>,
+) -> Result<ConflictBranchInfo, String> {
+    let path = get_repo_path(&tab_id, &state)?;
+    let git_dir = path.join(".git");
+
+    let (local, incoming) = if git_dir.join("rebase-merge").exists() {
+        read_rebase_branches(&path, &git_dir)
+    } else {
+        (read_head_branch(&git_dir), read_merge_incoming(&git_dir))
+    };
+
+    Ok(ConflictBranchInfo { local, incoming })
+}
+
+/// Run `git checkout <flag> -- <file>` then `git add -- <file>` (mark resolved).
+fn checkout_and_add(path: &Path, flag: &str, file_path: &str) -> Result<(), String> {
+    let p = path.to_string_lossy();
+    let ok = std::process::Command::new("git")
+        .args(["-C", &p, "checkout", flag, "--", file_path])
+        .status()
+        .map_err(|e| e.to_string())?
+        .success();
+    if !ok { return Err(format!("git checkout {flag} -- {file_path} failed")); }
+    let ok = std::process::Command::new("git")
+        .args(["-C", &p, "add", "--", file_path])
+        .status()
+        .map_err(|e| e.to_string())?
+        .success();
+    if !ok { return Err(format!("git add -- {file_path} failed")); }
+    Ok(())
+}
+
+/// Resolve a conflict by keeping the local branch's version.
+/// During a rebase --ours/--theirs are inverted vs a merge, so we detect
+/// the operation type and pick the correct flag automatically.
+#[tauri::command]
+pub async fn resolve_conflict_local(
+    tab_id: String,
+    file_path: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let path = get_repo_path(&tab_id, &state)?;
+    let git_dir = path.join(".git");
+    // Rebase: --theirs = commits being replayed (local branch)
+    // Merge:  --ours   = HEAD (local branch)
+    let flag = if git_dir.join("rebase-merge").exists() { "--theirs" } else { "--ours" };
+    info!("resolve_conflict_local tab={tab_id} file={file_path} flag={flag}");
+    checkout_and_add(&path, flag, &file_path)
+}
+
+/// Resolve a conflict by keeping the incoming branch's version.
+#[tauri::command]
+pub async fn resolve_conflict_incoming(
+    tab_id: String,
+    file_path: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let path = get_repo_path(&tab_id, &state)?;
+    let git_dir = path.join(".git");
+    // Rebase: --ours   = target (incoming to local branch)
+    // Merge:  --theirs = MERGE_HEAD (incoming branch)
+    let flag = if git_dir.join("rebase-merge").exists() { "--ours" } else { "--theirs" };
+    info!("resolve_conflict_incoming tab={tab_id} file={file_path} flag={flag}");
+    checkout_and_add(&path, flag, &file_path)
 }
 
 #[tauri::command]

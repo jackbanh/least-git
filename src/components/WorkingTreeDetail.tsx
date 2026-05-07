@@ -54,12 +54,19 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
   // Ref copy so menu-item click handlers always see the latest target even
   // after the menu's onClose fires and nulls contextMenu.
   const contextTargetRef = useRef<ContextMenuState | null>(null);
+  const [conflictBranches, setConflictBranches] = useState<{ local: string; incoming: string } | null>(null);
 
   function openContextMenu(e: React.MouseEvent, entry: StatusEntry, staged: boolean) {
     e.preventDefault();
     const state = { x: e.clientX, y: e.clientY, entry, staged };
     contextTargetRef.current = state;
     setContextMenu(state);
+    if (entry.is_conflict) {
+      setConflictBranches(null);
+      invoke<{ local: string; incoming: string }>("get_conflict_branch_info", { tabId })
+        .then(setConflictBranches)
+        .catch(() => setConflictBranches({ local: "local", incoming: "incoming" }));
+    }
   }
 
   async function runFileAction(
@@ -356,15 +363,39 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
               </>
             )}
             {contextTargetRef.current?.entry.is_conflict && (
-              <Menu.Item
-                leftSection={<IconGitMerge size={14} />}
-                onClick={() => invoke("open_mergetool_external", {
-                  tabId,
-                  filePath: contextTargetRef.current!.entry.path,
-                })}
-              >
-                Resolve Conflicts
-              </Menu.Item>
+              <Menu.Sub>
+                <Menu.Sub.Target>
+                  <Menu.Item leftSection={<IconGitMerge size={14} />}>
+                    Resolve Conflicts
+                  </Menu.Item>
+                </Menu.Sub.Target>
+                <Menu.Sub.Dropdown>
+                  <Menu.Sub.Item
+                    onClick={() => invoke("open_mergetool_external", {
+                      tabId,
+                      filePath: contextTargetRef.current!.entry.path,
+                    })}
+                  >
+                    Launch External Merge Tool
+                  </Menu.Sub.Item>
+                  <Menu.Sub.Item
+                    onClick={() => {
+                      invoke("resolve_conflict_local", { tabId, filePath: contextTargetRef.current!.entry.path })
+                        .then(() => refreshStatus());
+                    }}
+                  >
+                    Resolve Using Local ({conflictBranches?.local ?? "…"})
+                  </Menu.Sub.Item>
+                  <Menu.Sub.Item
+                    onClick={() => {
+                      invoke("resolve_conflict_incoming", { tabId, filePath: contextTargetRef.current!.entry.path })
+                        .then(() => refreshStatus());
+                    }}
+                  >
+                    Resolve Using Incoming ({conflictBranches?.incoming ?? "…"})
+                  </Menu.Sub.Item>
+                </Menu.Sub.Dropdown>
+              </Menu.Sub>
             )}
             <Menu.Divider />
             <Menu.Item
