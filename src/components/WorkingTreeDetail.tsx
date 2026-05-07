@@ -197,6 +197,12 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
             className="detail-files"
             tabIndex={0}
             onKeyDown={(e) => {
+              if (e.key === "d" && (e.metaKey || e.ctrlKey)) {
+                if (!selected) return;
+                e.preventDefault();
+                invoke("open_working_tree_diff_external", { tabId, filePath: selected.path, staged: selected.staged });
+                return;
+              }
               if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
               if (allFiles.length === 0) return;
               e.preventDefault();

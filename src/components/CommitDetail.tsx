@@ -166,6 +166,12 @@ function CommitDetailInner({
             className="detail-files"
             tabIndex={0}
             onKeyDown={(e) => {
+              if (e.key === "d" && (e.metaKey || e.ctrlKey)) {
+                if (!selectedFile) return;
+                e.preventDefault();
+                invoke("open_diff_external", { tabId, oid: detail.oid, filePath: selectedFile });
+                return;
+              }
               if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
               e.preventDefault();
               const idx = detail.files.findIndex((f) => f.path === selectedFile);
