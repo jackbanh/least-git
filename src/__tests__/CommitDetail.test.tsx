@@ -105,7 +105,7 @@ describe("CommitDetail file list keyboard navigation", () => {
     );
   });
 
-  it("does not move past the first file on ArrowUp", async () => {
+  it("navigates from first file to description row on ArrowUp", async () => {
     await setup();
 
     fireEvent.click(getFilePath("src/alpha.ts"));
@@ -113,7 +113,19 @@ describe("CommitDetail file list keyboard navigation", () => {
     fireEvent.keyDown(fileList, { key: "ArrowUp" });
 
     await waitFor(() =>
-      expect(getFilePath("src/alpha.ts").closest(".file-row")).toHaveClass("file-row--selected")
+      expect(document.querySelector(".description-row")).toHaveClass("file-row--selected")
+    );
+  });
+
+  it("does not move past the description row on ArrowUp", async () => {
+    await setup();
+
+    // Description row is selected by default; pressing ArrowUp should keep it selected.
+    const fileList = document.querySelector(".detail-files") as HTMLElement;
+    fireEvent.keyDown(fileList, { key: "ArrowUp" });
+
+    await waitFor(() =>
+      expect(document.querySelector(".description-row")).toHaveClass("file-row--selected")
     );
   });
 
