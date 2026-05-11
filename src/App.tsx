@@ -5,7 +5,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Tabs, Button, ActionIcon, Group, Text } from "@mantine/core";
 import { listen } from "@tauri-apps/api/event";
-import { useQuery } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useTabStore, Tab } from "./store";
 import { useResize } from "./hooks/useResize";
 import BranchSwitcher from "./components/BranchSwitcher";
@@ -19,9 +19,6 @@ import Toolbar from "./components/Toolbar";
 import SettingsModal from "./components/SettingsModal";
 import "./App.css";
 
-// Detected once at module load — stable for the lifetime of the app.
-// In browser mock mode (no Tauri context) default to "windows" so the
-// Windows chrome is visible for styling work.
 const platform = (() => {
   if (!(window as any).__TAURI_INTERNALS__) return "windows";
   const ua = navigator.userAgent;
@@ -33,7 +30,7 @@ const platform = (() => {
 export default function App() {
   const {
     tabs, activeTabId, openTab, closeTab, setActiveTab, bumpListKey, bumpStatusKey,
-    sidebarWidth, setSidebarWidth, detailHeight, setDetailHeight,
+    sidebarWidth, setSidebarWidth,
   } = useTabStore();
 
   const repoChangedThrottle = useRef<Record<string, number>>({});
@@ -46,7 +43,6 @@ export default function App() {
   const [rebaseDrawerOpen, setRebaseDrawerOpen] = useState(false);
   const [rebaseAction, setRebaseAction] = useState<"continue" | "abort">("continue");
 
-  // Theme state
   const [theme, setThemeState] = useState<"light" | "dark">(() => {
     return (localStorage.getItem("lg-theme") as "light" | "dark") ?? "light";
   });
@@ -64,28 +60,22 @@ export default function App() {
     localStorage.setItem("lg-accent-hue", String(accentHue));
   }, [accentHue]);
 
-  // Apply initial theme immediately (avoids flash)
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
     document.documentElement.style.setProperty("--lg-accent-hue", String(accentHue));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function setTheme(t: "light" | "dark") {
-    setThemeState(t);
-  }
-  function setAccentHue(h: number) {
-    setAccentHueState(h);
-  }
+  function setTheme(t: "light" | "dark") { setThemeState(t); }
+  function setAccentHue(h: number) { setAccentHueState(h); }
 
-  // Re-register persisted tabs with Rust on startup.
   useEffect(() => {
     tabs.forEach((tab) => {
       invoke<Tab>("open_repo", { path: tab.path })
         .then(() => bumpListKey(tab.id))
         .catch(() => closeTab(tab.id));
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -101,15 +91,11 @@ export default function App() {
       }
       repoChangedThrottle.current[key] = now;
       logInfo(`App repo:changed dispatching tab=${tab_id} kind=${kind}`);
-
-      if (kind === "refs") {
-        bumpListKey(tab_id);
-      } else if (kind === "index") {
-        bumpStatusKey(tab_id);
-      }
+      if (kind === "refs") bumpListKey(tab_id);
+      else if (kind === "index") bumpStatusKey(tab_id);
     });
     return () => { unlisten.then((fn) => fn()); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -137,7 +123,6 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    // macOS menu bar: pull current branch, no rebase
     const unlisten = listen("menu:pull", () => { setPullReq({ rebase: false }); setPullDrawerOpen(true); });
     return () => { unlisten.then((fn) => fn()); };
   }, []);
@@ -157,24 +142,20 @@ export default function App() {
     logInfo(`App preArmThrottle tab=${tabId} kind=${kind}`);
   }
 
-  // Read the branch list from the shared TanStack Query cache (populated by
-  // BranchSwitcher). No extra fetch — just subscribes to the same cache entry.
   interface BranchInfo { name: string; is_head: boolean; }
-  const { data: branches = [] } = useQuery<BranchInfo[]>({
-    queryKey: ["branches", activeTabId ?? ""],
-    enabled: false, // never fetch from here — BranchSwitcher owns fetching
-  });
+  const queryClient = useQueryClient();
   const pullBranchInfo = useMemo(() => {
+    const branches = queryClient.getQueryData<BranchInfo[]>(["branches", activeTabId ?? ""]) ?? [];
     const head = branches.find((b) => b.is_head)?.name ?? null;
     return {
       hasMain: branches.some((b) => b.name === "main"),
       hasMaster: branches.some((b) => b.name === "master"),
       headBranch: head,
     };
-  }, [branches]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab?.listKey, activeTabId, queryClient]);
 
-  const startSidebarResize = useResize(sidebarWidth, setSidebarWidth, "horizontal", 150, 500);
-  const startDetailResize = useResize(detailHeight, setDetailHeight, "vertical", 120, 600, true);
+  const startSidebarResize = useResize(sidebarWidth, setSidebarWidth, "horizontal", 200, 600);
 
   async function handleOpenFolder() {
     const selected = await open({ directory: true, multiple: false });
@@ -289,26 +270,29 @@ export default function App() {
       <div className="workspace">
         {activeTabId ? (
           <>
-            <div className="sidebar" style={{ width: sidebarWidth }}>
+            {/* Left sidebar: branch dropdown + commit list */}
+            <div className="sidebar-column" style={{ width: sidebarWidth }}>
               <BranchSwitcher
                 tabId={activeTabId}
                 listKey={activeTab?.listKey ?? 0}
                 onManualRefresh={() => preArmThrottle(activeTabId, "refs")}
               />
+              <CommitList
+                key={activeTabId}
+                tabId={activeTabId}
+                listKey={activeTab?.listKey ?? 0}
+              />
             </div>
+
             <div className="resize-handle resize-handle--vertical" onMouseDown={startSidebarResize} />
-            <div className="main-area">
-              <div className="commit-list-pane">
-                <CommitList
-                  key={activeTabId}
-                  tabId={activeTabId}
-                  listKey={activeTab?.listKey ?? 0}
-                />
-              </div>
-              <div className="resize-handle resize-handle--horizontal" onMouseDown={startDetailResize} />
-              <div className="detail-pane" style={{ height: detailHeight }}>
-                <CommitDetail tabId={activeTabId} listKey={activeTab?.listKey ?? 0} statusKey={activeTab?.statusKey ?? 0} />
-              </div>
+
+            {/* Right content: commit detail fills full height */}
+            <div className="main-content">
+              <CommitDetail
+                tabId={activeTabId}
+                listKey={activeTab?.listKey ?? 0}
+                statusKey={activeTab?.statusKey ?? 0}
+              />
             </div>
           </>
         ) : (
