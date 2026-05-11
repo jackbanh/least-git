@@ -6,35 +6,24 @@
   overflow: hidden;
 }
 
-/* ── Column headers ─────────────────────────────────────────────── */
+/* ── Section header ─────────────────────────────────────────────── */
 
-.commit-list-headers {
-  display: grid;
-  grid-template-columns: 44px 92px 1fr 160px 92px;
-  padding: 12px 16px 8px 0;
+.commit-list-header {
+  padding: 14px 16px 10px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  border-bottom: 0.5px solid var(--lg-border-soft);
   flex-shrink: 0;
+}
+
+.commit-list-header-label {
   font-family: var(--lg-font-serif);
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 500;
   color: var(--lg-ink-muted);
-  text-transform: uppercase;
   letter-spacing: 1.4px;
-  border-bottom: 0.5px solid var(--lg-border-soft);
-  background: var(--lg-panel-bg);
-  user-select: none;
-}
-
-.commit-list-headers .cl-col-sha,
-.commit-list-headers .cl-col-msg,
-.commit-list-headers .cl-col-author,
-.commit-list-headers .cl-col-date {
-  overflow: hidden;
-  white-space: nowrap;
-}
-
-.commit-list-headers .cl-col-date {
-  text-align: right;
-  padding-right: 4px;
+  text-transform: uppercase;
 }
 
 /* ── Scroll container ───────────────────────────────────────────── */
@@ -52,7 +41,7 @@
 /* Continuous hairline dot rail */
 .commit-dot-rail {
   position: absolute;
-  left: 22px;
+  left: 20px;
   top: 0;
   bottom: 0;
   width: 1px;
@@ -62,15 +51,15 @@
   z-index: 0;
 }
 
-/* ── Commit rows (grid) ─────────────────────────────────────────── */
+/* ── Commit rows ────────────────────────────────────────────────── */
 
 .commit-row {
-  display: grid;
-  grid-template-columns: 44px 92px 1fr 160px 92px;
-  align-items: center;
-  padding: 0 16px 0 0;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 10px 14px 11px 14px;
+  border-left: 2px solid transparent;
   cursor: pointer;
-  position: relative;
   -webkit-user-select: none;
   user-select: none;
   transition: background 60ms ease;
@@ -82,23 +71,22 @@
 
 .commit-row--selected {
   background: var(--lg-selected-bg);
+  border-left-color: var(--lg-accent);
 }
 
 .commit-row--selected:hover {
   background: var(--lg-selected-bg);
 }
 
-/* ── Grid columns ───────────────────────────────────────────────── */
+/* ── Dot ────────────────────────────────────────────────────────── */
 
-.cl-col-dot {
-  display: flex;
-  justify-content: center;
-  align-items: center;
+.commit-row-dot {
+  padding-top: 4px;
+  flex-shrink: 0;
   position: relative;
   z-index: 1;
 }
 
-/* Dots */
 .commit-dot {
   width: 7px;
   height: 7px;
@@ -107,8 +95,6 @@
   box-shadow: 0 0 0 3px var(--lg-panel-bg);
   opacity: 0.55;
   transition: background 120ms ease, opacity 120ms ease;
-  position: relative;
-  z-index: 1;
 }
 
 .commit-dot--selected {
@@ -132,60 +118,112 @@
   box-shadow: 0 0 0 3px var(--lg-selected-bg);
 }
 
+/* ── Row body ───────────────────────────────────────────────────── */
+
+.commit-row-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.commit-row-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 3px;
+}
+
 /* SHA */
 .commit-sha-mono {
   font-family: var(--lg-font-mono);
-  font-size: 11px;
+  font-size: 10.5px;
   color: var(--lg-sha);
   letter-spacing: 0.2px;
-  overflow: hidden;
+  flex-shrink: 0;
+}
+
+/* Date (right-aligned via auto left margin) */
+.commit-date {
+  font-family: var(--lg-font-mono);
+  font-size: 10px;
+  color: var(--lg-ink-faint);
+  margin-left: auto;
+  flex-shrink: 0;
   white-space: nowrap;
 }
 
-/* Message */
+/* Title — 2-line clamp */
 .commit-title {
   font-family: var(--lg-font-sans);
   font-size: 12.5px;
   font-weight: 400;
   color: var(--lg-ink);
-  white-space: nowrap;
+  line-height: 1.35;
+  letter-spacing: 0.05px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
   text-overflow: ellipsis;
-  padding-right: 16px;
-  letter-spacing: 0.05px;
 }
 
-.commit-row--selected .commit-title {
+.commit-title--selected {
   font-weight: 500;
 }
 
-/* Author */
+/* Author row */
 .commit-author-cell {
+  margin-top: 4px;
   display: flex;
   align-items: center;
   gap: 7px;
-  overflow: hidden;
 }
 
+.commit-initials-avatar {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--lg-accent-soft);
+  color: var(--lg-accent-text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--lg-font-sans);
+  font-size: 8px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
 
 .commit-author-text {
   font-family: var(--lg-font-sans);
-  font-size: 11.5px;
-  color: var(--lg-ink-muted);
+  font-size: 10.5px;
+  color: var(--lg-ink-faint);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-/* Date */
-.commit-date {
-  font-family: var(--lg-font-mono);
+/* ── Uncommitted row ────────────────────────────────────────────── */
+
+.commit-uncommitted-title {
+  font-family: var(--lg-font-sans);
+  font-size: 12.5px;
+  font-weight: 400;
+  color: var(--lg-ink);
+  letter-spacing: 0.05px;
+  margin-bottom: 3px;
+}
+
+.commit-uncommitted-title--selected {
+  font-weight: 500;
+}
+
+.commit-uncommitted-sub {
+  font-family: var(--lg-font-sans);
   font-size: 10.5px;
   color: var(--lg-ink-faint);
-  text-align: right;
-  padding-right: 4px;
-  white-space: nowrap;
 }
+
+/* ── Loading / sentinel ─────────────────────────────────────────── */
 
 .commit-loading {
   font-family: var(--lg-font-sans);
