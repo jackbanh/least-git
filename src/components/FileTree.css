@@ -51,6 +51,24 @@
   min-width: 0;
 }
 
+/* ── Status badges ──────────────────────────────────────────────── */
+
+.file-status {
+  font-family: var(--lg-font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  flex-shrink: 0;
+  width: 13px;
+  text-align: center;
+}
+
+.file-status--m { color: var(--lg-modified); }
+.file-status--a { color: var(--lg-added); }
+.file-status--d { color: var(--lg-deleted); }
+.file-status--r { color: var(--lg-modified); }
+.file-status--c { color: var(--lg-added); }
+.file-status--? { color: var(--lg-ink-faint); }
+
 /* ── File rows ──────────────────────────────────────────────────── */
 
 .file-tree-file {

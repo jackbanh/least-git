@@ -20,6 +20,7 @@ import { invoke } from "@tauri-apps/api/core";
 const mockInvoke = vi.mocked(invoke);
 
 const STUB_STATUS = {
+  head_branch: "main",
   staged:   [
     { path: "src/staged1.ts",   old_path: null, status: "M", is_conflict: false },
     { path: "src/staged2.ts",   old_path: null, status: "A", is_conflict: false },

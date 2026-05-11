@@ -30,6 +30,7 @@ interface StatusEntry {
 interface WorkingTreeStatus {
   staged: StatusEntry[];
   unstaged: StatusEntry[];
+  head_branch: string;
 }
 
 interface SelectedFile {
@@ -268,7 +269,7 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
                   .catch((e) => console.error("commit failed:", e));
               }}
             >
-              Commit to {status?.staged.length ? "" : ""}main
+              Commit to {status?.head_branch ?? "…"}
             </button>
           </div>
 

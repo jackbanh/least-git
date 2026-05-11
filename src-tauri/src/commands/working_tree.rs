@@ -249,7 +249,8 @@ pub async fn get_working_tree_status(
         info!("{msg}");
     }
 
-    Ok(WorkingTreeStatus { staged, unstaged })
+    let head_branch = read_head_branch(&path.join(".git"));
+    Ok(WorkingTreeStatus { staged, unstaged, head_branch })
 }
 
 /// Return paths of untracked (new) files — the slow part of `git status`.

@@ -262,7 +262,9 @@ index e5f6a7b..f6a7b8c 100644
 export const MOCK_WORKING_TREE: {
   staged: { path: string; old_path: string | null; status: string; is_conflict: boolean }[];
   unstaged: { path: string; old_path: string | null; status: string; is_conflict: boolean }[];
+  head_branch: string;
 } = {
+  head_branch: "main",
   staged: [
     { path: "src/components/InteractiveDiffViewer.tsx", old_path: null, status: "A", is_conflict: false },
     { path: "src/components/InteractiveDiffViewer.css",  old_path: null, status: "A", is_conflict: false },

@@ -106,6 +106,7 @@ pub struct StatusEntry {
 pub struct WorkingTreeStatus {
     pub staged: Vec<StatusEntry>,
     pub unstaged: Vec<StatusEntry>,
+    pub head_branch: String,
 }
 
 // ── Streaming helpers (used by checkout_branch, pull_with_rebase, rebase_interactive) ──
