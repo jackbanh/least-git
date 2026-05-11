@@ -7,7 +7,8 @@ import { IconCopy, IconGitCompare, IconFileDescription } from "@tabler/icons-rea
 import { useTabStore } from "../store";
 import { useResize } from "../hooks/useResize";
 import { useContextMenu } from "../hooks/useContextMenu";
-import { FileRow, AnchoredMenuTarget } from "./FileRow";
+import { AnchoredMenuTarget } from "./FileRow";
+import { FileTree } from "./FileTree";
 import DiffViewer from "./DiffViewer";
 import WorkingTreeDetail from "./WorkingTreeDetail";
 import "./CommitDetail.css";
@@ -138,7 +139,7 @@ function CommitDetailInner({
             }
             if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
             e.preventDefault();
-            // Index 0 = description row, 1..N = files
+            // Index 0 = description row, 1..N = files (original backend order)
             const allItems = [DESCRIPTION_KEY, ...detail.files.map((f) => f.path)];
             const idx = allItems.indexOf(selectedFile ?? DESCRIPTION_KEY);
             const next =
@@ -155,16 +156,17 @@ function CommitDetailInner({
             onSelect={() => setSelectedFile(DESCRIPTION_KEY)}
           />
 
-          {detail.files.map((file) => (
-            <FileRow
-              key={file.path}
-              path={file.path}
-              status={file.status}
-              isSelected={selectedFile === file.path}
-              onClick={() => setSelectedFile(file.path)}
-              onContextMenu={(e) => openContextMenu(e, file)}
-            />
-          ))}
+          <FileTree
+            key={detail.oid}
+            files={detail.files}
+            selected={showDescription ? null : selectedFile}
+            onSelect={(path) => setSelectedFile(path)}
+            onContextMenu={(e, path) => {
+              const file = detail.files.find((f) => f.path === path)!;
+              setSelectedFile(path);
+              openContextMenu(e, file);
+            }}
+          />
         </div>
       </div>
 

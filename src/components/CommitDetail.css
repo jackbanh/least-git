@@ -223,40 +223,6 @@
   background: var(--lg-selected-bg);
 }
 
-.file-status {
-  flex-shrink: 0;
-  width: 14px;
-  font-weight: 600;
-  font-size: 9.5px;
-  font-family: var(--lg-font-mono);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.file-status--m { color: var(--lg-modified); }
-.file-status--a { color: var(--lg-added); }
-.file-status--d { color: var(--lg-deleted); }
-.file-status--r { color: var(--lg-modified); }
-.file-status--c { color: var(--lg-added); }
-.file-status--\? { color: var(--lg-ink-faint); }
-
-.file-path {
-  font-family: var(--lg-font-sans);
-  font-size: 11.5px;
-  color: var(--lg-ink);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
-}
-
-.file-path-dir {
-  color: var(--lg-ink-faint);
-}
-
-.file-path-name {
-  color: var(--lg-ink);
-}
 
 /* ── Right column: diff ───────────────────────────────────────────── */
 

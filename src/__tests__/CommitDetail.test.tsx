@@ -89,7 +89,7 @@ describe("CommitDetail file list keyboard navigation", () => {
     fireEvent.keyDown(fileList, { key: "ArrowDown" });
 
     await waitFor(() =>
-      expect(getFilePath("src/beta.ts").closest(".file-row")).toHaveClass("file-row--selected")
+      expect(getFilePath("src/beta.ts").closest(".file-tree-file")).toHaveClass("file-tree-file--selected")
     );
   });
 
@@ -101,7 +101,7 @@ describe("CommitDetail file list keyboard navigation", () => {
     fireEvent.keyDown(fileList, { key: "ArrowUp" });
 
     await waitFor(() =>
-      expect(getFilePath("src/alpha.ts").closest(".file-row")).toHaveClass("file-row--selected")
+      expect(getFilePath("src/alpha.ts").closest(".file-tree-file")).toHaveClass("file-tree-file--selected")
     );
   });
 
@@ -137,7 +137,7 @@ describe("CommitDetail file list keyboard navigation", () => {
     fireEvent.keyDown(fileList, { key: "ArrowDown" });
 
     await waitFor(() =>
-      expect(getFilePath("src/gamma.ts").closest(".file-row")).toHaveClass("file-row--selected")
+      expect(getFilePath("src/gamma.ts").closest(".file-tree-file")).toHaveClass("file-tree-file--selected")
     );
   });
 });

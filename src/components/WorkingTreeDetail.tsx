@@ -14,7 +14,8 @@ import {
 import { useTabStore } from "../store";
 import { useResize } from "../hooks/useResize";
 import { useContextMenu } from "../hooks/useContextMenu";
-import { FileRow, AnchoredMenuTarget } from "./FileRow";
+import { AnchoredMenuTarget } from "./FileRow";
+import { FileTree } from "./FileTree";
 import InteractiveDiffViewer from "./InteractiveDiffViewer";
 import "./CommitDetail.css";
 import "./WorkingTreeDetail.css";
@@ -240,16 +241,20 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
           {status && status.staged.length === 0 && (
             <div className="wt-section-hint">No staged changes.</div>
           )}
-          {status && status.staged.map((f) => (
-            <FileRow
-              key={`staged:${f.path}`}
-              path={f.path}
-              status={f.status}
-              isSelected={!!(selected?.path === f.path && selected.staged)}
-              onClick={() => selectFile(f, true)}
-              onContextMenu={(e) => openContextMenu(e, f, true)}
+          {status && (
+            <FileTree
+              files={status.staged}
+              selected={selected?.staged ? selected.path : null}
+              onSelect={(path) => {
+                const f = status.staged.find((e) => e.path === path)!;
+                selectFile(f, true);
+              }}
+              onContextMenu={(e, path) => {
+                const f = status.staged.find((e) => e.path === path)!;
+                openContextMenu(e, f, true);
+              }}
             />
-          ))}
+          )}
 
           {/* Commit button */}
           <div className="wt-commit-area">
@@ -277,26 +282,20 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
                   {untracked === null && "+"}
                 </span>
               </div>
-              {status.unstaged.map((f) => (
-                <FileRow
-                  key={`unstaged:${f.path}`}
-                  path={f.path}
-                  status={f.status}
-                  isSelected={!!(selected?.path === f.path && !selected.staged)}
-                  onClick={() => selectFile(f, false)}
-                  onContextMenu={(e) => openContextMenu(e, f, false)}
-                />
-              ))}
-              {(untracked ?? []).map((f) => (
-                <FileRow
-                  key={`untracked:${f.path}`}
-                  path={f.path}
-                  status={f.status}
-                  isSelected={!!(selected?.path === f.path && !selected.staged)}
-                  onClick={() => selectFile(f, false)}
-                  onContextMenu={(e) => openContextMenu(e, f, false)}
-                />
-              ))}
+              <FileTree
+                files={[...status.unstaged, ...(untracked ?? [])]}
+                selected={selected?.staged ? null : selected?.path ?? null}
+                onSelect={(path) => {
+                  const allUnstaged = [...status.unstaged, ...(untracked ?? [])];
+                  const f = allUnstaged.find((e) => e.path === path)!;
+                  selectFile(f, false);
+                }}
+                onContextMenu={(e, path) => {
+                  const allUnstaged = [...status.unstaged, ...(untracked ?? [])];
+                  const f = allUnstaged.find((e) => e.path === path)!;
+                  openContextMenu(e, f, false);
+                }}
+              />
             </>
           )}
           {isLoading && (

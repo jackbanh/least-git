@@ -91,7 +91,7 @@ describe("WorkingTreeDetail file list keyboard navigation", () => {
     fireEvent.keyDown(fileList(), { key: "ArrowDown" });
 
     await waitFor(() =>
-      expect(getFilePath("src/staged2.ts").closest(".file-row")).toHaveClass("file-row--selected")
+      expect(getFilePath("src/staged2.ts").closest(".file-tree-file")).toHaveClass("file-tree-file--selected")
     );
   });
 
@@ -101,7 +101,7 @@ describe("WorkingTreeDetail file list keyboard navigation", () => {
     fireEvent.keyDown(fileList(), { key: "ArrowDown" });
 
     await waitFor(() =>
-      expect(getFilePath("src/unstaged1.ts").closest(".file-row")).toHaveClass("file-row--selected")
+      expect(getFilePath("src/unstaged1.ts").closest(".file-tree-file")).toHaveClass("file-tree-file--selected")
     );
   });
 
@@ -111,7 +111,7 @@ describe("WorkingTreeDetail file list keyboard navigation", () => {
     fireEvent.keyDown(fileList(), { key: "ArrowUp" });
 
     await waitFor(() =>
-      expect(getFilePath("src/staged2.ts").closest(".file-row")).toHaveClass("file-row--selected")
+      expect(getFilePath("src/staged2.ts").closest(".file-tree-file")).toHaveClass("file-tree-file--selected")
     );
   });
 
@@ -121,7 +121,7 @@ describe("WorkingTreeDetail file list keyboard navigation", () => {
     fireEvent.keyDown(fileList(), { key: "ArrowUp" });
 
     await waitFor(() =>
-      expect(getFilePath("src/staged1.ts").closest(".file-row")).toHaveClass("file-row--selected")
+      expect(getFilePath("src/staged1.ts").closest(".file-tree-file")).toHaveClass("file-tree-file--selected")
     );
   });
 
@@ -131,7 +131,7 @@ describe("WorkingTreeDetail file list keyboard navigation", () => {
     fireEvent.keyDown(fileList(), { key: "ArrowDown" });
 
     await waitFor(() =>
-      expect(getFilePath("src/unstaged1.ts").closest(".file-row")).toHaveClass("file-row--selected")
+      expect(getFilePath("src/unstaged1.ts").closest(".file-tree-file")).toHaveClass("file-tree-file--selected")
     );
   });
 });
