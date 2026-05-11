@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Menu } from "@mantine/core";
-import CommitAvatar from "./CommitAvatar";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { warn as logWarn, info as logInfo, error as logError } from "@tauri-apps/plugin-log";
 import {
@@ -41,6 +40,12 @@ function formatDate(ts: number): string {
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
+}
+
+function getInitials(name: string): string {
+  const words = name.trim().split(/\s+/);
+  if (words.length === 1) return (words[0][0] ?? "?").toUpperCase();
+  return (words[0][0] + words[words.length - 1][0]).toUpperCase();
 }
 
 
@@ -193,8 +198,9 @@ export default function CommitList({ tabId, listKey }: { tabId: string; listKey:
   const virtualizer = useVirtualizer({
     count,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 40,
+    estimateSize: () => 74,
     overscan: 15,
+    measureElement: (el) => el.getBoundingClientRect().height,
   });
 
   const items = virtualizer.getVirtualItems();
@@ -230,13 +236,8 @@ export default function CommitList({ tabId, listKey }: { tabId: string; listKey:
 
   return (
     <div className="commit-list-wrap">
-      {/* Column headers */}
-      <div className="commit-list-headers">
-        <div className="cl-col-dot" />
-        <div className="cl-col-sha">Commit</div>
-        <div className="cl-col-msg">Message</div>
-        <div className="cl-col-author">Author</div>
-        <div className="cl-col-date">Date</div>
+      <div className="commit-list-header">
+        <span className="commit-list-header-label">History</span>
       </div>
 
       <div
@@ -258,25 +259,21 @@ export default function CommitList({ tabId, listKey }: { tabId: string; listKey:
               return (
                 <div
                   key={vItem.key}
+                  data-index={vItem.index}
+                  ref={virtualizer.measureElement}
                   className={`commit-row${isSelected ? " commit-row--selected" : ""}`}
-                  style={{
-                    position: "absolute",
-                    top: vItem.start,
-                    left: 0,
-                    right: 0,
-                    height: vItem.size,
-                  }}
+                  style={{ position: "absolute", top: vItem.start, left: 0, right: 0 }}
                   onClick={() => selectCommit(tabId, UNCOMMITTED)}
                 >
-                  <div className="cl-col-dot">
+                  <div className="commit-row-dot">
                     <div className="commit-dot commit-dot--uncommitted" />
                   </div>
-                  <div className="cl-col-sha commit-sha-mono" style={{ color: "var(--lg-ink-faint)", fontStyle: "italic" }}>—</div>
-                  <div className="cl-col-msg commit-title">Uncommitted changes</div>
-                  <div className="cl-col-author commit-author-cell">
-                    <span className="commit-author-text" style={{ color: "var(--lg-ink-muted)", fontStyle: "normal" }}>working tree</span>
+                  <div className="commit-row-body">
+                    <div className={`commit-uncommitted-title${isSelected ? " commit-uncommitted-title--selected" : ""}`}>
+                      Uncommitted changes
+                    </div>
+                    <div className="commit-uncommitted-sub">working tree</div>
                   </div>
-                  <div className="cl-col-date commit-date" />
                 </div>
               );
             }
@@ -286,14 +283,10 @@ export default function CommitList({ tabId, listKey }: { tabId: string; listKey:
             return (
               <div
                 key={vItem.key}
+                data-index={vItem.index}
+                ref={virtualizer.measureElement}
                 className={`commit-row${isSelected ? " commit-row--selected" : ""}`}
-                style={{
-                  position: "absolute",
-                  top: vItem.start,
-                  left: 0,
-                  right: 0,
-                  height: vItem.size,
-                }}
+                style={{ position: "absolute", top: vItem.start, left: 0, right: 0 }}
                 onClick={() => commit && selectCommit(tabId, commit.oid)}
                 onContextMenu={(e) => {
                   if (!commit) return;
@@ -303,19 +296,25 @@ export default function CommitList({ tabId, listKey }: { tabId: string; listKey:
               >
                 {commit ? (
                   <>
-                    <div className="cl-col-dot">
+                    <div className="commit-row-dot">
                       <div className={`commit-dot${isSelected ? " commit-dot--selected" : ""}`} />
                     </div>
-                    <div className="cl-col-sha commit-sha-mono">{commit.short_oid}</div>
-                    <div className="cl-col-msg commit-title">{commit.summary}</div>
-                    <div className="cl-col-author commit-author-cell">
-                      <CommitAvatar name={commit.author_name} email={commit.author_email} />
-                      <span className="commit-author-text">{commit.author_name}</span>
+                    <div className="commit-row-body">
+                      <div className="commit-row-meta">
+                        <span className="commit-sha-mono">{commit.short_oid}</span>
+                        <span className="commit-date">{formatDate(commit.timestamp)}</span>
+                      </div>
+                      <div className={`commit-title${isSelected ? " commit-title--selected" : ""}`}>
+                        {commit.summary}
+                      </div>
+                      <div className="commit-author-cell">
+                        <div className="commit-initials-avatar">{getInitials(commit.author_name)}</div>
+                        <span className="commit-author-text">{commit.author_name}</span>
+                      </div>
                     </div>
-                    <div className="cl-col-date commit-date">{formatDate(commit.timestamp)}</div>
                   </>
                 ) : (
-                  <div className="cl-col-msg commit-loading">Loading…</div>
+                  <div className="commit-loading">Loading…</div>
                 )}
               </div>
             );

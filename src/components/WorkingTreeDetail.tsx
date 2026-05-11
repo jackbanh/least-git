@@ -14,8 +14,8 @@ import {
 import { useTabStore } from "../store";
 import { useResize } from "../hooks/useResize";
 import { useContextMenu } from "../hooks/useContextMenu";
-import DetailLayout from "./DetailLayout";
-import { FileRow, AnchoredMenuTarget } from "./FileRow";
+import { AnchoredMenuTarget } from "./FileRow";
+import { FileTree } from "./FileTree";
 import InteractiveDiffViewer from "./InteractiveDiffViewer";
 import "./CommitDetail.css";
 import "./WorkingTreeDetail.css";
@@ -48,9 +48,9 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
   const [selected, setSelected] = useState<SelectedFile | null>(null);
   const [diff, setDiff] = useState<string>("");
   const [diffLoading, setDiffLoading] = useState(false);
-  const metaPanelHeight = useTabStore((s) => s.metaPanelHeight);
-  const setMetaPanelHeight = useTabStore((s) => s.setMetaPanelHeight);
-  const startMetaResize = useResize(metaPanelHeight, setMetaPanelHeight, "vertical", 80, 320, true);
+  const detailLeftWidth = useTabStore((s) => s.detailLeftWidth);
+  const setDetailLeftWidth = useTabStore((s) => s.setDetailLeftWidth);
+  const startLeftResize = useResize(detailLeftWidth, setDetailLeftWidth, "horizontal", 140, 9999);
 
   // ── Context menu ────────────────────────────────────────────────────────
   const { contextMenu, contextTargetRef, open: openMenu, close: closeMenu } = useContextMenu<ContextData>();
@@ -199,222 +199,231 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
   );
 
   const ctx = contextTargetRef.current?.data;
+  const canCommit = status !== null && status.staged.length > 0;
 
   return (
-    <DetailLayout
-      left={
-        <>
-          <div
-            className="detail-files"
-            tabIndex={0}
-            onKeyDown={(e) => {
-              if (e.key === "d" && (e.metaKey || e.ctrlKey)) {
-                if (!selected) return;
-                e.preventDefault();
-                invoke("open_working_tree_diff_external", { tabId, filePath: selected.path, staged: selected.staged });
-                return;
-              }
-              if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
-              if (allFiles.length === 0) return;
+    <div className="commit-detail">
+      {/* Left column: staged + commit button + unstaged */}
+      <div className="detail-left" style={{ width: detailLeftWidth }}>
+        <div
+          className="detail-files"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === "d" && (e.metaKey || e.ctrlKey)) {
+              if (!selected) return;
               e.preventDefault();
-              const next =
-                e.key === "ArrowUp"
-                  ? Math.max(0, selectedIndex - 1)
-                  : Math.min(allFiles.length - 1, selectedIndex + 1);
-              const f = allFiles[next];
-              setSelected({ path: f.path, staged: f.staged, is_untracked: f.status === "?" });
-            }}
-          >
-            {statusError && (
-              <div className="wt-section-empty wt-section-error">{statusError}</div>
-            )}
-            {isEmpty && (
-              <div className="wt-section-empty">Nothing to commit, working tree clean</div>
-            )}
-            {status && status.staged.length > 0 && (
-              <>
-                <div className="wt-section-header">
-                  <span className="wt-section-label">Staged</span>
-                  <span className="wt-section-count">{status.staged.length}</span>
-                </div>
-                {status.staged.map((f) => (
-                  <FileRow
-                    key={`staged:${f.path}`}
-                    path={f.path}
-                    status={f.status}
-                    isSelected={!!(selected?.path === f.path && selected.staged)}
-                    onClick={() => selectFile(f, true)}
-                    onContextMenu={(e) => openContextMenu(e, f, true)}
-                  />
-                ))}
-              </>
-            )}
-            {status && (status.unstaged.length > 0 || (untracked ?? []).length > 0) && (
-              <>
-                <div className="wt-section-header">
-                  <span className="wt-section-label">Changes</span>
-                  <span className="wt-section-count">
-                    {status.unstaged.length + (untracked ?? []).length}
-                    {untracked === null && "+"}
-                  </span>
-                </div>
-                {status.unstaged.map((f) => (
-                  <FileRow
-                    key={`unstaged:${f.path}`}
-                    path={f.path}
-                    status={f.status}
-                    isSelected={!!(selected?.path === f.path && !selected.staged)}
-                    onClick={() => selectFile(f, false)}
-                    onContextMenu={(e) => openContextMenu(e, f, false)}
-                  />
-                ))}
-                {(untracked ?? []).map((f) => (
-                  <FileRow
-                    key={`untracked:${f.path}`}
-                    path={f.path}
-                    status={f.status}
-                    isSelected={!!(selected?.path === f.path && !selected.staged)}
-                    onClick={() => selectFile(f, false)}
-                    onContextMenu={(e) => openContextMenu(e, f, false)}
-                  />
-                ))}
-              </>
-            )}
-            {isLoading && (
-              <div className="wt-spinner-footer">
-                <Loader size={12} />
-                <span>{spinnerLabel}</span>
-              </div>
-            )}
-          </div>
-
-          <div className="resize-handle resize-handle--horizontal" onMouseDown={startMetaResize} />
-
-          <div className="wt-meta" style={{ height: metaPanelHeight }}>
-            <span className="wt-title">Uncommitted Changes</span>
-            {status && (
-              <span className="wt-counts">
-                {status.staged.length} staged · {status.unstaged.length + (untracked ?? []).length} unstaged
-                {untracked === null && "…"}
-              </span>
-            )}
-          </div>
-        </>
-      }
-      overlay={
-        <Menu
-          opened={!!contextMenu}
-          onClose={closeMenu}
-          position="right-start"
+              invoke("open_working_tree_diff_external", { tabId, filePath: selected.path, staged: selected.staged });
+              return;
+            }
+            if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+            if (allFiles.length === 0) return;
+            e.preventDefault();
+            const next =
+              e.key === "ArrowUp"
+                ? Math.max(0, selectedIndex - 1)
+                : Math.min(allFiles.length - 1, selectedIndex + 1);
+            const f = allFiles[next];
+            setSelected({ path: f.path, staged: f.staged, is_untracked: f.status === "?" });
+          }}
         >
-          <AnchoredMenuTarget contextMenu={contextMenu} />
-          <Menu.Dropdown>
-            {ctx?.staged ? (
-              // ── Staged file ──────────────────────────────────────────────
+          {statusError && (
+            <div className="wt-section-empty wt-section-error">{statusError}</div>
+          )}
+          {isEmpty && (
+            <div className="wt-section-empty">Nothing to commit, working tree clean</div>
+          )}
+
+          {/* Staged section */}
+          <div className="wt-section-header">
+            <span className="wt-section-label">Staged</span>
+            {status && <span className="wt-section-count">{status.staged.length}</span>}
+          </div>
+          {status && status.staged.length === 0 && (
+            <div className="wt-section-hint">No staged changes.</div>
+          )}
+          {status && (
+            <FileTree
+              files={status.staged}
+              selected={selected?.staged ? selected.path : null}
+              onSelect={(path) => {
+                const f = status.staged.find((e) => e.path === path)!;
+                selectFile(f, true);
+              }}
+              onContextMenu={(e, path) => {
+                const f = status.staged.find((e) => e.path === path)!;
+                openContextMenu(e, f, true);
+              }}
+            />
+          )}
+
+          {/* Commit button */}
+          <div className="wt-commit-area">
+            <button
+              className={`wt-commit-btn${canCommit ? " wt-commit-btn--enabled" : ""}`}
+              disabled={!canCommit}
+              onClick={() => {
+                if (!canCommit) return;
+                invoke("commit_staged", { tabId, message: "Commit" })
+                  .then(() => refreshStatus())
+                  .catch((e) => console.error("commit failed:", e));
+              }}
+            >
+              Commit to {status?.staged.length ? "" : ""}main
+            </button>
+          </div>
+
+          {/* Unstaged section */}
+          {status && (status.unstaged.length > 0 || (untracked ?? []).length > 0) && (
+            <>
+              <div className="wt-section-header">
+                <span className="wt-section-label">Unstaged</span>
+                <span className="wt-section-count">
+                  {status.unstaged.length + (untracked ?? []).length}
+                  {untracked === null && "+"}
+                </span>
+              </div>
+              <FileTree
+                files={[...status.unstaged, ...(untracked ?? [])]}
+                selected={selected?.staged ? null : selected?.path ?? null}
+                onSelect={(path) => {
+                  const allUnstaged = [...status.unstaged, ...(untracked ?? [])];
+                  const f = allUnstaged.find((e) => e.path === path)!;
+                  selectFile(f, false);
+                }}
+                onContextMenu={(e, path) => {
+                  const allUnstaged = [...status.unstaged, ...(untracked ?? [])];
+                  const f = allUnstaged.find((e) => e.path === path)!;
+                  openContextMenu(e, f, false);
+                }}
+              />
+            </>
+          )}
+          {isLoading && (
+            <div className="wt-spinner-footer">
+              <Loader size={12} />
+              <span>{spinnerLabel}</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Context menu overlay */}
+      <Menu
+        opened={!!contextMenu}
+        onClose={closeMenu}
+        position="right-start"
+      >
+        <AnchoredMenuTarget contextMenu={contextMenu} />
+        <Menu.Dropdown>
+          {ctx?.staged ? (
+            <Menu.Item
+              leftSection={<IconArrowBarToDown size={14} />}
+              onClick={() => runFileAction("unstage_file", ctx.entry.path)}
+            >
+              Unstage
+            </Menu.Item>
+          ) : (
+            <>
               <Menu.Item
-                leftSection={<IconArrowBarToDown size={14} />}
-                onClick={() => runFileAction("unstage_file", ctx.entry.path)}
+                leftSection={<IconArrowBarToUp size={14} />}
+                onClick={() => runFileAction("stage_file", ctx!.entry.path)}
               >
-                Unstage
+                {ctx?.entry.status === "?" ? "Add File" : "Stage"}
               </Menu.Item>
-            ) : (
-              // ── Unstaged / untracked file ────────────────────────────────
-              <>
+              {ctx?.entry.status === "?" ? (
                 <Menu.Item
-                  leftSection={<IconArrowBarToUp size={14} />}
-                  onClick={() => runFileAction("stage_file", ctx!.entry.path)}
+                  leftSection={<IconTrash size={14} />}
+                  color="red"
+                  onClick={() =>
+                    runFileAction(
+                      "delete_untracked",
+                      ctx.entry.path,
+                      `Delete "${ctx.entry.path}"? This cannot be undone.`,
+                    )
+                  }
                 >
-                  {ctx?.entry.status === "?" ? "Add File" : "Stage"}
+                  Delete File
                 </Menu.Item>
-                {ctx?.entry.status === "?" ? (
-                  <Menu.Item
-                    leftSection={<IconTrash size={14} />}
-                    color="red"
-                    onClick={() =>
-                      runFileAction(
-                        "delete_untracked",
-                        ctx.entry.path,
-                        `Delete "${ctx.entry.path}"? This cannot be undone.`,
-                      )
-                    }
-                  >
-                    Delete File
-                  </Menu.Item>
-                ) : (
-                  <Menu.Item
-                    leftSection={<IconRotate2 size={14} />}
-                    color="red"
-                    onClick={() =>
-                      runFileAction(
-                        "discard_changes",
-                        ctx!.entry.path,
-                        `Discard changes to "${ctx!.entry.path}"? This cannot be undone.`,
-                      )
-                    }
-                  >
-                    Discard Changes
-                  </Menu.Item>
-                )}
-              </>
-            )}
-            {ctx?.entry.is_conflict && (
-              <Menu.Sub>
-                <Menu.Sub.Target>
-                  <Menu.Sub.Item leftSection={<IconGitMerge size={14} />}>
-                    Resolve Conflicts
-                  </Menu.Sub.Item>
-                </Menu.Sub.Target>
-                <Menu.Sub.Dropdown>
-                  <Menu.Item
-                    onClick={() => invoke("open_mergetool_external", {
-                      tabId,
-                      filePath: ctx.entry.path,
-                    })}
-                  >
-                    Launch External Merge Tool
-                  </Menu.Item>
-                  <Menu.Item
-                    onClick={() => {
-                      invoke("resolve_conflict_local", { tabId, filePath: ctx.entry.path })
-                        .then(() => refreshStatus());
-                    }}
-                  >
-                    Resolve Using Local ({conflictBranches?.local ?? "…"})
-                  </Menu.Item>
-                  <Menu.Item
-                    onClick={() => {
-                      invoke("resolve_conflict_incoming", { tabId, filePath: ctx.entry.path })
-                        .then(() => refreshStatus());
-                    }}
-                  >
-                    Resolve Using Incoming ({conflictBranches?.incoming ?? "…"})
-                  </Menu.Item>
-                </Menu.Sub.Dropdown>
-              </Menu.Sub>
-            )}
-            <Menu.Divider />
-            <Menu.Item
-              leftSection={<IconCopy size={14} />}
-              onClick={() => navigator.clipboard.writeText(ctx!.entry.path)}
-            >
-              Copy Path
-            </Menu.Item>
-            <Menu.Item
-              leftSection={<IconGitCompare size={14} />}
-              onClick={() => invoke("open_working_tree_diff_external", {
-                tabId,
-                filePath: ctx!.entry.path,
-                staged: ctx!.staged,
-              })}
-            >
-              Diff in External App
-            </Menu.Item>
-          </Menu.Dropdown>
-        </Menu>
-      }
-      diff={
-        !selected ? (
-          <div className="diff-loading">Select a file to view diff</div>
+              ) : (
+                <Menu.Item
+                  leftSection={<IconRotate2 size={14} />}
+                  color="red"
+                  onClick={() =>
+                    runFileAction(
+                      "discard_changes",
+                      ctx!.entry.path,
+                      `Discard changes to "${ctx!.entry.path}"? This cannot be undone.`,
+                    )
+                  }
+                >
+                  Discard Changes
+                </Menu.Item>
+              )}
+            </>
+          )}
+          {ctx?.entry.is_conflict && (
+            <Menu.Sub>
+              <Menu.Sub.Target>
+                <Menu.Sub.Item leftSection={<IconGitMerge size={14} />}>
+                  Resolve Conflicts
+                </Menu.Sub.Item>
+              </Menu.Sub.Target>
+              <Menu.Sub.Dropdown>
+                <Menu.Item
+                  onClick={() => invoke("open_mergetool_external", {
+                    tabId,
+                    filePath: ctx.entry.path,
+                  })}
+                >
+                  Launch External Merge Tool
+                </Menu.Item>
+                <Menu.Item
+                  onClick={() => {
+                    invoke("resolve_conflict_local", { tabId, filePath: ctx.entry.path })
+                      .then(() => refreshStatus());
+                  }}
+                >
+                  Resolve Using Local ({conflictBranches?.local ?? "…"})
+                </Menu.Item>
+                <Menu.Item
+                  onClick={() => {
+                    invoke("resolve_conflict_incoming", { tabId, filePath: ctx.entry.path })
+                      .then(() => refreshStatus());
+                  }}
+                >
+                  Resolve Using Incoming ({conflictBranches?.incoming ?? "…"})
+                </Menu.Item>
+              </Menu.Sub.Dropdown>
+            </Menu.Sub>
+          )}
+          <Menu.Divider />
+          <Menu.Item
+            leftSection={<IconCopy size={14} />}
+            onClick={() => navigator.clipboard.writeText(ctx!.entry.path)}
+          >
+            Copy Path
+          </Menu.Item>
+          <Menu.Item
+            leftSection={<IconGitCompare size={14} />}
+            onClick={() => invoke("open_working_tree_diff_external", {
+              tabId,
+              filePath: ctx!.entry.path,
+              staged: ctx!.staged,
+            })}
+          >
+            Diff in External App
+          </Menu.Item>
+        </Menu.Dropdown>
+      </Menu>
+
+      <div className="resize-handle resize-handle--vertical" onMouseDown={startLeftResize} />
+
+      {/* Right column: diff */}
+      <div className="detail-diff">
+        {!selected ? (
+          <div className="diff-loading">
+            <span className="diff-loading-text">Select a file to view diff</span>
+          </div>
         ) : diffLoading ? (
           <div className="diff-loading"><Loader size="sm" /></div>
         ) : diff ? (
@@ -425,9 +434,11 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
             onApplyLines={(patch) => applyPatch(patch, selected.staged)}
           />
         ) : (
-          <div className="diff-loading">No diff available</div>
-        )
-      }
-    />
+          <div className="diff-loading">
+            <span className="diff-loading-text">No diff available</span>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

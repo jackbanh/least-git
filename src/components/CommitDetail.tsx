@@ -3,17 +3,18 @@ import { invoke } from "@tauri-apps/api/core";
 import { useQuery } from "@tanstack/react-query";
 import Markdown from "react-markdown";
 import { Loader, Menu } from "@mantine/core";
-import { IconCopy, IconGitCompare } from "@tabler/icons-react";
+import { IconCopy, IconGitCompare, IconFileDescription } from "@tabler/icons-react";
 import { useTabStore } from "../store";
 import { useResize } from "../hooks/useResize";
 import { useContextMenu } from "../hooks/useContextMenu";
-import DetailLayout from "./DetailLayout";
-import { FileRow, AnchoredMenuTarget } from "./FileRow";
+import { AnchoredMenuTarget } from "./FileRow";
+import { FileTree } from "./FileTree";
 import DiffViewer from "./DiffViewer";
 import WorkingTreeDetail from "./WorkingTreeDetail";
 import "./CommitDetail.css";
 
 export const UNCOMMITTED = "UNCOMMITTED";
+const DESCRIPTION_KEY = "__description__";
 
 interface ChangedFile {
   path: string;
@@ -41,7 +42,6 @@ function formatDateTime(ts: number): string {
   return `${yyyy}-${mm}-${day} ${hh}:${min}`;
 }
 
-// Routing shell — always calls hooks in the same order, then delegates.
 export default function CommitDetail({ tabId, listKey, statusKey }: { tabId: string; listKey: number; statusKey: number }) {
   const selectedOid = useTabStore(
     (s) => s.tabs.find((t) => t.id === tabId)?.selectedOid ?? null
@@ -61,7 +61,8 @@ function CommitDetailInner({
   tabId: string;
   selectedOid: string | null;
 }) {
-  const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  // null = show description; string = show file diff
+  const [selectedFile, setSelectedFile] = useState<string | null>(DESCRIPTION_KEY);
 
   const { contextMenu, contextTargetRef, open: openMenu, close: closeMenu } = useContextMenu<ChangedFile>();
 
@@ -70,19 +71,15 @@ function CommitDetailInner({
     openMenu(e, file);
   }
 
-  const metaPanelHeight = useTabStore((s) => s.metaPanelHeight);
-  const setMetaPanelHeight = useTabStore((s) => s.setMetaPanelHeight);
-  const startMetaResize = useResize(metaPanelHeight, setMetaPanelHeight, "vertical", 80, 320, true);
+  const detailLeftWidth = useTabStore((s) => s.detailLeftWidth);
+  const setDetailLeftWidth = useTabStore((s) => s.setDetailLeftWidth);
+  const startLeftResize = useResize(detailLeftWidth, setDetailLeftWidth, "horizontal", 140, 9999);
 
-  // Reset file selection when switching commits so we don't carry over a
-  // file from the previous commit into the new one's file list.
+  // Reset to description view when switching commits
   useEffect(() => {
-    setSelectedFile(null);
+    setSelectedFile(DESCRIPTION_KEY);
   }, [selectedOid]);
 
-  // Commit metadata — content-addressed by OID, never changes.
-  // staleTime: Infinity → no background refetch on revisit.
-  // gcTime: Infinity   → stays in memory for the whole session.
   const { data: detail, isLoading: detailLoading } = useQuery<CommitDetailData>({
     queryKey: ["commit-detail", tabId, selectedOid],
     queryFn: () =>
@@ -92,8 +89,6 @@ function CommitDetailInner({
     gcTime: Infinity,
   });
 
-  // File diff — also content-addressed. Revisiting any (commit, file) pair is
-  // instant after the first load.
   const { data: diff = "", isLoading: diffLoading } = useQuery<string>({
     queryKey: ["file-diff", tabId, selectedOid, selectedFile],
     queryFn: () =>
@@ -102,7 +97,7 @@ function CommitDetailInner({
         oid: selectedOid,
         filePath: selectedFile,
       }),
-    enabled: !!selectedOid && !!selectedFile,
+    enabled: !!selectedOid && !!selectedFile && selectedFile !== DESCRIPTION_KEY,
     staleTime: Infinity,
     gcTime: Infinity,
   });
@@ -118,100 +113,96 @@ function CommitDetailInner({
   }
 
   if (!detail) {
-    // selectedOid set but query failed / returned nothing
     return <div className="detail-empty">Failed to load commit.</div>;
   }
 
+  const showDescription = selectedFile === DESCRIPTION_KEY;
   const ctx = contextTargetRef.current?.data;
 
   return (
-    <DetailLayout
-      overlay={
-        <Menu
-          opened={!!contextMenu}
-          onClose={closeMenu}
-          position="right-start"
-        >
-          <AnchoredMenuTarget contextMenu={contextMenu} />
-          <Menu.Dropdown>
-            <Menu.Item
-              leftSection={<IconCopy size={14} />}
-              onClick={() => navigator.clipboard.writeText(ctx!.path)}
-            >
-              Copy Path
-            </Menu.Item>
-            <Menu.Item
-              leftSection={<IconGitCompare size={14} />}
-              onClick={() => invoke("open_diff_external", {
-                tabId,
-                oid: detail.oid,
-                filePath: ctx!.path,
-              })}
-            >
-              Diff in External App
-            </Menu.Item>
-          </Menu.Dropdown>
-        </Menu>
-      }
-      left={
-        <>
-          <div
-            className="detail-files"
-            tabIndex={0}
-            onKeyDown={(e) => {
-              if (e.key === "d" && (e.metaKey || e.ctrlKey)) {
-                if (!selectedFile) return;
-                e.preventDefault();
-                invoke("open_diff_external", { tabId, oid: detail.oid, filePath: selectedFile });
-                return;
-              }
-              if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+    <div className="commit-detail">
+      <div className="detail-left" style={{ width: detailLeftWidth }}>
+        {/* Files header */}
+        <div className="detail-files-header">
+          <span className="detail-files-header-label">Changes</span>
+        </div>
+
+        <div
+          className="detail-files"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === "d" && (e.metaKey || e.ctrlKey)) {
+              if (!selectedFile || showDescription) return;
               e.preventDefault();
-              const idx = detail.files.findIndex((f) => f.path === selectedFile);
-              const next =
-                e.key === "ArrowUp"
-                  ? Math.max(0, idx - 1)
-                  : Math.min(detail.files.length - 1, idx + 1);
-              setSelectedFile(detail.files[next]?.path ?? null);
+              invoke("open_diff_external", { tabId, oid: detail.oid, filePath: selectedFile });
+              return;
+            }
+            if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+            e.preventDefault();
+            // Index 0 = description row, 1..N = files (original backend order)
+            const allItems = [DESCRIPTION_KEY, ...detail.files.map((f) => f.path)];
+            const idx = allItems.indexOf(selectedFile ?? DESCRIPTION_KEY);
+            const next =
+              e.key === "ArrowUp"
+                ? Math.max(0, idx - 1)
+                : Math.min(allItems.length - 1, idx + 1);
+            setSelectedFile(allItems[next]);
+          }}
+        >
+          {/* Description pseudo-row */}
+          <DescriptionRow
+            detail={detail}
+            selected={showDescription}
+            onSelect={() => setSelectedFile(DESCRIPTION_KEY)}
+          />
+
+          <FileTree
+            key={detail.oid}
+            files={detail.files}
+            selected={showDescription ? null : selectedFile}
+            onSelect={(path) => setSelectedFile(path)}
+            onContextMenu={(e, path) => {
+              const file = detail.files.find((f) => f.path === path)!;
+              setSelectedFile(path);
+              openContextMenu(e, file);
             }}
+          />
+        </div>
+      </div>
+
+      {/* Context menu overlay */}
+      <Menu
+        opened={!!contextMenu}
+        onClose={closeMenu}
+        position="right-start"
+      >
+        <AnchoredMenuTarget contextMenu={contextMenu} />
+        <Menu.Dropdown>
+          <Menu.Item
+            leftSection={<IconCopy size={14} />}
+            onClick={() => navigator.clipboard.writeText(ctx!.path)}
           >
-            {detail.files.map((file) => (
-              <FileRow
-                key={file.path}
-                path={file.path}
-                status={file.status}
-                isSelected={selectedFile === file.path}
-                onClick={() => setSelectedFile(file.path)}
-                onContextMenu={(e) => openContextMenu(e, file)}
-              />
-            ))}
-          </div>
+            Copy Path
+          </Menu.Item>
+          <Menu.Item
+            leftSection={<IconGitCompare size={14} />}
+            onClick={() => invoke("open_diff_external", {
+              tabId,
+              oid: detail.oid,
+              filePath: ctx!.path,
+            })}
+          >
+            Diff in External App
+          </Menu.Item>
+        </Menu.Dropdown>
+      </Menu>
 
-          <div className="resize-handle resize-handle--horizontal" onMouseDown={startMetaResize} />
+      <div className="resize-handle resize-handle--vertical" onMouseDown={startLeftResize} />
 
-          <div className="detail-meta" style={{ height: metaPanelHeight }}>
-            <div className="detail-message">
-              <div className="detail-commit-title">{detail.summary}</div>
-              {detail.body && (
-                <div className="detail-commit-body">
-                  <Markdown>{detail.body}</Markdown>
-                </div>
-              )}
-              <div className="detail-meta-footer">
-                <span className="detail-oid">{detail.oid.slice(0, 7)}</span>
-                <span className="detail-meta-sep">·</span>
-                <span className="detail-date">{formatDateTime(detail.timestamp)}</span>
-                <span className="detail-meta-sep">·</span>
-                <span className="detail-author">
-                  {detail.author_name}
-                </span>
-              </div>
-            </div>
-          </div>
-        </>
-      }
-      diff={
-        diffLoading ? (
+      <div className="detail-diff">
+        {showDescription ? (
+          <DescriptionPane detail={detail} />
+        ) : diffLoading ? (
           <div className="diff-loading"><Loader size="sm" /></div>
         ) : diff ? (
           <DiffViewer diff={diff} />
@@ -219,8 +210,60 @@ function CommitDetailInner({
           <div className="diff-loading">
             <span className="diff-loading-text">Select a file to view diff</span>
           </div>
-        )
-      }
-    />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DescriptionRow({
+  detail,
+  selected,
+  onSelect,
+}: {
+  detail: CommitDetailData;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <div
+      className={`file-row description-row${selected ? " file-row--selected" : ""}`}
+      onClick={onSelect}
+    >
+      <IconFileDescription
+        size={12}
+        strokeWidth={1.5}
+        style={{ flexShrink: 0, opacity: 0.6 }}
+      />
+      <span className="description-row-label">Description</span>
+      <span className="description-row-sha">{detail.oid.slice(0, 7)}</span>
+    </div>
+  );
+}
+
+function DescriptionPane({ detail }: { detail: CommitDetailData }) {
+  return (
+    <div className="description-pane">
+      <div className="description-pane-header">
+        <div className="description-pane-meta">
+          <span className="detail-oid">{detail.oid.slice(0, 7)}</span>
+          <span className="detail-meta-sep">·</span>
+          <span className="detail-date">{formatDateTime(detail.timestamp)}</span>
+          <span className="detail-meta-sep">·</span>
+          <span className="detail-author">{detail.author_name}</span>
+        </div>
+        <div className="description-pane-title">{detail.summary}</div>
+      </div>
+
+      {detail.body ? (
+        <div className="description-pane-body">
+          <div className="detail-commit-body">
+            <Markdown>{detail.body}</Markdown>
+          </div>
+        </div>
+      ) : (
+        <div className="description-pane-empty">No description.</div>
+      )}
+    </div>
   );
 }

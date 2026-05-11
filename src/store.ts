@@ -14,9 +14,7 @@ interface TabStore {
   tabs: Tab[];
   activeTabId: string | null;
   sidebarWidth: number;
-  detailHeight: number;
   detailLeftWidth: number;
-  metaPanelHeight: number;
   openTab: (tab: Omit<Tab, "selectedOid" | "listKey" | "statusKey">) => void;
   closeTab: (id: string) => void;
   setActiveTab: (id: string) => void;
@@ -24,9 +22,7 @@ interface TabStore {
   bumpListKey: (tabId: string) => void;
   bumpStatusKey: (tabId: string) => void;
   setSidebarWidth: (width: number) => void;
-  setDetailHeight: (height: number) => void;
   setDetailLeftWidth: (width: number) => void;
-  setMetaPanelHeight: (height: number) => void;
 }
 
 export const useTabStore = create<TabStore>()(
@@ -34,10 +30,8 @@ export const useTabStore = create<TabStore>()(
     (set) => ({
       tabs: [],
       activeTabId: null,
-      sidebarWidth: 220,
-      detailHeight: 320,
-      detailLeftWidth: 220,
-      metaPanelHeight: 120,
+      sidebarWidth: 360,
+      detailLeftWidth: 240,
 
       openTab: (tab) =>
         set((state) => {
@@ -84,9 +78,7 @@ export const useTabStore = create<TabStore>()(
         })),
 
       setSidebarWidth: (width) => set({ sidebarWidth: width }),
-      setDetailHeight: (height) => set({ detailHeight: height }),
       setDetailLeftWidth: (width) => set({ detailLeftWidth: width }),
-      setMetaPanelHeight: (height) => set({ metaPanelHeight: height }),
     }),
     {
       name: "least-git-tabs",
@@ -101,9 +93,7 @@ export const useTabStore = create<TabStore>()(
         })),
         activeTabId: state.activeTabId,
         sidebarWidth: state.sidebarWidth,
-        detailHeight: state.detailHeight,
         detailLeftWidth: state.detailLeftWidth,
-        metaPanelHeight: state.metaPanelHeight,
       }),
     }
   )

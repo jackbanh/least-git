@@ -11,6 +11,7 @@ export default defineConfig({
       "**/node_modules/**",
       "**/.claude/**",   // exclude worktrees created by Claude Code agents
       "**/dist/**",
+      "**/test/e2e/**",  // Playwright specs — run via npm run test:e2e, not vitest
     ],
   },
 });

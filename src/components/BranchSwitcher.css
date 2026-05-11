@@ -1,128 +1,77 @@
 .branch-switcher {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
+  flex-shrink: 0;
   position: relative;
   background: var(--lg-sidebar-bg);
-  overflow: hidden;
+  border-bottom: 0.5px solid var(--lg-border);
 }
 
-/* Linen texture overlay — absolute, pointer-events none */
-.branch-linen {
-  position: absolute;
-  inset: 0;
-  background-size: 220px 220px;
-  mix-blend-mode: multiply;
-  opacity: 0.4;
-  pointer-events: none;
-  z-index: 0;
-}
+/* ── Dropdown trigger button ──────────────────────────────────────── */
 
-/* All content sits above linen */
-.branch-content {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-}
-
-/* ── Header ───────────────────────────────────────────────────────── */
-
-.branch-header {
-  padding: 18px 18px 10px;
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  flex-shrink: 0;
-}
-
-.branch-header-label {
-  font-family: var(--lg-font-serif);
-  font-size: 11.5px;
-  font-weight: 500;
-  color: var(--lg-ink-muted);
-  letter-spacing: 1.4px;
-  text-transform: uppercase;
-}
-
-.branch-header-count {
-  font-family: var(--lg-font-mono);
-  font-size: 10.5px;
-  color: var(--lg-ink-faint);
-}
-
-/* ── Filter ───────────────────────────────────────────────────────── */
-
-.branch-filter-wrap {
-  padding: 0 14px 12px;
-  flex-shrink: 0;
-}
-
-.branch-filter-box {
+.branch-dropdown-btn {
+  width: 100%;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 10px;
-  border-radius: 6px;
-  background: var(--lg-panel-bg);
-  border: 0.5px solid var(--lg-border);
-  transition: box-shadow 120ms ease, border-color 120ms ease;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  transition: background 80ms ease;
 }
 
-.branch-filter-box--focused {
-  border-color: var(--lg-accent);
-  box-shadow: 0 0 0 3px var(--lg-accent-soft);
+.branch-dropdown-btn:hover {
+  background: var(--lg-hover-bg);
 }
 
-.branch-filter-icon {
-  color: var(--lg-ink-muted);
-  display: flex;
-  align-items: center;
+.branch-dropdown-icon {
+  color: var(--lg-accent-text);
+  opacity: 0.85;
   flex-shrink: 0;
 }
 
-.branch-filter-input {
+.branch-dropdown-name {
   flex: 1;
-  border: none;
-  background: transparent;
-  font-family: var(--lg-font-sans);
-  font-size: 11.5px;
-  color: var(--lg-ink);
-  outline: none;
-  padding: 0;
   min-width: 0;
+  font-family: var(--lg-font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--lg-accent-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.branch-filter-input::placeholder {
+.branch-dropdown-chevron {
   color: var(--lg-ink-faint);
+  opacity: 0.7;
+  flex-shrink: 0;
 }
 
-.branch-filter-clear {
-  border: none;
-  background: transparent;
-  color: var(--lg-ink-faint);
-  cursor: pointer;
-  font-size: 13px;
-  padding: 0;
-  line-height: 1;
-  display: flex;
-  align-items: center;
+/* ── Popover dropdown ─────────────────────────────────────────────── */
+
+.branch-popover-dropdown {
+  padding: 4px 0 !important;
+  border: 0.5px solid var(--lg-border) !important;
+  background: var(--lg-panel-bg) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 12px 28px -8px rgba(0,0,0,0.18), 0 2px 4px rgba(0,0,0,0.08) !important;
+  max-height: 320px;
+  overflow-y: auto;
 }
 
-/* ── Branch list ──────────────────────────────────────────────────── */
+/* ── Branch list (shared by popover + inline) ─────────────────────── */
 
 .branch-list {
-  flex: 1;
-  overflow-y: auto;
-  padding-bottom: 10px;
+  display: flex;
+  flex-direction: column;
 }
 
 .branch-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 9px 20px;
+  padding: 7px 12px;
   cursor: pointer;
   position: relative;
   transition: background 60ms ease;
@@ -207,7 +156,7 @@
 }
 
 .branch-empty {
-  padding: 16px 18px;
+  padding: 12px 16px;
   font-family: var(--lg-font-sans);
   font-size: 11.5px;
   color: var(--lg-ink-faint);

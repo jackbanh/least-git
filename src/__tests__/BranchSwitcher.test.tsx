@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { vi, describe, it, expect, beforeEach } from "vitest";
 import { MantineProvider } from "@mantine/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -46,6 +46,19 @@ function Wrapper({
   );
 }
 
+// Branches live in a Popover dropdown — open it to make them visible.
+function openDropdown() {
+  fireEvent.click(document.querySelector(".branch-dropdown-btn")!);
+}
+
+// Query the branch list items directly to avoid ambiguity: when the dropdown is
+// open "main" appears in both the button label and the list row.
+function branchListNames(): string[] {
+  return Array.from(document.querySelectorAll(".branch-row-name")).map(
+    (el) => el.textContent ?? ""
+  );
+}
+
 describe("BranchSwitcher", () => {
   beforeEach(() => {
     mockInvoke.mockReset();
@@ -58,8 +71,12 @@ describe("BranchSwitcher", () => {
 
     render(<Wrapper client={client} listKey={0} />);
 
+    // Head branch appears in the button label before the dropdown is opened
     await waitFor(() => expect(screen.getByText("main")).toBeInTheDocument());
-    expect(screen.getByText("feature/new-ui")).toBeInTheDocument();
+    // Non-head branches are inside the Popover — open it first
+    openDropdown();
+    await waitFor(() => expect(branchListNames()).toContain("feature/new-ui"));
+    expect(branchListNames()).toContain("main");
   });
 
   it("keeps previous branches visible while a listKey-triggered refresh is in flight", async () => {
@@ -71,14 +88,16 @@ describe("BranchSwitcher", () => {
 
     const { rerender } = render(<Wrapper client={client} listKey={0} />);
     await waitFor(() => expect(screen.getByText("main")).toBeInTheDocument());
+    openDropdown();
+    await waitFor(() => expect(branchListNames()).toContain("feature/new-ui"));
 
     // Trigger refresh — fetch is pending, never resolves in this test
     mockInvoke.mockReturnValueOnce(new Promise(() => {}));
     rerender(<Wrapper client={client} listKey={1} />);
 
-    // Both branches must still be visible while the refresh is in flight
-    expect(screen.getByText("main")).toBeInTheDocument();
-    expect(screen.getByText("feature/new-ui")).toBeInTheDocument();
+    // Both branches must still be visible in the open dropdown while refresh is in flight
+    expect(branchListNames()).toContain("main");
+    expect(branchListNames()).toContain("feature/new-ui");
   });
 
   it("updates the branch list when a refresh resolves with new data", async () => {
@@ -86,15 +105,17 @@ describe("BranchSwitcher", () => {
     mockInvoke.mockResolvedValueOnce([BRANCH_A, BRANCH_B]);
 
     const { rerender } = render(<Wrapper client={client} listKey={0} />);
-    await waitFor(() => expect(screen.getByText("feature/new-ui")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("main")).toBeInTheDocument());
+    openDropdown();
+    await waitFor(() => expect(branchListNames()).toContain("feature/new-ui"));
 
     const updatedB = { name: "feature/redesign", is_head: false };
     mockInvoke.mockResolvedValueOnce([BRANCH_A, updatedB]);
     rerender(<Wrapper client={client} listKey={1} />);
 
-    await waitFor(() => expect(screen.getByText("feature/redesign")).toBeInTheDocument());
-    expect(screen.queryByText("feature/new-ui")).not.toBeInTheDocument();
-    expect(screen.getByText("main")).toBeInTheDocument();
+    await waitFor(() => expect(branchListNames()).toContain("feature/redesign"));
+    expect(branchListNames()).not.toContain("feature/new-ui");
+    expect(branchListNames()).toContain("main");
   });
 
   it("shows cached branches immediately on remount (simulates tab switch)", async () => {
@@ -117,14 +138,17 @@ describe("BranchSwitcher", () => {
     // Remount with the same client — simulates switching back to this tab
     render(<Wrapper client={client} listKey={1} />);
 
-    // Stale cache data must be visible immediately — no blank flash
-    expect(screen.getByText("main")).toBeInTheDocument();
-    expect(screen.getByText("feature/new-ui")).toBeInTheDocument();
+    // Open dropdown; stale cache data must be visible immediately — no blank flash
+    openDropdown();
+    await waitFor(() => {
+      expect(branchListNames()).toContain("main");
+      expect(branchListNames()).toContain("feature/new-ui");
+    });
 
     // Resolve with a slimmed-down list to confirm the live update lands
     resolveRemount([BRANCH_A]);
-    await waitFor(() => expect(screen.queryByText("feature/new-ui")).not.toBeInTheDocument());
-    expect(screen.getByText("main")).toBeInTheDocument();
+    await waitFor(() => expect(branchListNames()).not.toContain("feature/new-ui"));
+    expect(branchListNames()).toContain("main");
   });
 
   it("shows stale branches via branchCache when the TanStack Query cache is cold", async () => {
@@ -147,9 +171,12 @@ describe("BranchSwitcher", () => {
     mockInvoke.mockReturnValueOnce(new Promise((res) => { resolveFetch = res; }));
     rerender(<Wrapper client={client} tabId="tab-a" listKey={1} />);
 
-    // branchCache provides initialData — no blank flash despite cold TQ cache
-    expect(screen.getByText("main")).toBeInTheDocument();
-    expect(screen.getByText("feature/new-ui")).toBeInTheDocument();
+    // Open dropdown; branchCache provides initialData — no blank flash despite cold TQ cache
+    openDropdown();
+    await waitFor(() => {
+      expect(branchListNames()).toContain("main");
+      expect(branchListNames()).toContain("feature/new-ui");
+    });
 
     resolveFetch([BRANCH_A, BRANCH_B]);
   });

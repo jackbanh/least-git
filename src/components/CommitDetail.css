@@ -19,7 +19,7 @@
   background: var(--lg-panel-bg);
 }
 
-/* ── Left column: file list (top) + meta (bottom) ─────────────── */
+/* ── Left column: file list ───────────────────────────────────────── */
 
 .detail-left {
   flex-shrink: 0;
@@ -29,6 +29,25 @@
   overflow: hidden;
 }
 
+/* Files section header */
+.detail-files-header {
+  padding: 10px 14px 8px;
+  display: flex;
+  align-items: center;
+  border-bottom: 0.5px solid var(--lg-border-soft);
+  background: var(--lg-panel-bg);
+  flex-shrink: 0;
+}
+
+.detail-files-header-label {
+  font-family: var(--lg-font-serif);
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--lg-ink-muted);
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+}
+
 .detail-files {
   flex: 1;
   overflow-y: auto;
@@ -36,38 +55,93 @@
   background: var(--lg-panel-bg);
 }
 
-.detail-meta {
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  border-top: 0.5px solid var(--lg-border-soft);
+/* ── Description pseudo-row ───────────────────────────────────────── */
+
+.description-row {
+  border-bottom: 0.5px solid var(--lg-border-soft);
 }
 
-/* ── Commit body pane ───────────────────────────────────────────── */
-
-.detail-message {
+.description-row-label {
+  font-family: var(--lg-font-serif);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--lg-ink);
   flex: 1;
-  overflow-y: auto;
-  padding: 14px 16px;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-row--selected .description-row-label {
+  color: var(--lg-accent-text);
+}
+
+.description-row-sha {
+  font-family: var(--lg-font-mono);
+  font-size: 9.5px;
+  color: var(--lg-ink-faint);
+  letter-spacing: 0.4px;
+  flex-shrink: 0;
+}
+
+/* ── Description pane (right column when description is selected) ─── */
+
+.description-pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+  background: var(--lg-panel-bg);
+}
+
+.description-pane-header {
+  padding: 22px 32px 16px;
+  border-bottom: 0.5px solid var(--lg-border-soft);
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
-.detail-commit-title {
+.description-pane-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--lg-font-mono);
+  font-size: 10.5px;
+  color: var(--lg-ink-faint);
+  flex-wrap: wrap;
+}
+
+.description-pane-title {
   font-family: var(--lg-font-serif);
-  font-size: 14px;
+  font-size: 20px;
   font-weight: 500;
   color: var(--lg-ink);
-  line-height: 1.35;
+  line-height: 1.3;
+  max-width: 760px;
 }
+
+.description-pane-body {
+  padding: 20px 32px 40px;
+  max-width: 760px;
+}
+
+.description-pane-empty {
+  padding: 20px 32px;
+  font-family: var(--lg-font-sans);
+  font-size: 12px;
+  color: var(--lg-ink-faint);
+  font-style: italic;
+}
+
+/* ── Commit body markdown ─────────────────────────────────────────── */
 
 .detail-commit-body {
   font-family: var(--lg-font-sans);
-  font-size: 12px;
+  font-size: 13px;
   color: var(--lg-ink-soft);
-  line-height: 1.6;
+  line-height: 1.65;
 }
 
 .detail-commit-body p { margin: 0 0 6px; }
@@ -99,20 +173,11 @@
 }
 .detail-commit-body a { color: var(--lg-accent-text); }
 
-.detail-meta-footer {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding-top: 10px;
-  border-top: 0.5px dashed var(--lg-border-soft);
-  font-family: var(--lg-font-mono);
-  font-size: 10.5px;
-  color: var(--lg-ink-faint);
-  flex-wrap: wrap;
-}
+/* ── Metadata tokens ──────────────────────────────────────────────── */
 
 .detail-oid {
   color: var(--lg-sha);
+  font-size: 11.5px;
 }
 
 .detail-meta-sep {
@@ -158,40 +223,6 @@
   background: var(--lg-selected-bg);
 }
 
-.file-status {
-  flex-shrink: 0;
-  width: 14px;
-  font-weight: 600;
-  font-size: 9.5px;
-  font-family: var(--lg-font-mono);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.file-status--m { color: var(--lg-modified); }
-.file-status--a { color: var(--lg-added); }
-.file-status--d { color: var(--lg-deleted); }
-.file-status--r { color: var(--lg-modified); }
-.file-status--c { color: var(--lg-added); }
-.file-status--\? { color: var(--lg-ink-faint); }
-
-.file-path {
-  font-family: var(--lg-font-sans);
-  font-size: 11.5px;
-  color: var(--lg-ink);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
-}
-
-.file-path-dir {
-  color: var(--lg-ink-faint);
-}
-
-.file-path-name {
-  color: var(--lg-ink);
-}
 
 /* ── Right column: diff ───────────────────────────────────────────── */
 
@@ -221,7 +252,6 @@
   letter-spacing: 0.1px;
 }
 
-/* Resize handles inside commit detail reuse app-level classes */
 .commit-detail .resize-handle--vertical {
   border-right: none;
 }
