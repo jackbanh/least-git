@@ -5,6 +5,22 @@
   border-bottom: 0.5px solid var(--lg-border);
 }
 
+.branch-switcher-inner {
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.branch-switcher-label {
+  font-family: var(--lg-font-serif);
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--lg-ink-muted);
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+}
+
 /* ── Dropdown trigger button ──────────────────────────────────────── */
 
 .branch-dropdown-btn {
@@ -12,9 +28,10 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px;
-  background: transparent;
-  border: none;
+  padding: 7px 10px;
+  background: var(--lg-panel-bg);
+  border: 0.5px solid var(--lg-border);
+  border-radius: 6px;
   cursor: pointer;
   text-align: left;
   transition: background 80ms ease;
@@ -94,23 +111,15 @@
   pointer-events: none;
 }
 
-/* Left accent bars */
-.branch-row-accent-bar {
-  position: absolute;
-  left: 0;
-  top: 4px;
-  bottom: 4px;
-  width: 2px;
-  border-radius: 0 2px 2px 0;
+/* Icon per row */
+.branch-row-icon {
+  flex-shrink: 0;
+  color: var(--lg-accent-text);
+  opacity: 0.45;
 }
 
-.branch-row-accent-bar--head {
-  background: var(--lg-accent);
-}
-
-.branch-row-accent-bar--selected {
-  background: var(--lg-ink-faint);
-  opacity: 0.55;
+.branch-row--head .branch-row-icon {
+  opacity: 0.85;
 }
 
 /* Branch name */
@@ -118,7 +127,7 @@
   font-family: var(--lg-font-sans);
   font-size: 12px;
   font-weight: 400;
-  color: var(--lg-ink-soft);
+  color: var(--lg-ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -131,17 +140,14 @@
   color: var(--lg-accent-text);
 }
 
-.branch-row--selected:not(.branch-row--head) .branch-row-name {
-  color: var(--lg-ink);
-}
-
-/* Small dot for head branch indicator */
-.branch-row-head-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--lg-accent);
-  opacity: 0.7;
+/* "current" badge */
+.branch-row-current {
+  font-family: var(--lg-font-mono);
+  font-size: 9px;
+  color: var(--lg-accent-text);
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  opacity: 0.85;
   flex-shrink: 0;
 }
 

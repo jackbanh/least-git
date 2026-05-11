@@ -116,43 +116,46 @@ export default function BranchSwitcher({
 
       {error && <div className="branch-error">{error}</div>}
 
-      <Popover
-        opened={dropdownOpen}
-        onClose={() => setDropdownOpen(false)}
-        position="bottom-start"
-        width="target"
-        shadow="md"
-      >
-        <Popover.Target>
-          <button
-            className="branch-dropdown-btn"
-            onClick={() => setDropdownOpen((o) => !o)}
-          >
-            <IconGitBranch size={12} strokeWidth={1.6} className="branch-dropdown-icon" />
-            <span className="branch-dropdown-name">{displayName}</span>
-            <IconChevronDown size={11} strokeWidth={1.75} className="branch-dropdown-chevron" />
-          </button>
-        </Popover.Target>
+      <div className="branch-switcher-inner">
+        <span className="branch-switcher-label">Branch</span>
+        <Popover
+          opened={dropdownOpen}
+          onClose={() => setDropdownOpen(false)}
+          position="bottom-start"
+          width="target"
+          shadow="md"
+        >
+          <Popover.Target>
+            <button
+              className="branch-dropdown-btn"
+              onClick={() => setDropdownOpen((o) => !o)}
+            >
+              <IconGitBranch size={12} strokeWidth={1.6} className="branch-dropdown-icon" />
+              <span className="branch-dropdown-name">{displayName}</span>
+              <IconChevronDown size={11} strokeWidth={1.75} className="branch-dropdown-chevron" />
+            </button>
+          </Popover.Target>
 
-        <Popover.Dropdown className="branch-popover-dropdown">
-          <div className="branch-list">
-            {branches.map((branch) => (
-              <BranchRow
-                key={branch.name}
-                branch={branch}
-                selected={branch.name === selectedName}
-                isChecking={checkoutBranch === branch.name}
-                onSelect={() => setSelectedName(branch.name)}
-                onDoubleClick={() => handleCheckout(branch.name)}
-                onContextMenu={(e) => { setSelectedName(branch.name); openContextMenu(e, branch); }}
-              />
-            ))}
-            {branches.length === 0 && (
-              <div className="branch-empty">No branches.</div>
-            )}
-          </div>
-        </Popover.Dropdown>
-      </Popover>
+          <Popover.Dropdown className="branch-popover-dropdown">
+            <div className="branch-list">
+              {branches.map((branch) => (
+                <BranchRow
+                  key={branch.name}
+                  branch={branch}
+                  selected={branch.name === selectedName}
+                  isChecking={checkoutBranch === branch.name}
+                  onSelect={() => setSelectedName(branch.name)}
+                  onDoubleClick={() => handleCheckout(branch.name)}
+                  onContextMenu={(e) => { setSelectedName(branch.name); openContextMenu(e, branch); }}
+                />
+              ))}
+              {branches.length === 0 && (
+                <div className="branch-empty">No branches.</div>
+              )}
+            </div>
+          </Popover.Dropdown>
+        </Popover>
+      </div>
 
       <GitOutputDrawer
         tabId={tabId}
@@ -218,15 +221,14 @@ function BranchRow({
       onDoubleClick={onDoubleClick}
       onContextMenu={onContextMenu}
     >
-      {branch.is_head && (
-        <div className="branch-row-accent-bar branch-row-accent-bar--head" />
-      )}
-      {selected && !branch.is_head && (
-        <div className="branch-row-accent-bar branch-row-accent-bar--selected" />
-      )}
+      <IconGitBranch
+        size={12}
+        strokeWidth={1.6}
+        className="branch-row-icon"
+      />
       <span className="branch-row-name">{branch.name}</span>
       {branch.is_head && (
-        <div className="branch-row-head-dot" />
+        <span className="branch-row-current">current</span>
       )}
     </div>
   );
