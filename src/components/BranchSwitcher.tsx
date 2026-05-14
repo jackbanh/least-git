@@ -1,14 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useContextMenu } from "../hooks/useContextMenu";
-import { AnchoredMenuTarget } from "./FileRow";
 import { invoke } from "@tauri-apps/api/core";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { warn as logWarn, info as logInfo } from "@tauri-apps/plugin-log";
-import { Menu, Popover } from "@mantine/core";
-import { IconGitBranch, IconCopy, IconChevronDown } from "@tabler/icons-react";
+import { Loader, Popover } from "@mantine/core";
+import { IconGitBranch, IconChevronDown } from "@tabler/icons-react";
 import { useTabStore } from "../store";
 import GitOutputDrawer from "./GitOutputDrawer";
-import ProgressBar from "./ProgressBar";
 import "./BranchSwitcher.css";
 
 interface BranchInfo {
@@ -34,11 +31,8 @@ export default function BranchSwitcher({
   onManualRefresh?: () => void;
 }) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [selectedName, setSelectedName] = useState<string | null>(null);
   const [checkoutBranch, setCheckoutBranch] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  const { contextMenu, contextTargetRef, open: openContextMenu, close: closeContextMenu } = useContextMenu<BranchInfo>();
 
   const bumpListKey = useTabStore((s) => s.bumpListKey);
   const queryClient = useQueryClient();
@@ -63,8 +57,6 @@ export default function BranchSwitcher({
         }
         logInfo(`BranchSwitcher[${tabId}] refresh done count=${data.length} ms=${ms}`);
         if (data.length > 0) branchCache.set(tabId, data);
-        const head = data.find((b) => b.is_head);
-        if (head) setSelectedName(head.name);
         return data;
       } catch (e) {
         const ms = Math.round(performance.now() - t0);
@@ -108,12 +100,10 @@ export default function BranchSwitcher({
   }
 
   const headBranch = useMemo(() => branches.find((b) => b.is_head), [branches]);
-  const displayName = headBranch?.name ?? selectedName ?? "—";
+  const displayName = checkoutBranch ?? headBranch?.name ?? "—";
 
   return (
     <div className="branch-switcher">
-      <ProgressBar visible={isFetching} />
-
       {error && <div className="branch-error">{error}</div>}
 
       <div className="branch-switcher-inner">
@@ -129,10 +119,14 @@ export default function BranchSwitcher({
             <button
               className="branch-dropdown-btn"
               onClick={() => setDropdownOpen((o) => !o)}
+              disabled={!!checkoutBranch || isFetching}
             >
               <IconGitBranch size={12} strokeWidth={1.6} className="branch-dropdown-icon" />
               <span className="branch-dropdown-name">{displayName}</span>
-              <IconChevronDown size={11} strokeWidth={1.75} className="branch-dropdown-chevron" />
+              {(checkoutBranch || isFetching)
+                ? <Loader size={11} color="var(--lg-ink-faint)" />
+                : <IconChevronDown size={11} strokeWidth={1.75} className="branch-dropdown-chevron" />
+              }
             </button>
           </Popover.Target>
 
@@ -142,11 +136,8 @@ export default function BranchSwitcher({
                 <BranchRow
                   key={branch.name}
                   branch={branch}
-                  selected={branch.name === selectedName}
                   isChecking={checkoutBranch === branch.name}
-                  onSelect={() => setSelectedName(branch.name)}
-                  onDoubleClick={() => handleCheckout(branch.name)}
-                  onContextMenu={(e) => { setSelectedName(branch.name); openContextMenu(e, branch); }}
+                  onClick={() => handleCheckout(branch.name)}
                 />
               ))}
               {branches.length === 0 && (
@@ -168,58 +159,27 @@ export default function BranchSwitcher({
         onSuccess={handleCheckoutSuccess}
       />
 
-      <Menu
-        opened={!!contextMenu}
-        onClose={closeContextMenu}
-        position="right-start"
-      >
-        <AnchoredMenuTarget contextMenu={contextMenu} />
-        <Menu.Dropdown>
-          <Menu.Item
-            leftSection={<IconGitBranch size={14} />}
-            onClick={() => handleCheckout(contextTargetRef.current!.data.name)}
-            disabled={contextTargetRef.current?.data.is_head}
-          >
-            Checkout {contextTargetRef.current?.data.name}
-          </Menu.Item>
-          <Menu.Item
-            leftSection={<IconCopy size={14} />}
-            onClick={() => navigator.clipboard.writeText(contextTargetRef.current!.data.name)}
-          >
-            Copy Branch Name
-          </Menu.Item>
-        </Menu.Dropdown>
-      </Menu>
     </div>
   );
 }
 
 function BranchRow({
   branch,
-  selected,
   isChecking,
-  onSelect,
-  onDoubleClick,
-  onContextMenu,
+  onClick,
 }: {
   branch: BranchInfo;
-  selected: boolean;
   isChecking: boolean;
-  onSelect: () => void;
-  onDoubleClick: () => void;
-  onContextMenu: (e: React.MouseEvent) => void;
+  onClick: () => void;
 }) {
   return (
     <div
       className={[
         "branch-row",
         branch.is_head ? "branch-row--head" : "",
-        selected ? "branch-row--selected" : "",
         isChecking ? "branch-row--checking" : "",
       ].filter(Boolean).join(" ")}
-      onClick={onSelect}
-      onDoubleClick={onDoubleClick}
-      onContextMenu={onContextMenu}
+      onClick={branch.is_head ? undefined : onClick}
     >
       <IconGitBranch
         size={12}

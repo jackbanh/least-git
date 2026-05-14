@@ -37,8 +37,13 @@
   transition: background 80ms ease;
 }
 
-.branch-dropdown-btn:hover {
+.branch-dropdown-btn:hover:not(:disabled) {
   background: var(--lg-hover-bg);
+}
+
+.branch-dropdown-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 
 .branch-dropdown-icon {
@@ -97,14 +102,6 @@
 
 .branch-row:hover {
   background: var(--lg-hover-bg);
-}
-
-.branch-row--selected {
-  background: var(--lg-selected-bg);
-}
-
-.branch-row--selected:hover {
-  background: var(--lg-selected-bg);
 }
 
 .branch-row--checking {

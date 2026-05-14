@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Menu } from "@mantine/core";
+import { Loader, Menu } from "@mantine/core";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { warn as logWarn, info as logInfo, error as logError } from "@tauri-apps/plugin-log";
 import {
@@ -11,7 +11,6 @@ import {
 } from "@tabler/icons-react";
 import { useTabStore } from "../store";
 import { UNCOMMITTED } from "./CommitDetail";
-import ProgressBar from "./ProgressBar";
 import GitOutputDrawer from "./GitOutputDrawer";
 import { useContextMenu } from "../hooks/useContextMenu";
 import { AnchoredMenuTarget } from "./FileRow";
@@ -238,6 +237,9 @@ export default function CommitList({ tabId, listKey }: { tabId: string; listKey:
     <div className="commit-list-wrap">
       <div className="commit-list-header">
         <span className="commit-list-header-label">History</span>
+        {commits.length === 0 && hasMore && (
+          <Loader size={11} color="var(--lg-ink-faint)" />
+        )}
       </div>
 
       <div
@@ -247,8 +249,6 @@ export default function CommitList({ tabId, listKey }: { tabId: string; listKey:
         onKeyDown={handleKeyDown}
         style={contextMenu ? { overflowY: "hidden" } : undefined}
       >
-        <ProgressBar visible={commits.length === 0 && hasMore} />
-
         {/* Continuous dot rail */}
         <div className="commit-dot-rail" />
 

@@ -11,7 +11,7 @@
 .commit-list-header {
   padding: 14px 16px 10px;
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   border-bottom: 0.5px solid var(--lg-border-soft);
   flex-shrink: 0;
