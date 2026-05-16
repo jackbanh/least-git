@@ -2,7 +2,7 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "least-git",
   "version": "0.4.0",
-  "identifier": "com.jackbanh.least-git",
+  "identifier": "io.github.jackbanh.least-git",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",

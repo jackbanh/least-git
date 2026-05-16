@@ -12,8 +12,18 @@ dist
 dist-ssr
 *.local
 
-# Claude Code local settings
+# Claude Code local settings and worktrees
 .claude/settings.local.json
+.claude/worktrees/
+
+# Test results
+test-results/
+playwright-report/
+
+# Env files (never commit secrets)
+.env
+.env.*
+!.env.example
 
 # Editor directories and files
 .vscode/*
