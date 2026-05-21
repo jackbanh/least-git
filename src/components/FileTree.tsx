@@ -158,7 +158,10 @@ function TreeFolder({
         </div>
       )}
       {isOpen && (
-        <>
+        <div
+          className={hideRoot ? undefined : "file-tree-level"}
+          style={hideRoot ? undefined : { "--tree-guide-x": `${10 + depth * 14 + 6}px` } as React.CSSProperties}
+        >
           {node.sortedChildren.map(c => (
             <TreeFolder
               key={c.path}
@@ -181,7 +184,7 @@ function TreeFolder({
               onContextMenu={onContextMenu}
             />
           ))}
-        </>
+        </div>
       )}
     </div>
   );

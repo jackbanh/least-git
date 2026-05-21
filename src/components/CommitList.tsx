@@ -33,18 +33,25 @@ const PAGE_SIZE = 25;
 // loaded commits are visible immediately while the fresh fetch runs.
 const commitCache = new Map<string, CommitInfo[]>();
 
+function getInitials(name: string): string {
+  const words = name.trim().split(/\s+/);
+  if (words.length === 1) return (words[0][0] ?? "?").toUpperCase();
+  return (words[0][0] + words[words.length - 1][0]).toUpperCase();
+}
+
 function formatDate(ts: number): string {
+  const nowS = Date.now() / 1000;
+  const diff = nowS - ts;
+  if (diff < 48 * 3600) {
+    if (diff < 60) return "just now";
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    return `${Math.floor(diff / 3600)}h ago`;
+  }
   const d = new Date(ts * 1000);
   const yyyy = d.getFullYear();
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
-}
-
-function getInitials(name: string): string {
-  const words = name.trim().split(/\s+/);
-  if (words.length === 1) return (words[0][0] ?? "?").toUpperCase();
-  return (words[0][0] + words[words.length - 1][0]).toUpperCase();
 }
 
 
@@ -300,16 +307,15 @@ export default function CommitList({ tabId, listKey }: { tabId: string; listKey:
                       <div className={`commit-dot${isSelected ? " commit-dot--selected" : ""}`} />
                     </div>
                     <div className="commit-row-body">
-                      <div className="commit-row-meta">
-                        <span className="commit-sha-mono">{commit.short_oid}</span>
-                        <span className="commit-date">{formatDate(commit.timestamp)}</span>
-                      </div>
                       <div className={`commit-title${isSelected ? " commit-title--selected" : ""}`}>
                         {commit.summary}
                       </div>
                       <div className="commit-author-cell">
-                        <div className="commit-initials-avatar">{getInitials(commit.author_name)}</div>
-                        <span className="commit-author-text">{commit.author_name}</span>
+                        <div className="commit-author-identity">
+                          <div className="commit-initials-avatar">{getInitials(commit.author_name)}</div>
+                          <span className="commit-author-text">{commit.author_name}</span>
+                        </div>
+                        <span className="commit-date">{formatDate(commit.timestamp)}</span>
                       </div>
                     </div>
                   </>

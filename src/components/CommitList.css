@@ -125,28 +125,11 @@
   min-width: 0;
 }
 
-.commit-row-meta {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  margin-bottom: 3px;
-}
-
-/* SHA */
-.commit-sha-mono {
-  font-family: var(--lg-font-mono);
-  font-size: 10.5px;
-  color: var(--lg-sha);
-  letter-spacing: 0.2px;
-  flex-shrink: 0;
-}
-
-/* Date (right-aligned via auto left margin) */
+/* Date */
 .commit-date {
   font-family: var(--lg-font-mono);
   font-size: 10px;
   color: var(--lg-ink-faint);
-  margin-left: auto;
   flex-shrink: 0;
   white-space: nowrap;
 }
@@ -170,12 +153,13 @@
   font-weight: 500;
 }
 
-/* Author row */
-.commit-author-cell {
-  margin-top: 4px;
+/* Author + date bottom row */
+.commit-author-identity {
   display: flex;
   align-items: center;
   gap: 7px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .commit-initials-avatar {
@@ -193,6 +177,14 @@
   flex-shrink: 0;
 }
 
+.commit-author-cell {
+  margin-top: 4px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .commit-author-text {
   font-family: var(--lg-font-sans);
   font-size: 10.5px;
@@ -200,6 +192,7 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0;
 }
 
 /* ── Uncommitted row ────────────────────────────────────────────── */

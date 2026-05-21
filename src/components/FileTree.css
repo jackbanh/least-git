@@ -4,6 +4,23 @@
   padding: 6px 0 12px;
 }
 
+/* ── Tree guide lines ───────────────────────────────────────────── */
+
+.file-tree-level {
+  position: relative;
+}
+
+.file-tree-level::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 4px;
+  left: var(--tree-guide-x);
+  width: 1px;
+  background: var(--lg-border-soft);
+  pointer-events: none;
+}
+
 /* ── Folder rows ────────────────────────────────────────────────── */
 
 .file-tree-folder {
@@ -16,6 +33,7 @@
   -webkit-user-select: none;
   user-select: none;
   transition: background 60ms ease;
+  position: relative;
 }
 
 .file-tree-folder:hover {
@@ -41,8 +59,8 @@
 }
 
 .file-tree-folder-name {
-  font-family: var(--lg-font-mono);
-  font-size: 11.5px;
+  font-family: var(--lg-font-sans);
+  font-size: 13px;
   color: var(--lg-ink-muted);
   white-space: nowrap;
   overflow: hidden;
@@ -99,8 +117,8 @@
 }
 
 .file-tree-filename {
-  font-family: var(--lg-font-mono);
-  font-size: 11.5px;
+  font-family: var(--lg-font-sans);
+  font-size: 13px;
   color: var(--lg-ink);
   white-space: nowrap;
   overflow: hidden;
