@@ -102,6 +102,16 @@ export default function BranchSwitcher({
   const headBranch = useMemo(() => branches.find((b) => b.is_head), [branches]);
   const displayName = checkoutBranch ?? headBranch?.name ?? "—";
 
+  // Close the dropdown when HEAD changes out from under us (e.g. another
+  // process or a terminal switches the branch — surfaced via FSMonitor refetch).
+  const prevHeadRef = useRef(headBranch?.name);
+  useEffect(() => {
+    if (prevHeadRef.current !== undefined && headBranch?.name !== prevHeadRef.current) {
+      setDropdownOpen(false);
+    }
+    prevHeadRef.current = headBranch?.name;
+  }, [headBranch?.name]);
+
   return (
     <div className="branch-switcher">
       {error && <div className="branch-error">{error}</div>}

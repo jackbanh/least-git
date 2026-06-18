@@ -118,6 +118,32 @@ describe("BranchSwitcher", () => {
     expect(branchListNames()).toContain("main");
   });
 
+  it("closes the dropdown when HEAD changes externally (another process switches branch)", async () => {
+    // Bug fix: if a terminal or other process checks out a different branch, the
+    // FSMonitor-driven refetch updates which branch is_head. The open dropdown
+    // must close so it doesn't show a stale "current" marker.
+    const client = makeQueryClient();
+    mockInvoke.mockResolvedValueOnce([BRANCH_A, BRANCH_B]);
+
+    const { rerender } = render(<Wrapper client={client} listKey={0} />);
+    await waitFor(() => expect(screen.getByText("main")).toBeInTheDocument());
+
+    openDropdown();
+    await waitFor(() => expect(branchListNames()).toContain("feature/new-ui"));
+    expect(document.querySelector(".branch-popover-dropdown")).not.toBeNull();
+
+    // External switch: feature/new-ui becomes HEAD
+    mockInvoke.mockResolvedValueOnce([
+      { name: "main", is_head: false },
+      { name: "feature/new-ui", is_head: true },
+    ]);
+    rerender(<Wrapper client={client} listKey={1} />);
+
+    await waitFor(() =>
+      expect(document.querySelector(".branch-popover-dropdown")).toBeNull()
+    );
+  });
+
   it("shows cached branches immediately on remount (simulates tab switch)", async () => {
     // Regression: before TanStack Query, lastKnownBranchesRef was component-local
     // and reset to [] on every remount. Tab switches caused a blank flash.
