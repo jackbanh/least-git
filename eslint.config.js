@@ -15,6 +15,11 @@ export default tseslint.config(
       // React Compiler and produce false positives on our async loading pattern.
       "react-hooks/rules-of-hooks": "error",
       "react-hooks/exhaustive-deps": "warn",
+      // Honour the `_`-prefix convention for intentionally unused args/vars.
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_", caughtErrorsIgnorePattern: "^_" },
+      ],
     },
   },
   {

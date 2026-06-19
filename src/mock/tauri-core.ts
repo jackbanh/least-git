@@ -42,7 +42,6 @@ function delay(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function invoke<T = unknown>(cmd: string, _args?: Record<string, unknown>): Promise<T> {
 
   switch (cmd) {

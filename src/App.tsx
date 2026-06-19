@@ -20,7 +20,7 @@ import SettingsModal from "./components/SettingsModal";
 import "./App.css";
 
 const platform = (() => {
-  if (!(window as any).__TAURI_INTERNALS__) return "windows";
+  if (!(window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__) return "windows";
   const ua = navigator.userAgent;
   if (ua.includes("Windows")) return "windows";
   if (ua.includes("Mac")) return "macos";
