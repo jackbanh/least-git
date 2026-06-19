@@ -245,7 +245,7 @@ export default function CommitList({ tabId, listKey }: { tabId: string; listKey:
       <div className="commit-list-header">
         <span className="commit-list-header-label">History</span>
         {commits.length === 0 && hasMore && (
-          <Loader size={11} color="var(--lg-ink-faint)" />
+          <Loader size={11} color="var(--lg-ink-faint)" role="progressbar" />
         )}
       </div>
 

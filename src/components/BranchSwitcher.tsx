@@ -129,7 +129,10 @@ export default function BranchSwitcher({
             <button
               className="branch-dropdown-btn"
               onClick={() => setDropdownOpen((o) => !o)}
-              disabled={!!checkoutBranch || isFetching}
+              // Only block interaction during a checkout, or the very first load
+              // when there's nothing cached to show. A background refresh with
+              // cached branches present must stay openable (no blank flash).
+              disabled={!!checkoutBranch || (isFetching && branches.length === 0)}
             >
               <IconGitBranch size={12} strokeWidth={1.6} className="branch-dropdown-icon" />
               <span className="branch-dropdown-name">{displayName}</span>
