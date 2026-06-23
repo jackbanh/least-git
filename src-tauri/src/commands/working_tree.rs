@@ -425,6 +425,65 @@ pub async fn get_unstaged_diff(
     Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
+/// Maximum bytes read for an untracked-file preview. New files in a large
+/// monorepo can be arbitrarily big (build artefacts, vendored blobs); cap the
+/// read so the UI never has to hold or highlight a huge buffer.
+const PREVIEW_MAX_BYTES: u64 = 512 * 1024; // 512 KiB
+
+/// Contents of an untracked file for a syntax-highlighted preview. New files
+/// have no diff, so the frontend renders their contents directly.
+#[derive(Serialize)]
+pub struct FilePreview {
+    /// UTF-8 (lossy) file contents; empty when `is_binary`.
+    content: String,
+    /// A NUL byte was found in the sample — git's own "this is binary" heuristic.
+    is_binary: bool,
+    /// The file exceeded `PREVIEW_MAX_BYTES` and the content was cut off.
+    truncated: bool,
+}
+
+/// Read an untracked file's contents for preview. Reads at most
+/// `PREVIEW_MAX_BYTES` and flags binary/truncated so the UI can fall back to a
+/// message instead of dumping garbage or blocking on a giant file.
+#[tauri::command]
+pub async fn read_file_preview(
+    tab_id: String,
+    file_path: String,
+    state: State<'_, AppState>,
+) -> Result<FilePreview, String> {
+    use tokio::io::AsyncReadExt;
+
+    let repo = get_repo_path(&tab_id, &state)?;
+    let full = repo.join(&file_path);
+
+    let file = tokio::fs::File::open(&full).await.map_err(|e| e.to_string())?;
+
+    // Read one byte past the cap so we can tell whether the file was truncated.
+    let mut buf = Vec::new();
+    let read = file
+        .take(PREVIEW_MAX_BYTES + 1)
+        .read_to_end(&mut buf)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let truncated = read as u64 > PREVIEW_MAX_BYTES;
+    if truncated {
+        buf.truncate(PREVIEW_MAX_BYTES as usize);
+    }
+
+    // Binary heuristic: a NUL byte in the sample. Matches what `git diff` uses
+    // to decide a file is binary and refuse to show a textual diff.
+    if buf.contains(&0) {
+        return Ok(FilePreview { content: String::new(), is_binary: true, truncated });
+    }
+
+    Ok(FilePreview {
+        content: String::from_utf8_lossy(&buf).into_owned(),
+        is_binary: false,
+        truncated,
+    })
+}
+
 /// Apply a patch string via `git apply`.
 /// `reverse = true` → `git apply --reverse` (unstage a staged chunk).
 /// Always uses `--cached` so only the index is touched, never the working tree.

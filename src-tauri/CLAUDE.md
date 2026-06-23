@@ -28,6 +28,7 @@ get_working_tree_status(tab_id) → WorkingTreeStatus         { staged, unstaged
 get_untracked_files(tab_id) → Vec<String>                   paths only; frontend fires this in parallel with get_working_tree_status
 get_staged_diff(tab_id, file_path: String) → String
 get_unstaged_diff(tab_id, file_path: String, is_untracked: bool) → String
+read_file_preview(tab_id, file_path: String) → FilePreview   { content, is_binary, truncated } — untracked file contents for preview, capped at 512 KiB (NUL byte ⇒ is_binary)
 stage_file(tab_id, file_path: String) → ()
 unstage_file(tab_id, file_path: String) → ()
 discard_changes(tab_id, file_path: String) → ()

@@ -565,6 +565,7 @@ pub fn run() {
             working_tree::delete_untracked,
             working_tree::get_staged_diff,
             working_tree::get_unstaged_diff,
+            working_tree::read_file_preview,
             working_tree::apply_patch,
             external::open_diff_external,
             external::open_working_tree_diff_external,

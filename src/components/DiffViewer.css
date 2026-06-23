@@ -72,110 +72,110 @@
 
 /* ── Syntax token colors ──────────────────────────────────────────── */
 
-.diff-scroll .token.keyword,
-.diff-scroll .token.important {
+:is(.diff-scroll, .fp-code) .token.keyword,
+:is(.diff-scroll, .fp-code) .token.important {
   color: oklch(50% 0.13 280);
 }
 
-.diff-scroll .token.string,
-.diff-scroll .token.attr-value,
-.diff-scroll .token.char {
+:is(.diff-scroll, .fp-code) .token.string,
+:is(.diff-scroll, .fp-code) .token.attr-value,
+:is(.diff-scroll, .fp-code) .token.char {
   color: oklch(52% 0.14 150);
 }
 
-.diff-scroll .token.comment,
-.diff-scroll .token.prolog,
-.diff-scroll .token.doctype,
-.diff-scroll .token.cdata {
+:is(.diff-scroll, .fp-code) .token.comment,
+:is(.diff-scroll, .fp-code) .token.prolog,
+:is(.diff-scroll, .fp-code) .token.doctype,
+:is(.diff-scroll, .fp-code) .token.cdata {
   color: var(--lg-ink-faint);
   font-style: italic;
 }
 
-.diff-scroll .token.number,
-.diff-scroll .token.boolean,
-.diff-scroll .token.constant {
+:is(.diff-scroll, .fp-code) .token.number,
+:is(.diff-scroll, .fp-code) .token.boolean,
+:is(.diff-scroll, .fp-code) .token.constant {
   color: oklch(55% 0.14 200);
 }
 
-.diff-scroll .token.function,
-.diff-scroll .token.function-name {
+:is(.diff-scroll, .fp-code) .token.function,
+:is(.diff-scroll, .fp-code) .token.function-name {
   color: oklch(52% 0.12 240);
 }
 
-.diff-scroll .token.class-name,
-.diff-scroll .token.type-definition,
-.diff-scroll .token.builtin {
+:is(.diff-scroll, .fp-code) .token.class-name,
+:is(.diff-scroll, .fp-code) .token.type-definition,
+:is(.diff-scroll, .fp-code) .token.builtin {
   color: oklch(54% 0.12 55);
 }
 
-.diff-scroll .token.attr-name,
-.diff-scroll .token.property {
+:is(.diff-scroll, .fp-code) .token.attr-name,
+:is(.diff-scroll, .fp-code) .token.property {
   color: oklch(52% 0.12 220);
 }
 
-.diff-scroll .token.operator,
-.diff-scroll .token.entity,
-.diff-scroll .token.url,
-.diff-scroll .token.variable {
+:is(.diff-scroll, .fp-code) .token.operator,
+:is(.diff-scroll, .fp-code) .token.entity,
+:is(.diff-scroll, .fp-code) .token.url,
+:is(.diff-scroll, .fp-code) .token.variable {
   color: var(--lg-ink-soft);
 }
 
-.diff-scroll .token.punctuation {
+:is(.diff-scroll, .fp-code) .token.punctuation {
   color: var(--lg-ink-muted);
 }
 
-.diff-scroll .token.regex,
-.diff-scroll .token.atrule {
+:is(.diff-scroll, .fp-code) .token.regex,
+:is(.diff-scroll, .fp-code) .token.atrule {
   color: oklch(52% 0.13 30);
 }
 
-.diff-scroll .token.tag,
-.diff-scroll .token.selector {
+:is(.diff-scroll, .fp-code) .token.tag,
+:is(.diff-scroll, .fp-code) .token.selector {
   color: oklch(50% 0.12 15);
 }
 
 /* Dark mode overrides */
-[data-theme="dark"] .diff-scroll .token.keyword,
-[data-theme="dark"] .diff-scroll .token.important {
+[data-theme="dark"] :is(.diff-scroll, .fp-code) .token.keyword,
+[data-theme="dark"] :is(.diff-scroll, .fp-code) .token.important {
   color: oklch(72% 0.12 280);
 }
 
-[data-theme="dark"] .diff-scroll .token.string,
-[data-theme="dark"] .diff-scroll .token.attr-value,
-[data-theme="dark"] .diff-scroll .token.char {
+[data-theme="dark"] :is(.diff-scroll, .fp-code) .token.string,
+[data-theme="dark"] :is(.diff-scroll, .fp-code) .token.attr-value,
+[data-theme="dark"] :is(.diff-scroll, .fp-code) .token.char {
   color: oklch(72% 0.14 150);
 }
 
-[data-theme="dark"] .diff-scroll .token.comment,
-[data-theme="dark"] .diff-scroll .token.prolog,
-[data-theme="dark"] .diff-scroll .token.doctype,
-[data-theme="dark"] .diff-scroll .token.cdata {
+[data-theme="dark"] :is(.diff-scroll, .fp-code) .token.comment,
+[data-theme="dark"] :is(.diff-scroll, .fp-code) .token.prolog,
+[data-theme="dark"] :is(.diff-scroll, .fp-code) .token.doctype,
+[data-theme="dark"] :is(.diff-scroll, .fp-code) .token.cdata {
   color: var(--lg-ink-faint);
 }
 
-[data-theme="dark"] .diff-scroll .token.number,
-[data-theme="dark"] .diff-scroll .token.boolean,
-[data-theme="dark"] .diff-scroll .token.constant {
+[data-theme="dark"] :is(.diff-scroll, .fp-code) .token.number,
+[data-theme="dark"] :is(.diff-scroll, .fp-code) .token.boolean,
+[data-theme="dark"] :is(.diff-scroll, .fp-code) .token.constant {
   color: oklch(72% 0.13 200);
 }
 
-[data-theme="dark"] .diff-scroll .token.function,
-[data-theme="dark"] .diff-scroll .token.function-name {
+[data-theme="dark"] :is(.diff-scroll, .fp-code) .token.function,
+[data-theme="dark"] :is(.diff-scroll, .fp-code) .token.function-name {
   color: oklch(72% 0.11 240);
 }
 
-[data-theme="dark"] .diff-scroll .token.class-name,
-[data-theme="dark"] .diff-scroll .token.type-definition,
-[data-theme="dark"] .diff-scroll .token.builtin {
+[data-theme="dark"] :is(.diff-scroll, .fp-code) .token.class-name,
+[data-theme="dark"] :is(.diff-scroll, .fp-code) .token.type-definition,
+[data-theme="dark"] :is(.diff-scroll, .fp-code) .token.builtin {
   color: oklch(74% 0.12 55);
 }
 
-[data-theme="dark"] .diff-scroll .token.attr-name,
-[data-theme="dark"] .diff-scroll .token.property {
+[data-theme="dark"] :is(.diff-scroll, .fp-code) .token.attr-name,
+[data-theme="dark"] :is(.diff-scroll, .fp-code) .token.property {
   color: oklch(72% 0.11 220);
 }
 
-[data-theme="dark"] .diff-scroll .token.tag,
-[data-theme="dark"] .diff-scroll .token.selector {
+[data-theme="dark"] :is(.diff-scroll, .fp-code) .token.tag,
+[data-theme="dark"] :is(.diff-scroll, .fp-code) .token.selector {
   color: oklch(72% 0.12 15);
 }

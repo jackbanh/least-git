@@ -17,6 +17,7 @@ import { useContextMenu } from "../hooks/useContextMenu";
 import { AnchoredMenuTarget } from "./FileRow";
 import { FileTree } from "./FileTree";
 import InteractiveDiffViewer from "./InteractiveDiffViewer";
+import FilePreview, { type FilePreviewData } from "./FilePreview";
 import "./CommitDetail.css";
 import "./WorkingTreeDetail.css";
 
@@ -48,6 +49,8 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
   const [untracked, setUntracked] = useState<StatusEntry[] | null>(null);
   const [selected, setSelected] = useState<SelectedFile | null>(null);
   const [diff, setDiff] = useState<string>("");
+  // Untracked files have no diff; we show their contents instead.
+  const [preview, setPreview] = useState<FilePreviewData | null>(null);
   const [diffLoading, setDiffLoading] = useState(false);
   const detailLeftWidth = useTabStore((s) => s.detailLeftWidth);
   const setDetailLeftWidth = useTabStore((s) => s.setDetailLeftWidth);
@@ -161,9 +164,21 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
   }, [tabId]);
 
   useEffect(() => {
-    if (!selected) { setDiff(""); return; }
+    if (!selected) { setDiff(""); setPreview(null); return; }
+    // Untracked (new) files have no diff — fetch their contents for a preview.
+    if (selected.is_untracked) {
+      setDiff("");
+      setPreview(null);
+      setDiffLoading(true);
+      invoke<FilePreviewData>("read_file_preview", { tabId, filePath: selected.path })
+        .then(setPreview)
+        .catch(() => setPreview(null))
+        .finally(() => setDiffLoading(false));
+      return;
+    }
+    setPreview(null);
     refreshDiff(selected);
-  }, [selected, refreshDiff]);
+  }, [selected, refreshDiff, tabId]);
 
   const applyPatch = useCallback(async (patch: string, reverse: boolean) => {
     try {
@@ -427,6 +442,14 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
           </div>
         ) : diffLoading ? (
           <div className="diff-loading"><Loader size="sm" /></div>
+        ) : selected.is_untracked ? (
+          preview ? (
+            <FilePreview path={selected.path} preview={preview} />
+          ) : (
+            <div className="diff-loading">
+              <span className="diff-loading-text">No preview available</span>
+            </div>
+          )
         ) : diff ? (
           <InteractiveDiffViewer
             diff={diff}

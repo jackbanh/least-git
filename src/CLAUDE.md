@@ -7,6 +7,7 @@
 - `tokens.css` — all `--lg-*` design tokens; naming convention guide at the top of the file
 - `components/CommitList.tsx` — virtualised commit history (plain CSS rows, no Mantine inside)
 - `components/CommitDetail.tsx` — commit diff view; exports `UNCOMMITTED` sentinel
+- `components/FilePreview.tsx` — syntax-highlighted preview of untracked files (no diff exists for new files); shares token colors with `DiffViewer.css`
 - `components/BranchSwitcher.tsx` — branch list with TanStack Query cache
 - Mantine CSS imported once in `main.tsx`
 

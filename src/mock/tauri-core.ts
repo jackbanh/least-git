@@ -11,6 +11,7 @@ import {
   MOCK_DIFF,
   MOCK_WORKING_TREE,
   MOCK_UNTRACKED_FILES,
+  mockFilePreview,
 } from "./fixtures";
 import { dispatchMockEvent } from "./tauri-event";
 
@@ -92,6 +93,10 @@ export async function invoke<T = unknown>(cmd: string, _args?: Record<string, un
     case "get_untracked_files":
       await delay(LATENCY.get_untracked_files);
       return MOCK_UNTRACKED_FILES as T;
+
+    case "read_file_preview":
+      await delay(LATENCY.get_file_diff);
+      return mockFilePreview((_args?.filePath as string) ?? "") as T;
 
     case "rebase_interactive": {
       const tabId = (_args?.tabId as string) ?? "";

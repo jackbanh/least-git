@@ -282,3 +282,32 @@ export const MOCK_UNTRACKED_FILES: string[] = [
   "src/mock/fixtures.ts",
   "notes/scratch.md",
 ];
+
+// Returned by read_file_preview for untracked files (keyed by extension).
+const PREVIEW_TS = `import { useState } from "react";
+
+// A brand-new helper that isn't tracked by git yet.
+export function useCounter(initial = 0) {
+  const [count, setCount] = useState(initial);
+  const increment = () => setCount((c) => c + 1);
+  const reset = () => setCount(initial);
+  return { count, increment, reset };
+}
+`;
+
+const PREVIEW_MD = `# Scratch notes
+
+- [ ] wire up the preview pane
+- [x] read untracked file contents
+- highlight with **refractor**
+
+\`\`\`bash
+git status --porcelain=v1 -z
+\`\`\`
+`;
+
+export function mockFilePreview(path: string) {
+  const ext = path.split(".").pop()?.toLowerCase();
+  const content = ext === "md" ? PREVIEW_MD : PREVIEW_TS;
+  return { content, is_binary: false, truncated: false };
+}
