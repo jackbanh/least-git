@@ -12,6 +12,10 @@ vi.mock("../store", () => ({
     selector({
       detailLeftWidth: 220,
       setDetailLeftWidth: vi.fn(),
+      detailStagedHeight: 220,
+      setDetailStagedHeight: vi.fn(),
+      commitBoxExpanded: false,
+      setCommitBoxExpanded: vi.fn(),
     })
   ),
 }));
@@ -77,7 +81,7 @@ describe("WorkingTreeDetail file list keyboard navigation", () => {
   }
 
   function fileList() {
-    return document.querySelector(".detail-files") as HTMLElement;
+    return document.querySelector(".detail-files-panes") as HTMLElement;
   }
 
   it("focuses the file list when a file row is clicked", async () => {

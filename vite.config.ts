@@ -15,6 +15,7 @@ const mockDir = path.resolve(__dirname, "src/mock");
 const tauriMockAliases = isTauri
   ? []
   : [
+      { find: "@tauri-apps/api/app",                   replacement: path.join(mockDir, "tauri-app.ts")           },
       { find: "@tauri-apps/api/core",                  replacement: path.join(mockDir, "tauri-core.ts")          },
       { find: "@tauri-apps/api/event",                 replacement: path.join(mockDir, "tauri-event.ts")         },
       { find: "@tauri-apps/api/window",                replacement: path.join(mockDir, "tauri-window.ts")        },

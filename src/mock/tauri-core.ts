@@ -57,6 +57,7 @@ export async function invoke<T = unknown>(cmd: string, _args?: Record<string, un
     case "unstage_file":
     case "discard_changes":
     case "apply_patch":
+    case "commit_staged":
       return undefined as T;
 
     case "list_branches":

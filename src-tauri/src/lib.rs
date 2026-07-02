@@ -26,6 +26,20 @@ pub(crate) fn git_async() -> tokio::process::Command {
     cmd
 }
 
+/// Spawn a synchronous git process. Same `CREATE_NO_WINDOW` handling as
+/// [`git_async`] — used for blocking/detached spawns (`.status()`, `.spawn()`)
+/// such as the working-tree context-menu actions (difftool, mergetool, resolve).
+pub(crate) fn git_sync() -> std::process::Command {
+    #[allow(unused_mut)]
+    let mut cmd = std::process::Command::new("git");
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    }
+    cmd
+}
+
 // ── Shared state ─────────────────────────────────────────────────────────────
 
 pub struct RepoEntry {
@@ -567,6 +581,7 @@ pub fn run() {
             working_tree::get_unstaged_diff,
             working_tree::read_file_preview,
             working_tree::apply_patch,
+            working_tree::commit_staged,
             external::open_diff_external,
             external::open_working_tree_diff_external,
             external::open_mergetool_external,

@@ -1,6 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Anchor, Modal, ScrollArea, Stack, Switch, TableOfContents, Text } from "@mantine/core";
-import { invoke } from "@tauri-apps/api/core";
+import { IconCircleCheck, IconAlertTriangle } from "@tabler/icons-react";
+import { getVersion } from "@tauri-apps/api/app";
+import { GIT_CONFIG_SETTINGS, countNotFollowing, isFollowing, switchOn } from "../gitConfig";
+import { useGitConfigStore } from "../gitConfigStore";
 import "./SettingsModal.css";
 
 const ACCENT_HUES = [
@@ -17,144 +20,62 @@ const ACCENT_HUES = [
 const HEADING_ATTR = "data-settings-h";
 const HEADING_SEL  = `h2[${HEADING_ATTR}]`;
 
-// ── Git config settings ───────────────────────────────────────────────────────
-
-interface GitConfigSetting {
-  key: string;
-  label: string;
-  description: string;
-  docsUrl: string;
-  /** Value written to git config when the switch is ON. */
-  onValue: string;
-  /** Derive switch state from the current stored value (null = unset). */
-  isOn: (stored: string | null) => boolean;
-}
-
-const GIT_CONFIG_SETTINGS: GitConfigSetting[] = [
-  {
-    key: "core.fsmonitor",
-    label: "Built-in FSMonitor",
-    description:
-      "Runs a background daemon that tracks filesystem changes so git status " +
-      "only needs to check files the OS flagged as modified — instead of " +
-      "scanning every file. The single biggest performance win for large repos " +
-      "on Windows. Requires git ≥ 2.37.",
-    docsUrl: "https://git-scm.com/docs/git-config#Documentation/git-config.txt-corefsmonitor",
-    onValue: "true",
-    isOn: (v) => v === "true",
-  },
-  {
-    key: "core.untrackedCache",
-    label: "Untracked file cache",
-    description:
-      "Caches the result of the untracked-file scan per directory, keyed by " +
-      "mtime. Avoids re-scanning directories whose timestamps haven't changed. " +
-      "Works synergistically with FSMonitor — together they make git status " +
-      "nearly instant after the first run. " +
-      "⚠ Avoid on network drives or WSL↔Windows paths — unreliable timestamps " +
-      "can cause git status to miss changes.",
-    docsUrl: "https://git-scm.com/docs/git-config#Documentation/git-config.txt-coreuntrackedCache",
-    onValue: "true",
-    isOn: (v) => v === "true",
-  },
-  {
-    key: "feature.manyFiles",
-    label: "Many-files optimisations",
-    description:
-      "A compound flag that enables index version 4 (better path-name " +
-      "compression for monorepos with deep shared prefixes) and turns on the " +
-      "untracked cache. Recommended for repos with tens of thousands of files.",
-    docsUrl: "https://git-scm.com/docs/git-config#Documentation/git-config.txt-featuremanyFiles",
-    onValue: "true",
-    isOn: (v) => v === "true",
-  },
-  {
-    key: "core.commitGraph",
-    label: "Commit graph",
-    description:
-      "Stores a precomputed graph of commit relationships on disk. Makes " +
-      "git log, reachability checks, and merge-base lookups dramatically " +
-      "faster on repos with deep history. Enabled by default in git ≥ 2.24 " +
-      "but worth setting explicitly.",
-    docsUrl: "https://git-scm.com/docs/git-config#Documentation/git-config.txt-corecommitGraph",
-    onValue: "true",
-    isOn: (v) => v === "true",
-  },
-  {
-    key: "fetch.writeCommitGraph",
-    label: "Auto-update commit graph on fetch",
-    description:
-      "Rewrites the commit graph file after every git fetch so it stays " +
-      "current with new history. Pairs with the commit graph setting above. " +
-      "The rewrite is incremental and typically adds only a few milliseconds.",
-    docsUrl: "https://git-scm.com/docs/git-config#Documentation/git-config.txt-fetchwriteCommitGraph",
-    onValue: "true",
-    isOn: (v) => v === "true",
-  },
-  {
-    key: "maintenance.auto",
-    label: "Suppress automatic maintenance",
-    description:
-      "Prevents git from running background maintenance tasks (repacking, " +
-      "loose-object pruning) mid-operation. On a large slow repo these tasks " +
-      "can block for minutes at an unpredictable moment. Run " +
-      "git maintenance run manually instead.",
-    docsUrl: "https://git-scm.com/docs/git-config#Documentation/git-config.txt-maintenanceauto",
-    onValue: "false",
-    isOn: (v) => v === "false",
-  },
-];
-
-const CONFIG_KEYS = GIT_CONFIG_SETTINGS.map((s) => s.key);
+// ── Git config section ─────────────────────────────────────────────────────────
 
 function GitConfigSection() {
-  // null = still loading, undefined = unset, string = stored value
-  const [values, setValues] = useState<Record<string, string | null> | null>(null);
-
-  useEffect(() => {
-    invoke<Record<string, string | null>>("get_git_config_globals", { keys: CONFIG_KEYS })
-      .then(setValues)
-      .catch(() => setValues({}));
-  }, []);
-
-  const toggle = useCallback(async (setting: GitConfigSetting, checked: boolean) => {
-    const newValue = checked ? setting.onValue : null;
-    // Optimistic update
-    setValues((prev) => prev ? { ...prev, [setting.key]: newValue } : prev);
-    try {
-      await invoke("set_git_config_global", { key: setting.key, value: newValue });
-    } catch {
-      // Revert on failure
-      setValues((prev) => prev ? { ...prev, [setting.key]: checked ? null : setting.onValue } : prev);
-    }
-  }, []);
+  const values = useGitConfigStore((s) => s.values);
+  const setValue = useGitConfigStore((s) => s.setValue);
+  const loading = values === null;
 
   return (
-    <Stack gap="xl">
+    <Stack gap="lg">
       {GIT_CONFIG_SETTINGS.map((setting) => {
-        const stored = values?.[setting.key] ?? null;
-        const checked = setting.isOn(stored);
+        const on = switchOn(setting, values);
+        const following = isFollowing(setting, values);
+        const recommendLabel = setting.recommend === "on" ? "On" : "Off";
+        // Colour the "on" track by which direction is recommended: green for
+        // settings we recommend enabling, orange for ones we recommend disabling.
+        const switchColor = setting.recommend === "on" ? "var(--lg-added)" : "var(--lg-uncommitted)";
         return (
-          <div key={setting.key} className="gc-row">
+          <div
+            key={setting.key}
+            className={`gc-row${loading ? "" : following ? " gc-row--ok" : " gc-row--warn"}`}
+          >
             <div className="gc-row-text">
-              <Text className="gc-label">{setting.key}</Text>
+              <div className="gc-row-head">
+                <Text className="gc-label">{setting.key}</Text>
+                {setting.requires && <span className="gc-requires">{setting.requires}</span>}
+              </div>
               <Text className="gc-description">{setting.description}</Text>
-              <Anchor
-                href={setting.docsUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="gc-docs-link"
-              >
-                git-scm.com docs ↗
-              </Anchor>
+              <div className="gc-row-foot">
+                {!loading && (
+                  following ? (
+                    <span className="gc-status gc-status--ok">
+                      <IconCircleCheck size={13} /> Following recommendation
+                    </span>
+                  ) : (
+                    <span className="gc-status gc-status--warn">
+                      <IconAlertTriangle size={13} /> Recommended: {recommendLabel}
+                    </span>
+                  )
+                )}
+                <Anchor
+                  href={setting.docsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="gc-docs-link"
+                >
+                  docs ↗
+                </Anchor>
+              </div>
             </div>
             <Switch
-              checked={checked}
-              disabled={values === null}
-              onChange={(e) => toggle(setting, e.currentTarget.checked)}
+              checked={on}
+              disabled={loading}
+              onChange={(e) => setValue(setting.key, e.currentTarget.checked ? setting.onValue : setting.offValue)}
               size="md"
-              onLabel={setting.onValue}
-              offLabel={stored !== null ? stored : "unset"}
+              aria-label={`${setting.key} — recommended ${recommendLabel}`}
+              style={{ "--switch-color": switchColor } as React.CSSProperties}
             />
           </div>
         );
@@ -179,7 +100,22 @@ export default function SettingsModal({
   setAccentHue: (h: number) => void;
 }) {
   const [activeId, setActiveId] = useState("s-appearance");
+  const [version, setVersion] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const gitConfigValues = useGitConfigStore((s) => s.values);
+  const loadGitConfig = useGitConfigStore((s) => s.load);
+  const gcNotFollowing = countNotFollowing(gitConfigValues);
+
+  // App version comes from tauri.conf.json via getVersion() — never hardcoded.
+  useEffect(() => {
+    getVersion().then(setVersion).catch(() => setVersion(null));
+  }, []);
+
+  // Refresh git config each time the modal opens, in case it changed externally.
+  useEffect(() => {
+    if (opened) loadGitConfig();
+  }, [opened, loadGitConfig]);
 
   // Track which heading is scrolled into view so the TOC active state updates
   // as the user scrolls, not only on click.
@@ -234,7 +170,15 @@ export default function SettingsModal({
             variant="subtle"
             color="gray"
             getControlProps={({ data }) => ({
-              children: data.value,
+              children:
+                data.id === "s-git-config" && gcNotFollowing > 0 ? (
+                  <span className="settings-nav-item">
+                    {data.value}
+                    <span className="settings-nav-badge">{gcNotFollowing}</span>
+                  </span>
+                ) : (
+                  data.value
+                ),
               "data-active": (activeId === data.id) || undefined,
               onClick: () => scrollTo(data.id),
             })}
@@ -306,7 +250,9 @@ export default function SettingsModal({
               <h2 id="s-about" className="settings-section-heading" data-settings-h>About</h2>
               <div className="settings-about">
                 <span className="settings-about-app">least-git</span>
-                <span className="settings-about-version">Version 0.3.0</span>
+                <span className="settings-about-version">
+                  {version ? `Version ${version}` : "Version …"}
+                </span>
                 <span className="settings-about-author">Jack Banh</span>
               </div>
             </section>

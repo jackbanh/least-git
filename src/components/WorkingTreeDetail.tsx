@@ -5,7 +5,9 @@ import { Loader, Menu } from "@mantine/core";
 import {
   IconArrowBarToDown,
   IconArrowBarToUp,
+  IconChevronRight,
   IconCopy,
+  IconGitBranch,
   IconGitCompare,
   IconGitMerge,
   IconRotate2,
@@ -55,6 +57,14 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
   const detailLeftWidth = useTabStore((s) => s.detailLeftWidth);
   const setDetailLeftWidth = useTabStore((s) => s.setDetailLeftWidth);
   const startLeftResize = useResize(detailLeftWidth, setDetailLeftWidth, "horizontal", 140, 9999);
+  const detailStagedHeight = useTabStore((s) => s.detailStagedHeight);
+  const setDetailStagedHeight = useTabStore((s) => s.setDetailStagedHeight);
+  // Max is capped in CSS (`max-height`) so the unstaged pane always keeps room.
+  const startStagedResize = useResize(detailStagedHeight, setDetailStagedHeight, "vertical", 80, 2000);
+  const commitBoxExpanded = useTabStore((s) => s.commitBoxExpanded);
+  const setCommitBoxExpanded = useTabStore((s) => s.setCommitBoxExpanded);
+  const bumpListKey = useTabStore((s) => s.bumpListKey);
+  const [commitMessage, setCommitMessage] = useState("");
 
   // ── Context menu ────────────────────────────────────────────────────────
   const { contextMenu, contextTargetRef, open: openMenu, close: closeMenu } = useContextMenu<ContextData>();
@@ -195,10 +205,6 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
     setSelected({ path: entry.path, staged, is_untracked: entry.status === "?" });
   }
 
-  const isEmpty =
-    status !== null && untracked !== null &&
-    status.staged.length === 0 && status.unstaged.length === 0 && untracked.length === 0;
-
   const isLoading = (status === null || untracked === null) && !statusError;
   const spinnerLabel = status === null ? "Checking tracked changes…" : "Scanning untracked files…";
 
@@ -215,14 +221,26 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
   );
 
   const ctx = contextTargetRef.current?.data;
-  const canCommit = status !== null && status.staged.length > 0;
+  const hasStaged = status !== null && status.staged.length > 0;
+  const canCommit = hasStaged && commitMessage.trim().length > 0;
+
+  function doCommit() {
+    if (!canCommit) return;
+    invoke("commit_staged", { tabId, message: commitMessage.trim() })
+      .then(() => {
+        setCommitMessage("");
+        refreshStatus();      // clear the now-committed staged list
+        bumpListKey(tabId);   // surface the new commit in history immediately
+      })
+      .catch((e) => console.error("commit failed:", e));
+  }
 
   return (
     <div className="commit-detail">
       {/* Left column: staged + commit button + unstaged */}
       <div className="detail-left" style={{ width: detailLeftWidth }}>
         <div
-          className="detail-files"
+          className="detail-files-panes"
           tabIndex={0}
           onKeyDown={(e) => {
             if (e.key === "d" && (e.metaKey || e.ctrlKey)) {
@@ -242,84 +260,130 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
             setSelected({ path: f.path, staged: f.staged, is_untracked: f.status === "?" });
           }}
         >
-          {statusError && (
-            <div className="wt-section-empty wt-section-error">{statusError}</div>
-          )}
-          {isEmpty && (
-            <div className="wt-section-empty">Nothing to commit, working tree clean</div>
-          )}
+          {/* Staged pane (resizable height) */}
+          <div className="wt-pane wt-pane--staged" style={{ height: detailStagedHeight }}>
+            <div className="wt-section-header">
+              <span className="wt-section-label">Staged</span>
+              {status && <span className="wt-section-count">{status.staged.length}</span>}
+            </div>
+            <div className="wt-pane-scroll">
+              {statusError && (
+                <div className="wt-section-empty wt-section-error">{statusError}</div>
+              )}
+              {status && status.staged.length === 0 && !statusError && (
+                <div className="wt-section-hint">No staged changes.</div>
+              )}
+              {status && (
+                <FileTree
+                  files={status.staged}
+                  selected={selected?.staged ? selected.path : null}
+                  onSelect={(path) => {
+                    const f = status.staged.find((e) => e.path === path)!;
+                    selectFile(f, true);
+                  }}
+                  onContextMenu={(e, path) => {
+                    const f = status.staged.find((e) => e.path === path)!;
+                    openContextMenu(e, f, true);
+                  }}
+                />
+              )}
+            </div>
 
-          {/* Staged section */}
-          <div className="wt-section-header">
-            <span className="wt-section-label">Staged</span>
-            {status && <span className="wt-section-count">{status.staged.length}</span>}
+            {/* Commit accordion pinned to the bottom of the staged pane */}
+            <div className="wt-commit-box">
+              <button
+                type="button"
+                className="wt-commit-toggle"
+                aria-expanded={commitBoxExpanded}
+                onClick={() => setCommitBoxExpanded(!commitBoxExpanded)}
+              >
+                <IconChevronRight
+                  size={13}
+                  className={`wt-commit-chevron${commitBoxExpanded ? " wt-commit-chevron--open" : ""}`}
+                />
+                <span className="wt-commit-toggle-label">Commit</span>
+                {hasStaged && <span className="wt-commit-toggle-count">{status!.staged.length}</span>}
+              </button>
+              {commitBoxExpanded && (
+                <div className="wt-commit-body">
+                  <div className="wt-commit-branch">
+                    <IconGitBranch size={12} />
+                    <span>
+                      Committing to <strong>{status?.head_branch ?? "…"}</strong>
+                    </span>
+                  </div>
+                  <textarea
+                    className="wt-commit-input"
+                    placeholder="Commit message"
+                    value={commitMessage}
+                    onChange={(e) => setCommitMessage(e.target.value)}
+                    onKeyDown={(e) => {
+                      // Keep arrow/⌘D file-nav from hijacking edits in this field.
+                      e.stopPropagation();
+                      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                        e.preventDefault();
+                        doCommit();
+                      }
+                    }}
+                  />
+                  <button
+                    className={`wt-commit-btn${canCommit ? " wt-commit-btn--enabled" : ""}`}
+                    disabled={!canCommit}
+                    onClick={doCommit}
+                  >
+                    Commit
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
-          {status && status.staged.length === 0 && (
-            <div className="wt-section-hint">No staged changes.</div>
-          )}
-          {status && (
-            <FileTree
-              files={status.staged}
-              selected={selected?.staged ? selected.path : null}
-              onSelect={(path) => {
-                const f = status.staged.find((e) => e.path === path)!;
-                selectFile(f, true);
-              }}
-              onContextMenu={(e, path) => {
-                const f = status.staged.find((e) => e.path === path)!;
-                openContextMenu(e, f, true);
-              }}
-            />
-          )}
 
-          {/* Commit button */}
-          <div className="wt-commit-area">
-            <button
-              className={`wt-commit-btn${canCommit ? " wt-commit-btn--enabled" : ""}`}
-              disabled={!canCommit}
-              onClick={() => {
-                if (!canCommit) return;
-                invoke("commit_staged", { tabId, message: "Commit" })
-                  .then(() => refreshStatus())
-                  .catch((e) => console.error("commit failed:", e));
-              }}
-            >
-              Commit to {status?.head_branch ?? "…"}
-            </button>
-          </div>
+          {/* Horizontal resize handle between the two panes */}
+          <div className="resize-handle resize-handle--horizontal" onMouseDown={startStagedResize} />
 
-          {/* Unstaged section */}
-          {status && (status.unstaged.length > 0 || (untracked ?? []).length > 0) && (
-            <>
-              <div className="wt-section-header">
-                <span className="wt-section-label">Unstaged</span>
+          {/* Unstaged pane (fills remaining height) */}
+          <div className="wt-pane wt-pane--unstaged">
+            <div className="wt-section-header">
+              <span className="wt-section-label">Unstaged</span>
+              {status && (
                 <span className="wt-section-count">
                   {status.unstaged.length + (untracked ?? []).length}
                   {untracked === null && "+"}
                 </span>
-              </div>
-              <FileTree
-                files={[...status.unstaged, ...(untracked ?? [])]}
-                selected={selected?.staged ? null : selected?.path ?? null}
-                onSelect={(path) => {
-                  const allUnstaged = [...status.unstaged, ...(untracked ?? [])];
-                  const f = allUnstaged.find((e) => e.path === path)!;
-                  selectFile(f, false);
-                }}
-                onContextMenu={(e, path) => {
-                  const allUnstaged = [...status.unstaged, ...(untracked ?? [])];
-                  const f = allUnstaged.find((e) => e.path === path)!;
-                  openContextMenu(e, f, false);
-                }}
-              />
-            </>
-          )}
-          {isLoading && (
-            <div className="wt-spinner-footer">
-              <Loader size={12} />
-              <span>{spinnerLabel}</span>
+              )}
             </div>
-          )}
+            <div className="wt-pane-scroll">
+              {status && status.unstaged.length === 0 && (untracked ?? []).length === 0 && untracked !== null && (
+                <div className="wt-section-hint">
+                  {status.staged.length === 0 && !statusError
+                    ? "Working tree clean."
+                    : "No unstaged changes."}
+                </div>
+              )}
+              {status && (
+                <FileTree
+                  files={[...status.unstaged, ...(untracked ?? [])]}
+                  selected={selected?.staged ? null : selected?.path ?? null}
+                  onSelect={(path) => {
+                    const allUnstaged = [...status.unstaged, ...(untracked ?? [])];
+                    const f = allUnstaged.find((e) => e.path === path)!;
+                    selectFile(f, false);
+                  }}
+                  onContextMenu={(e, path) => {
+                    const allUnstaged = [...status.unstaged, ...(untracked ?? [])];
+                    const f = allUnstaged.find((e) => e.path === path)!;
+                    openContextMenu(e, f, false);
+                  }}
+                />
+              )}
+              {isLoading && (
+                <div className="wt-spinner-footer">
+                  <Loader size={12} />
+                  <span>{spinnerLabel}</span>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 

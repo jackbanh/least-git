@@ -15,6 +15,8 @@ interface TabStore {
   activeTabId: string | null;
   sidebarWidth: number;
   detailLeftWidth: number;
+  detailStagedHeight: number;
+  commitBoxExpanded: boolean;
   openTab: (tab: Omit<Tab, "selectedOid" | "listKey" | "statusKey">) => void;
   closeTab: (id: string) => void;
   setActiveTab: (id: string) => void;
@@ -23,6 +25,8 @@ interface TabStore {
   bumpStatusKey: (tabId: string) => void;
   setSidebarWidth: (width: number) => void;
   setDetailLeftWidth: (width: number) => void;
+  setDetailStagedHeight: (height: number) => void;
+  setCommitBoxExpanded: (expanded: boolean) => void;
 }
 
 export const useTabStore = create<TabStore>()(
@@ -32,6 +36,8 @@ export const useTabStore = create<TabStore>()(
       activeTabId: null,
       sidebarWidth: 360,
       detailLeftWidth: 240,
+      detailStagedHeight: 220,
+      commitBoxExpanded: true,
 
       openTab: (tab) =>
         set((state) => {
@@ -79,6 +85,8 @@ export const useTabStore = create<TabStore>()(
 
       setSidebarWidth: (width) => set({ sidebarWidth: width }),
       setDetailLeftWidth: (width) => set({ detailLeftWidth: width }),
+      setDetailStagedHeight: (height) => set({ detailStagedHeight: height }),
+      setCommitBoxExpanded: (expanded) => set({ commitBoxExpanded: expanded }),
     }),
     {
       name: "least-git-tabs",
@@ -94,6 +102,8 @@ export const useTabStore = create<TabStore>()(
         activeTabId: state.activeTabId,
         sidebarWidth: state.sidebarWidth,
         detailLeftWidth: state.detailLeftWidth,
+        detailStagedHeight: state.detailStagedHeight,
+        commitBoxExpanded: state.commitBoxExpanded,
       }),
     }
   )

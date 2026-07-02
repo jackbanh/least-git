@@ -1,3 +1,44 @@
+/* ── Two-pane layout (staged over unstaged) ───────────────────────── */
+
+/* Fills the left column; stacks the two panes with a resize handle. */
+.detail-files-panes {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  outline: none;
+}
+
+/* A pane = fixed header + scrollable body (+ commit footer for staged). */
+.wt-pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Staged pane: resizable height (inline `height`), capped so the unstaged
+   pane always keeps room; the handle drives the inline height. */
+.wt-pane--staged {
+  flex-shrink: 0;
+  min-height: 80px;
+  max-height: calc(100% - 100px);
+}
+
+/* Unstaged pane: absorbs the remaining vertical space. */
+.wt-pane--unstaged {
+  flex: 1;
+}
+
+/* The independently scrollable list region inside each pane. */
+.wt-pane-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
 /* ── Section headers (Staged / Unstaged) ──────────────────────────── */
 
 .wt-section-header {
@@ -60,11 +101,102 @@
   word-break: break-word;
 }
 
-/* ── Commit button area ───────────────────────────────────────────── */
+/* ── Commit accordion ─────────────────────────────────────────────── */
 
-.wt-commit-area {
-  padding: 6px 14px 10px;
-  border-bottom: 0.5px solid var(--lg-border-soft);
+.wt-commit-box {
+  flex-shrink: 0;
+  border-top: 0.5px solid var(--lg-border-soft);
+  background: var(--lg-panel-bg);
+}
+
+.wt-commit-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 14px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-family: var(--lg-font-serif);
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--lg-ink-muted);
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  transition: background 100ms ease;
+}
+
+.wt-commit-toggle:hover {
+  background: var(--lg-hover-bg);
+}
+
+.wt-commit-chevron {
+  flex-shrink: 0;
+  color: var(--lg-ink-faint);
+  transition: transform 120ms ease;
+}
+
+.wt-commit-chevron--open {
+  transform: rotate(90deg);
+}
+
+.wt-commit-toggle-label {
+  flex: 1;
+  text-align: left;
+}
+
+.wt-commit-toggle-count {
+  font-family: var(--lg-font-mono);
+  font-size: 10px;
+  letter-spacing: 0;
+  color: var(--lg-ink-faint);
+}
+
+.wt-commit-body {
+  padding: 2px 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.wt-commit-branch {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--lg-font-sans);
+  font-size: 11px;
+  color: var(--lg-ink-faint);
+}
+
+.wt-commit-branch strong {
+  font-weight: 600;
+  color: var(--lg-ink-soft);
+}
+
+.wt-commit-input {
+  width: 100%;
+  box-sizing: border-box;
+  resize: none;
+  min-height: 58px;
+  padding: 7px 9px;
+  border: 0.5px solid var(--lg-border);
+  border-radius: 6px;
+  background: var(--lg-panel-bg);
+  color: var(--lg-ink);
+  font-family: var(--lg-font-sans);
+  font-size: 12px;
+  line-height: 1.5;
+  outline: none;
+  transition: border-color 100ms ease;
+}
+
+.wt-commit-input::placeholder {
+  color: var(--lg-ink-faint);
+}
+
+.wt-commit-input:focus {
+  border-color: var(--lg-accent);
 }
 
 .wt-commit-btn {

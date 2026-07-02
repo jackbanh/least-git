@@ -142,13 +142,13 @@ pub async fn get_conflict_branch_info(
 /// Run `git checkout <flag> -- <file>` then `git add -- <file>` (mark resolved).
 fn checkout_and_add(path: &Path, flag: &str, file_path: &str) -> Result<(), String> {
     let p = path.to_string_lossy();
-    let ok = std::process::Command::new("git")
+    let ok = crate::git_sync()
         .args(["-C", &p, "checkout", flag, "--", file_path])
         .status()
         .map_err(|e| e.to_string())?
         .success();
     if !ok { return Err(format!("git checkout {flag} -- {file_path} failed")); }
-    let ok = std::process::Command::new("git")
+    let ok = crate::git_sync()
         .args(["-C", &p, "add", "--", file_path])
         .status()
         .map_err(|e| e.to_string())?
@@ -517,6 +517,54 @@ pub async fn apply_patch(
     if !out.status.success() {
         return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
     }
+    Ok(())
+}
+
+/// Commit the currently staged changes — `git commit -F -`.
+///
+/// Shells out to the git binary (like every other mutating command here) so the
+/// user's identity, commit hooks, and signing config are all honoured rather
+/// than reimplemented. Only the index is committed — no `-a` — since staging is
+/// done separately via [`stage_file`]/[`apply_patch`]. The message is piped
+/// through stdin (`-F -`) so multi-line messages and leading dashes are safe,
+/// and the default `whitespace` cleanup means `#` lines are kept verbatim.
+#[tauri::command]
+pub async fn commit_staged(
+    tab_id: String,
+    message: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    use tokio::io::AsyncWriteExt;
+
+    if message.trim().is_empty() {
+        return Err("Commit message is empty".to_string());
+    }
+
+    let path = get_repo_path(&tab_id, &state)?;
+
+    let mut child = git_async()
+        .args(["commit", "-F", "-"])
+        .current_dir(&path)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .map_err(|e| e.to_string())?;
+
+    child.stdin.take().unwrap().write_all(message.as_bytes()).await.map_err(|e| e.to_string())?;
+
+    let out = child.wait_with_output().await.map_err(|e| e.to_string())?;
+    if !out.status.success() {
+        // git reports "nothing to commit" and hook rejections on stdout, real
+        // errors on stderr — surface whichever is populated.
+        let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        let stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        let msg = if stderr.is_empty() { stdout } else { stderr };
+        warn!("commit_staged failed: {msg}");
+        return Err(if msg.is_empty() { "git commit failed".to_string() } else { msg });
+    }
+
+    info!("commit_staged: committed staged changes");
     Ok(())
 }
 

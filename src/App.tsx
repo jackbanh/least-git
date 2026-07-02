@@ -7,6 +7,8 @@ import { Tabs, Button, ActionIcon, Group, Text } from "@mantine/core";
 import { listen } from "@tauri-apps/api/event";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTabStore, Tab } from "./store";
+import { useGitConfigStore } from "./gitConfigStore";
+import { countNotFollowing } from "./gitConfig";
 import { useResize } from "./hooks/useResize";
 import BranchSwitcher from "./components/BranchSwitcher";
 import BranchDialog from "./components/BranchDialog";
@@ -34,6 +36,12 @@ export default function App() {
   } = useTabStore();
 
   const repoChangedThrottle = useRef<Record<string, number>>({});
+
+  // Git config drives the "needs attention" badges on the toolbar + settings nav.
+  const gitConfigValues = useGitConfigStore((s) => s.values);
+  const loadGitConfig = useGitConfigStore((s) => s.load);
+  useEffect(() => { loadGitConfig(); }, [loadGitConfig]);
+  const gcNotFollowing = countNotFollowing(gitConfigValues);
 
   const [branchDialogOpen, setBranchDialogOpen] = useState(false);
   const [pullDrawerOpen, setPullDrawerOpen] = useState(false);
@@ -265,6 +273,7 @@ export default function App() {
         onRebaseContinue={() => { setRebaseAction("continue"); setRebaseDrawerOpen(true); }}
         onRebaseAbort={() => { setRebaseAction("abort"); setRebaseDrawerOpen(true); }}
         onToggleTweaks={() => setTweaksOpen((o) => !o)}
+        settingsBadge={gcNotFollowing}
       />
 
       <div className="workspace">

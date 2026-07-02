@@ -205,7 +205,9 @@ function TreeFileRow({
       className={`file-tree-file${selected ? " file-tree-file--selected" : ""}`}
       style={{ paddingLeft: 10 + depth * 14 }}
       onClick={(e) => {
-        (e.currentTarget.closest(".detail-files") as HTMLElement | null)?.focus();
+        // Focus the nearest scrollable file-list container (keydown nav lives there).
+        // Works for both CommitDetail (.detail-files) and WorkingTree (.detail-files-panes).
+        (e.currentTarget.closest("[tabindex]") as HTMLElement | null)?.focus();
         onSelect(file.path);
       }}
       onContextMenu={onContextMenu ? (e) => onContextMenu(e, file.path) : undefined}

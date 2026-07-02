@@ -31,7 +31,7 @@ function ToolbarBtn({ icon, label, badge, onClick }: { icon: React.ReactNode; la
   );
 }
 
-function ToolbarIconBtn({ icon, onClick, title }: { icon: React.ReactNode; onClick?: () => void; title?: string }) {
+function ToolbarIconBtn({ icon, onClick, title, badge }: { icon: React.ReactNode; onClick?: () => void; title?: string; badge?: number }) {
   const [hover, setHover] = useState(false);
   return (
     <button
@@ -42,6 +42,9 @@ function ToolbarIconBtn({ icon, onClick, title }: { icon: React.ReactNode; onCli
       title={title}
     >
       {icon}
+      {badge != null && badge > 0 && (
+        <span className="toolbar-icon-badge">{badge}</span>
+      )}
     </button>
   );
 }
@@ -184,6 +187,7 @@ export default function Toolbar({
   onRebaseContinue,
   onRebaseAbort,
   onToggleTweaks,
+  settingsBadge,
 }: {
   currentBranch?: string;
   pullBranchInfo?: PullBranchInfo;
@@ -195,6 +199,7 @@ export default function Toolbar({
   onRebaseContinue?: () => void;
   onRebaseAbort?: () => void;
   onToggleTweaks?: () => void;
+  settingsBadge?: number;
 }) {
   return (
     <div className="toolbar">
@@ -210,7 +215,7 @@ export default function Toolbar({
           <span className="toolbar-branch-name">{currentBranch}</span>
         </div>
       )}
-      <ToolbarIconBtn icon={<IconAdjustments size={ICON_SIZE} />} onClick={onToggleTweaks} title="Settings" />
+      <ToolbarIconBtn icon={<IconAdjustments size={ICON_SIZE} />} onClick={onToggleTweaks} title="Settings" badge={settingsBadge} />
     </div>
   );
 }

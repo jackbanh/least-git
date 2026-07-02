@@ -24,7 +24,7 @@ pub async fn open_diff_external(
     ];
     info!("open_diff_external: git {}", args.join(" "));
 
-    std::process::Command::new("git")
+    crate::git_sync()
         .args(args)
         .spawn()
         .map_err(|e| e.to_string())?;
@@ -46,7 +46,7 @@ pub async fn open_mergetool_external(
     let args = ["-C", &path_str, "mergetool", "--no-prompt", "--tool=bc", "--", &file_path];
     info!("open_mergetool_external: git {}", args.join(" "));
 
-    std::process::Command::new("git")
+    crate::git_sync()
         .args(args)
         .spawn()
         .map_err(|e| e.to_string())?;
@@ -75,7 +75,7 @@ pub async fn open_working_tree_diff_external(
 
     info!("open_working_tree_diff_external: git {}", args.join(" "));
 
-    std::process::Command::new("git")
+    crate::git_sync()
         .args(&args)
         .spawn()
         .map_err(|e| e.to_string())?;

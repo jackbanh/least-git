@@ -30,7 +30,9 @@ export function FileRow({
     <div
       className={`file-row${isSelected ? " file-row--selected" : ""}`}
       onClick={(e) => {
-        (e.currentTarget.closest(".detail-files") as HTMLElement | null)?.focus();
+        // Focus the nearest scrollable file-list container (keydown nav lives there).
+        // Works for both CommitDetail (.detail-files) and WorkingTree (.detail-files-panes).
+        (e.currentTarget.closest("[tabindex]") as HTMLElement | null)?.focus();
         onClick();
       }}
       onContextMenu={onContextMenu}
