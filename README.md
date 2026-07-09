@@ -1,4 +1,6 @@
-**Project: least-git** — a Git GUI client intentionally limited to 5 core operations (view history, switch branches, commit, pull, push), purpose-built for performance on large monorepos with 100k+ commits, thousands of files, and many branches/remotes.
+**Project: least-git** — a Git GUI client intentionally limited to 4 core operations (view history, switch branches, commit, pull), purpose-built for performance on large monorepos with 100k+ commits, thousands of files, and many branches/remotes.
+
+**Direction:** least-git is a **companion to an AI coding workflow**. The AI agent makes most of the writes; the developer uses least-git to *review* those changes — scanning history, reading diffs, and staging/committing at the hunk level — then hands publishing (push) back to the terminal or agent. It is a fast review-and-commit surface, not a full Git driver, which is why push is deliberately absent.
 
 **Platforms:** macOS and Windows (both testable; code signing scoped to macOS only, not a current priority)
 
@@ -7,7 +9,7 @@
 - **React + TypeScript** (UI layer — thin renderer only)
 - **Rust + async Tokio** (all Git logic and state)
 - **gitoxide** (pure Rust Git library — parallel pack reads, lazy streaming object access, better than libgit2 for this use case)
-- **System git binary** (shelled out for push/pull/checkout only — no reimplementing SSH/HTTPS transport for MVP)
+- **System git binary** (shelled out for pull/checkout only — no reimplementing SSH/HTTPS transport for MVP)
 - **Mantine v8** — UI components for app chrome only (tabs, toolbar, dialogs, forms)
 - **Zustand** — tab state
 - **@tanstack/react-virtual** — virtualised lists
@@ -24,7 +26,7 @@
 - Native menu (Repository > Refresh, Repository > Branch…) emits `menu:refresh` / `menu:branch` Tauri events
 
 **UI design:**
-- Follows a subset of Sourcetree's layout and conventions — familiar to existing Sourcetree users but stripped to only the 5 core operations
+- Follows a subset of Sourcetree's layout and conventions — familiar to existing Sourcetree users but stripped to only the 4 core operations
 - Remote branches are not shown anywhere in the UI — local branches only
 - **Styling: Mantine v8** for app chrome (tabs, toolbar, branch panel, dialogs, commit form) — v7+ uses CSS modules internally, no runtime CSS-in-JS overhead
 - Virtualised list rows (commit history, file tree) use plain CSS classes only — no Mantine components inside rows, as prop overhead compounds across high-frequency mount/unmount cycles during scroll
@@ -44,7 +46,7 @@
 
   `git()` (sync, `std::process::Command`) exists solely to define the two factory functions and must not be called from any Tauri command.
 
-- **Long-running operations must stream output.** Operations that can take more than ~200ms (checkout, pull, push, rebase) must stream stdout/stderr line-by-line to the frontend via Tauri events rather than buffering and returning on completion. Use the `PullLine` / `PullDone` structs and the `GitOutputDrawer` frontend component. Event naming convention: `<operation>:line` and `<operation>:done`.
+- **Long-running operations must stream output.** Operations that can take more than ~200ms (checkout, pull, rebase) must stream stdout/stderr line-by-line to the frontend via Tauri events rather than buffering and returning on completion. Use the `PullLine` / `PullDone` structs and the `GitOutputDrawer` frontend component. Event naming convention: `<operation>:line` and `<operation>:done`.
 
 **Key performance constraints to design around:**
 - History view must render recent commits on the current branch with no perceptible delay — first page of results must appear near-instantly even in repos with 100k+ total commits; virtual scroll handles the rest
@@ -54,10 +56,11 @@
 - `git status` calls use Git's built-in FSMonitor daemon — latest Git version is required, no fallback for older versions
 
 **Assumptions:**
-- Git credentials are pre-configured in the system; push/pull may hang if they are not (acceptable for MVP)
+- Git credentials are pre-configured in the system; pull may hang if they are not (acceptable for MVP)
 - Minimum Git version: latest stable release (FSMonitor, `--pathspec-from-file`, and other modern features assumed available)
 
 **Scope limits (do not add without discussion):**
+- Push / publishing is out of scope — the AI agent or terminal handles pushing; least-git is a review-and-commit companion, not a full Git driver
 - Remote branches are not shown anywhere — local branches only
 - No tab persistence across restarts (deferred)
 - No credential UI — assume creds pre-configured in system git

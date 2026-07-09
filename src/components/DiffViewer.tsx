@@ -4,6 +4,7 @@ import type { RenderGutter } from "react-diff-view";
 import "react-diff-view/style/index.css";
 import "./DiffViewer.css";
 import { useTokens } from "../lib/useTokens";
+import { isMarkdownPath } from "../lib/paths";
 
 const renderGutter: RenderGutter = ({ renderDefault }) => renderDefault() ?? null;
 
@@ -17,8 +18,11 @@ export default function DiffViewer({ diff }: { diff: string }) {
 
   if (files.length === 0) return null;
 
+  // Wrap prose files (markdown) rather than scrolling horizontally.
+  const wrap = files.every((f) => isMarkdownPath(f.newPath) || isMarkdownPath(f.oldPath));
+
   return (
-    <div className="diff-scroll">
+    <div className={`diff-scroll${wrap ? " diff-scroll--wrap" : ""}`}>
       {files.map((file) => {
         const key = `${file.oldPath}:${file.newPath}`;
         return (

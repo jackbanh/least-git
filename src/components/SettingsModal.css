@@ -148,14 +148,14 @@
   background: var(--lg-panel-bg);
 }
 
-/* Flagged: not following the recommendation → amber marker. */
+/* Flagged: not following the recommendation → diff-red marker. */
 .gc-row--warn {
-  border-left-color: var(--lg-uncommitted);
+  border-left-color: var(--lg-diff-rem-bar);
 }
 
-/* Following the recommendation → subtle green marker. */
+/* Following the recommendation → diff-green marker. */
 .gc-row--ok {
-  border-left-color: var(--lg-added);
+  border-left-color: var(--lg-diff-add-bar);
 }
 
 .gc-row-text {
@@ -217,11 +217,11 @@
 }
 
 .gc-status--ok {
-  color: var(--lg-added);
+  color: var(--lg-diff-add-fg);
 }
 
 .gc-status--warn {
-  color: var(--lg-uncommitted);
+  color: var(--lg-diff-rem-fg);
 }
 
 .gc-docs-link {
@@ -256,7 +256,7 @@
   font-weight: 600;
   line-height: 1;
   color: #fff;
-  background: var(--lg-uncommitted);
+  background: var(--lg-diff-rem-bar);
   border-radius: 8px;
 }
 

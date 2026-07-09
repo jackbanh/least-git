@@ -167,6 +167,30 @@ body {
   letter-spacing: 0.1px;
 }
 
+/* Close control lives inside the Mantine tab button, so it must NOT be a
+   <button> itself (nested buttons are invalid HTML). Rendered as a role=button
+   span instead. */
+.tab-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  margin-left: 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 1;
+  color: inherit;
+  opacity: 0.6;
+  cursor: pointer;
+  transition: background 80ms ease, opacity 80ms ease;
+}
+
+.tab-close:hover {
+  opacity: 1;
+  background: var(--lg-chrome-hover);
+}
+
 .tab-bar-new-btn {
   align-self: flex-end;
   margin-left: 4px;

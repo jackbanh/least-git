@@ -20,6 +20,32 @@
   white-space: pre;
 }
 
+/* ── Line wrap (markdown / prose) ─────────────────────────────────────
+   Prose files hard-wrap paragraphs onto very long single lines; wrapping
+   avoids horizontal scrolling. Safe in the unified view because each line
+   is its own row — a wrapped line just grows taller, no columns to align. */
+.diff-scroll--wrap {
+  overflow-x: hidden;
+}
+
+.diff-scroll--wrap .diff {
+  width: auto;
+  min-width: 100%;
+}
+
+.diff-scroll--wrap .diff-code,
+.diff-scroll--wrap .diff-code pre,
+.diff-scroll--wrap .diff-code span {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere; /* break unbreakable runs (e.g. long URLs) */
+}
+
+/* Pin line numbers to the first visual line of a wrapped row. */
+.diff-scroll--wrap .diff-gutter,
+.diff-scroll--wrap .diff-code {
+  vertical-align: top;
+}
+
 /* Map react-diff-view CSS vars to our design tokens */
 .diff-scroll .diff {
   --diff-font-family: var(--lg-font-mono);

@@ -14,6 +14,7 @@ import {
   IconTrash,
 } from "@tabler/icons-react";
 import { useTabStore } from "../store";
+import { toastError, toastSuccess } from "../toastStore";
 import { useResize } from "../hooks/useResize";
 import { useContextMenu } from "../hooks/useContextMenu";
 import { AnchoredMenuTarget } from "./FileRow";
@@ -83,6 +84,14 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
     }
   }
 
+  // Human-readable verb per mutating command, for error toasts.
+  const FILE_ACTION_VERB: Record<string, string> = {
+    stage_file: "stage file",
+    unstage_file: "unstage file",
+    discard_changes: "discard changes",
+    delete_untracked: "delete file",
+  };
+
   async function runFileAction(
     command: string,
     filePath: string,
@@ -99,6 +108,7 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
       }
     } catch (e) {
       logWarn(`WorkingTreeDetail[${tabId}] ${command} failed: ${e}`);
+      toastError(`Couldn't ${FILE_ACTION_VERB[command] ?? command}`, e);
     }
   }
 
@@ -197,7 +207,7 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
       refreshStatus();
       if (selected) refreshDiff(selected);
     } catch (e) {
-      console.error("apply_patch failed:", e);
+      toastError(reverse ? "Couldn't unstage changes" : "Couldn't stage changes", e);
     }
   }, [tabId, selected, refreshStatus, refreshDiff]);
 
@@ -231,8 +241,9 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
         setCommitMessage("");
         refreshStatus();      // clear the now-committed staged list
         bumpListKey(tabId);   // surface the new commit in history immediately
+        toastSuccess("Commit created");
       })
-      .catch((e) => console.error("commit failed:", e));
+      .catch((e) => toastError("Commit failed", e));
   }
 
   return (
@@ -453,14 +464,15 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
                   onClick={() => invoke("open_mergetool_external", {
                     tabId,
                     filePath: ctx.entry.path,
-                  })}
+                  }).catch((e) => toastError("Couldn't launch merge tool", e))}
                 >
                   Launch External Merge Tool
                 </Menu.Item>
                 <Menu.Item
                   onClick={() => {
                     invoke("resolve_conflict_local", { tabId, filePath: ctx.entry.path })
-                      .then(() => refreshStatus());
+                      .then(() => refreshStatus())
+                      .catch((e) => toastError("Couldn't resolve conflict", e));
                   }}
                 >
                   Resolve Using Local ({conflictBranches?.local ?? "…"})
@@ -468,7 +480,8 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
                 <Menu.Item
                   onClick={() => {
                     invoke("resolve_conflict_incoming", { tabId, filePath: ctx.entry.path })
-                      .then(() => refreshStatus());
+                      .then(() => refreshStatus())
+                      .catch((e) => toastError("Couldn't resolve conflict", e));
                   }}
                 >
                   Resolve Using Incoming ({conflictBranches?.incoming ?? "…"})

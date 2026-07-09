@@ -1,0 +1,99 @@
+.toasts {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 380px;
+  pointer-events: none;
+}
+
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--lg-panel-bg);
+  border: 0.5px solid var(--lg-border);
+  /* A left accent bar carries the status colour. */
+  border-left: 3px solid var(--lg-border-strong);
+  box-shadow: 0 6px 20px rgba(20, 30, 50, 0.18);
+  animation: toast-in 140ms ease-out;
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Colours reuse the diff red / green so status reads consistently app-wide. */
+.toast--error {
+  border-left-color: var(--lg-diff-rem-bar);
+}
+.toast--error .toast-icon {
+  color: var(--lg-diff-rem-fg);
+}
+
+.toast--success {
+  border-left-color: var(--lg-diff-add-bar);
+}
+.toast--success .toast-icon {
+  color: var(--lg-diff-add-fg);
+}
+
+.toast--info .toast-icon {
+  color: var(--lg-accent);
+}
+
+.toast-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  margin-top: 1px;
+}
+
+.toast-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.toast-title {
+  font-family: var(--lg-font-sans);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--lg-ink);
+}
+
+.toast-message {
+  margin-top: 3px;
+  font-family: var(--lg-font-mono);
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--lg-ink-muted);
+  word-break: break-word;
+  /* Cap runaway git error dumps but keep them scannable. */
+  max-height: 5.8em;
+  overflow-y: auto;
+}
+
+.toast-close {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--lg-ink-faint);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  transition: background 80ms ease, color 80ms ease;
+}
+
+.toast-close:hover {
+  color: var(--lg-ink);
+  background: var(--lg-hover-bg);
+}

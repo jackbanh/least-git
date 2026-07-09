@@ -103,6 +103,7 @@ export const MOCK_COMMIT_DETAIL = {
     { path: "src/components/InteractiveDiffViewer.css", status: "A" },
     { path: "src-tauri/src/lib.rs", status: "M" },
     { path: "src-tauri/src/diff.rs", status: "A" },
+    { path: "docs/architecture.md", status: "M" },
   ],
 };
 
@@ -255,6 +256,25 @@ index e5f6a7b..f6a7b8c 100644
          .map_err(|e| e.to_string())?;
 `;
 
+// Markdown diff — prose hard-wrapped onto very long single lines, used to
+// exercise line-wrapping in the diff viewer (returned for *.md paths).
+export const MOCK_MD_DIFF = `\
+diff --git a/docs/architecture.md b/docs/architecture.md
+index 1a2b3c4..2b3c4d5 100644
+--- a/docs/architecture.md
++++ b/docs/architecture.md
+@@ -1,6 +1,6 @@
+ # Architecture
+
+-least-git opens each repository fresh per command call and never holds a cached repository handle, which keeps memory flat even when dozens of tabs are open across enormous monorepos with hundreds of thousands of commits.
++least-git opens each repository fresh per command call and never holds a cached repository handle, which keeps memory flat even when dozens of tabs are open across enormous monorepos with hundreds of thousands of commits. This is a deliberate trade of a small amount of per-call overhead for predictable, bounded memory that does not creep upward over a long review session.
+
+ ## Rendering
+
+-The commit history is virtualised so that only the rows currently visible in the viewport are ever mounted, and see https://tanstack.com/virtual/latest for the underlying windowing implementation that makes scrolling through a hundred thousand commits feel instant.
++The commit history is virtualised so that only the rows currently visible in the viewport are ever mounted, and see https://tanstack.com/virtual/latest for the underlying windowing implementation that makes scrolling through a hundred thousand commits feel instant on even the largest repositories we have tested against.
+`;
+
 // ---------------------------------------------------------------------------
 // Working tree status
 // ---------------------------------------------------------------------------
@@ -273,6 +293,7 @@ export const MOCK_WORKING_TREE: {
   unstaged: [
     { path: "src/components/WorkingTreeDetail.tsx",       old_path: null, status: "M", is_conflict: false },
     { path: "src-tauri/src/lib.rs",                       old_path: null, status: "M", is_conflict: false },
+    { path: "docs/architecture.md",                       old_path: null, status: "M", is_conflict: false },
     { path: "src/components/ConflictedFile.tsx",          old_path: null, status: "U", is_conflict: true },
   ],
 };

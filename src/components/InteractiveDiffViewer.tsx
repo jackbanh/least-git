@@ -1,10 +1,11 @@
-import { useMemo } from "react";
+import { Fragment, useMemo } from "react";
 import { parseDiff, Diff, Hunk, Decoration, getChangeKey, useChangeSelect } from "react-diff-view";
 import type { HunkData, HunkTokens, ChangeData, GutterOptions } from "react-diff-view";
 import "react-diff-view/style/index.css";
 import "./DiffViewer.css";
 import "./InteractiveDiffViewer.css";
 import { useTokens } from "../lib/useTokens";
+import { isMarkdownPath } from "../lib/paths";
 
 interface Props {
   diff: string;
@@ -53,8 +54,11 @@ export default function InteractiveDiffViewer({ diff, staged, onApplyHunk, onApp
 
   if (files.length === 0) return null;
 
+  // Wrap prose files (markdown) rather than scrolling horizontally.
+  const wrap = files.every((f) => isMarkdownPath(f.newPath) || isMarkdownPath(f.oldPath));
+
   return (
-    <div className="diff-scroll">
+    <div className={`diff-scroll${wrap ? " diff-scroll--wrap" : ""}`}>
       {files.map((file) => {
         const key = `${file.oldPath}:${file.newPath}`;
         return (
@@ -131,8 +135,8 @@ function FileView({
       >
         {(hunks) =>
           hunks.map((hunk) => (
-            <>
-              <Decoration key={`deco-${hunk.content}`}>
+            <Fragment key={hunk.content}>
+              <Decoration>
                 <div className="idv-hunk-header">
                   <span className="idv-hunk-range">{hunk.content}</span>
                   <button
@@ -143,8 +147,8 @@ function FileView({
                   </button>
                 </div>
               </Decoration>
-              <Hunk key={hunk.content} hunk={hunk} />
-            </>
+              <Hunk hunk={hunk} />
+            </Fragment>
           ))
         }
       </Diff>

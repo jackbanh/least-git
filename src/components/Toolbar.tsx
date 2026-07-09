@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import {
   IconRefresh,
   IconArrowBarDown,
-  IconArrowBarUp,
   IconGitBranch,
   IconAdjustments,
   IconChevronDown,
@@ -181,7 +180,6 @@ export default function Toolbar({
   pullBranchInfo,
   isRebasing,
   onPull,
-  onPush,
   onBranch,
   onRefresh,
   onRebaseContinue,
@@ -193,7 +191,6 @@ export default function Toolbar({
   pullBranchInfo?: PullBranchInfo;
   isRebasing?: boolean;
   onPull?: (req: PullRequest) => void;
-  onPush?: () => void;
   onBranch?: () => void;
   onRefresh?: () => void;
   onRebaseContinue?: () => void;
@@ -205,7 +202,6 @@ export default function Toolbar({
     <div className="toolbar">
       <ToolbarBtn icon={<IconRefresh size={ICON_SIZE} />} label="Refresh" onClick={onRefresh} />
       <PullMenuBtn onPull={onPull} pullBranchInfo={pullBranchInfo} />
-      <ToolbarBtn icon={<IconArrowBarUp size={ICON_SIZE} />} label="Push" onClick={onPush} />
       <ToolbarBtn icon={<IconGitBranch size={ICON_SIZE} />} label="Branch" onClick={onBranch} />
       <RebaseMenuBtn disabled={!isRebasing} onContinue={onRebaseContinue} onAbort={onRebaseAbort} />
       <div className="toolbar-spacer" />

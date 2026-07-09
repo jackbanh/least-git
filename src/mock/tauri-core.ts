@@ -9,6 +9,7 @@ import {
   MOCK_BRANCHES,
   MOCK_COMMIT_DETAIL,
   MOCK_DIFF,
+  MOCK_MD_DIFF,
   MOCK_WORKING_TREE,
   MOCK_UNTRACKED_FILES,
   mockFilePreview,
@@ -83,9 +84,11 @@ export async function invoke<T = unknown>(cmd: string, _args?: Record<string, un
 
     case "get_file_diff":
     case "get_staged_diff":
-    case "get_unstaged_diff":
+    case "get_unstaged_diff": {
       await delay(LATENCY.get_file_diff);
-      return MOCK_DIFF as T;
+      const filePath = (_args?.filePath as string) ?? "";
+      return (filePath.endsWith(".md") ? MOCK_MD_DIFF : MOCK_DIFF) as T;
+    }
 
     case "get_working_tree_status":
       await delay(LATENCY.get_working_tree_status);

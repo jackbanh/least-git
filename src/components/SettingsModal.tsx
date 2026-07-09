@@ -33,9 +33,10 @@ function GitConfigSection() {
         const on = switchOn(setting, values);
         const following = isFollowing(setting, values);
         const recommendLabel = setting.recommend === "on" ? "On" : "Off";
-        // Colour the "on" track by which direction is recommended: green for
-        // settings we recommend enabling, orange for ones we recommend disabling.
-        const switchColor = setting.recommend === "on" ? "var(--lg-added)" : "var(--lg-uncommitted)";
+        // Colour the "on" track by which direction is recommended, reusing the
+        // diff palette: green for settings we recommend enabling, red for ones
+        // we recommend disabling.
+        const switchColor = setting.recommend === "on" ? "var(--lg-diff-add-bar)" : "var(--lg-diff-rem-bar)";
         return (
           <div
             key={setting.key}
@@ -158,7 +159,7 @@ export default function SettingsModal({
       opened={opened}
       onClose={onClose}
       title="Settings"
-      size={680}
+      size="min(880px, 94vw)"
       centered
       styles={{ body: { padding: 0 } }}
     >
@@ -190,7 +191,7 @@ export default function SettingsModal({
         {/* ── Right: scrollable sections ────────────────────────────── */}
         <ScrollArea
           className="settings-scroll"
-          h="calc(max(500px, 75vh) - 60px)"
+          h="calc(max(560px, 82vh) - 60px)"
           viewportRef={scrollRef}
           offsetScrollbars
         >

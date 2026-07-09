@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { info as logInfo } from "@tauri-apps/plugin-log";
 import { open } from "@tauri-apps/plugin-dialog";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Tabs, Button, ActionIcon, Group, Text } from "@mantine/core";
+import { Tabs, Button, Group, Text } from "@mantine/core";
 import { listen } from "@tauri-apps/api/event";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTabStore, Tab } from "./store";
@@ -19,6 +19,8 @@ import CommitList from "./components/CommitList";
 import CommitDetail from "./components/CommitDetail";
 import Toolbar from "./components/Toolbar";
 import SettingsModal from "./components/SettingsModal";
+import Toasts from "./components/Toasts";
+import { toastError } from "./toastStore";
 import "./App.css";
 
 const platform = (() => {
@@ -173,7 +175,7 @@ export default function App() {
       const tab = await invoke<Tab>("open_repo", { path });
       openTab(tab);
     } catch (e) {
-      console.error("Failed to open repo:", e);
+      toastError("Couldn't open repository", e);
     }
   }
 
@@ -196,20 +198,27 @@ export default function App() {
               {tabs.map((tab) => (
                 <Tabs.Tab key={tab.id} value={tab.id}>
                   <span className="tab-label">{tab.name}</span>
-                  <ActionIcon
-                    size={14}
-                    variant="transparent"
-                    c="dimmed"
-                    style={{ marginLeft: 6, color: "inherit", opacity: 0.6 }}
+                  <span
+                    className="tab-close"
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Close ${tab.name}`}
                     onClick={(e) => {
                       e.stopPropagation();
                       invoke("close_tab", { tabId: tab.id });
                       closeTab(tab.id);
                     }}
-                    aria-label={`Close ${tab.name}`}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        invoke("close_tab", { tabId: tab.id });
+                        closeTab(tab.id);
+                      }
+                    }}
                   >
                     ✕
-                  </ActionIcon>
+                  </span>
                 </Tabs.Tab>
               ))}
             </Tabs.List>
@@ -359,6 +368,8 @@ export default function App() {
         accentHue={accentHue}
         setAccentHue={setAccentHue}
       />
+
+      <Toasts />
     </div>
   );
 }
