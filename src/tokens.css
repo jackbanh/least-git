@@ -67,6 +67,9 @@
   --lg-font-serif: 'Fraunces', 'Iowan Old Style', Georgia, serif;
   --lg-font-sans: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
   --lg-font-mono: 'IBM Plex Mono', 'SF Mono', Menlo, Consolas, monospace;
+  /* Native UI font, resolved per-platform. Used for keyboard-shortcut labels so
+     the macOS modifier glyphs (⌘ ⇧ ⌥ ⌫) render at correct proportions. */
+  --lg-font-system: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
 }
 
 [data-theme="dark"] {

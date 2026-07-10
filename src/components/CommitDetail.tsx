@@ -10,6 +10,7 @@ import { useContextMenu } from "../hooks/useContextMenu";
 import { AnchoredMenuTarget } from "./FileRow";
 import { FileTree } from "./FileTree";
 import { joinRepoPath } from "../lib/paths";
+import { shortcutLabel } from "../lib/platform";
 import DiffViewer from "./DiffViewer";
 import WorkingTreeDetail from "./WorkingTreeDetail";
 import "./CommitDetail.css";
@@ -193,6 +194,7 @@ function CommitDetailInner({
           </Menu.Item>
           <Menu.Item
             leftSection={<IconGitCompare size={14} />}
+            rightSection={<span className="menu-kbd">{shortcutLabel("D")}</span>}
             onClick={() => invoke("open_diff_external", {
               tabId,
               oid: detail.oid,

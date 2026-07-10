@@ -1,10 +1,26 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { Anchor, Modal, ScrollArea, Stack, Switch, TableOfContents, Text } from "@mantine/core";
 import { IconCircleCheck, IconAlertTriangle } from "@tabler/icons-react";
 import { getVersion } from "@tauri-apps/api/app";
 import { GIT_CONFIG_SETTINGS, countNotFollowing, isFollowing, switchOn } from "../gitConfig";
 import { useGitConfigStore } from "../gitConfigStore";
+import { isMac, shortcutLabel, plusShortcut, deleteShortcut } from "../lib/platform";
 import "./SettingsModal.css";
+
+// Reference list for the Keyboard Shortcuts section. Labels are platform-aware
+// (⌘ on macOS, spelled-out Ctrl/Shift elsewhere) so they read clearly regardless
+// of platform or first language.
+const SHORTCUTS: { action: string; keys: string[] }[] = [
+  { action: "Refresh", keys: isMac ? ["⌘R"] : ["Ctrl+R", "F5"] },
+  { action: "Open branch dialog", keys: [shortcutLabel("B", { shift: true })] },
+  { action: "Pull", keys: [shortcutLabel("P", { shift: true })] },
+  { action: "Stage / add selected file", keys: [plusShortcut] },
+  { action: "Discard changes to selected file", keys: [shortcutLabel("R", { shift: true })] },
+  { action: "Delete selected untracked file", keys: [deleteShortcut] },
+  { action: "Commit staged changes", keys: [shortcutLabel("Enter")] },
+  { action: "Open selected file in external diff", keys: [shortcutLabel("D")] },
+  { action: "Move up / down in lists", keys: ["↑", "↓"] },
+];
 
 const ACCENT_HUES = [
   { label: "Sage",  value: 155 },
@@ -244,6 +260,26 @@ export default function SettingsModal({
             <section className="settings-section">
               <h2 id="s-git-config" className="settings-section-heading" data-settings-h>Git Config</h2>
               <GitConfigSection />
+            </section>
+
+            {/* ── Keyboard Shortcuts ────────────────────────────────── */}
+            <section className="settings-section">
+              <h2 id="s-shortcuts" className="settings-section-heading" data-settings-h>Keyboard Shortcuts</h2>
+              <div className="settings-shortcuts">
+                {SHORTCUTS.map((s) => (
+                  <div className="settings-shortcut" key={s.action}>
+                    <span className="settings-shortcut-action">{s.action}</span>
+                    <span className="settings-shortcut-keys">
+                      {s.keys.map((k, i) => (
+                        <Fragment key={k}>
+                          {i > 0 && <span className="settings-kbd-or">or</span>}
+                          <kbd className="settings-kbd">{k}</kbd>
+                        </Fragment>
+                      ))}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </section>
 
             {/* ── About ─────────────────────────────────────────────── */}

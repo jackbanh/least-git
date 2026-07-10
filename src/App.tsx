@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { info as logInfo } from "@tauri-apps/plugin-log";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -21,15 +21,8 @@ import Toolbar from "./components/Toolbar";
 import SettingsModal from "./components/SettingsModal";
 import Toasts from "./components/Toasts";
 import { toastError } from "./toastStore";
+import { platform } from "./lib/platform";
 import "./App.css";
-
-const platform = (() => {
-  if (!(window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__) return "windows";
-  const ua = navigator.userAgent;
-  if (ua.includes("Windows")) return "windows";
-  if (ua.includes("Mac")) return "macos";
-  return "linux";
-})();
 
 export default function App() {
   const {
@@ -73,6 +66,8 @@ export default function App() {
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
     document.documentElement.style.setProperty("--lg-accent-hue", String(accentHue));
+    // Lets CSS render keyboard-shortcut glyphs in the native font on macOS.
+    document.documentElement.setAttribute("data-platform", platform);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -116,26 +111,49 @@ export default function App() {
     return () => { unlisten?.(); };
   }, [activeTabId, bumpStatusKey]);
 
-  useEffect(() => {
-    const unlisten = listen("menu:refresh", () => {
-      if (activeTabId) {
-        invoke("clear_detail_cache", { tabId: activeTabId });
-        preArmThrottle(activeTabId, "refs");
-        bumpListKey(activeTabId);
-      }
-    });
-    return () => { unlisten.then((fn) => fn()); };
+  // Primary operations, shared by the macOS native menu, the toolbar, and the
+  // Windows/Linux keyboard shortcuts below.
+  const doRefresh = useCallback(() => {
+    if (!activeTabId) return;
+    invoke("clear_detail_cache", { tabId: activeTabId });
+    preArmThrottle(activeTabId, "refs");
+    bumpListKey(activeTabId);
   }, [activeTabId, bumpListKey]);
 
-  useEffect(() => {
-    const unlisten = listen("menu:branch", () => setBranchDialogOpen(true));
-    return () => { unlisten.then((fn) => fn()); };
-  }, []);
+  const doBranch = useCallback(() => setBranchDialogOpen(true), []);
+
+  const doPull = useCallback(() => { setPullReq({ rebase: false }); setPullDrawerOpen(true); }, []);
 
   useEffect(() => {
-    const unlisten = listen("menu:pull", () => { setPullReq({ rebase: false }); setPullDrawerOpen(true); });
+    const unlisten = listen("menu:refresh", doRefresh);
     return () => { unlisten.then((fn) => fn()); };
-  }, []);
+  }, [doRefresh]);
+
+  useEffect(() => {
+    const unlisten = listen("menu:branch", doBranch);
+    return () => { unlisten.then((fn) => fn()); };
+  }, [doBranch]);
+
+  useEffect(() => {
+    const unlisten = listen("menu:pull", doPull);
+    return () => { unlisten.then((fn) => fn()); };
+  }, [doPull]);
+
+  // macOS binds these via the native menu (Cmd accelerators). Windows/Linux have
+  // no native menu, so bind the same primary operations to the keyboard here.
+  useEffect(() => {
+    if (platform === "macos") return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.altKey || e.metaKey) return;
+      const key = e.key.toLowerCase();
+      if (e.key === "F5") { e.preventDefault(); doRefresh(); }
+      else if (e.ctrlKey && !e.shiftKey && key === "r") { e.preventDefault(); doRefresh(); }
+      else if (e.ctrlKey && e.shiftKey && key === "b") { e.preventDefault(); doBranch(); }
+      else if (e.ctrlKey && e.shiftKey && key === "p") { e.preventDefault(); doPull(); }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [doRefresh, doBranch, doPull]);
 
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? null;
 
@@ -271,14 +289,8 @@ export default function App() {
         pullBranchInfo={pullBranchInfo}
         isRebasing={isRebasing}
         onPull={(req) => { setPullReq(req); setPullDrawerOpen(true); }}
-        onBranch={() => setBranchDialogOpen(true)}
-        onRefresh={() => {
-          if (activeTabId) {
-            invoke("clear_detail_cache", { tabId: activeTabId });
-            preArmThrottle(activeTabId, "refs");
-            bumpListKey(activeTabId);
-          }
-        }}
+        onBranch={doBranch}
+        onRefresh={doRefresh}
         onRebaseContinue={() => { setRebaseAction("continue"); setRebaseDrawerOpen(true); }}
         onRebaseAbort={() => { setRebaseAction("abort"); setRebaseDrawerOpen(true); }}
         onToggleTweaks={() => setTweaksOpen((o) => !o)}

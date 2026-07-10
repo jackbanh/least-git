@@ -191,6 +191,22 @@ body {
   background: var(--lg-chrome-hover);
 }
 
+/* Keyboard-shortcut hint shown in the rightSection of context-menu items. */
+.menu-kbd {
+  font-family: var(--lg-font-mono);
+  font-size: 10.5px;
+  color: var(--lg-ink-faint);
+  letter-spacing: 0.2px;
+}
+
+/* macOS modifier glyphs (⌘ ⇧ ⌫) render undersized in the mono stack; the native
+   system font draws them at correct proportions. */
+[data-platform="macos"] .menu-kbd {
+  font-family: var(--lg-font-system);
+  font-size: 11.5px;
+  letter-spacing: 0;
+}
+
 .tab-bar-new-btn {
   align-self: flex-end;
   margin-left: 4px;

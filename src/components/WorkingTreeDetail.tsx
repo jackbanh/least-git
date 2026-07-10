@@ -20,6 +20,7 @@ import { useContextMenu } from "../hooks/useContextMenu";
 import { AnchoredMenuTarget } from "./FileRow";
 import { FileTree } from "./FileTree";
 import { joinRepoPath } from "../lib/paths";
+import { shortcutLabel, plusShortcut, deleteShortcut } from "../lib/platform";
 import InteractiveDiffViewer from "./InteractiveDiffViewer";
 import FilePreview, { type FilePreviewData } from "./FilePreview";
 import "./CommitDetail.css";
@@ -261,6 +262,28 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
               invoke("open_working_tree_diff_external", { tabId, filePath: selected.path, staged: selected.staged });
               return;
             }
+            // Per-file actions on the selected file, mirroring the context menu.
+            // Only apply to unstaged/untracked files (staged files only offer Unstage).
+            if ((e.metaKey || e.ctrlKey) && selected && !selected.staged) {
+              // Stage / Add — Ctrl+Plus / ⌘+
+              if (e.key === "+" || e.key === "=") {
+                e.preventDefault();
+                runFileAction("stage_file", selected.path);
+                return;
+              }
+              // Discard Changes — Ctrl+Shift+R / ⇧⌘R (tracked files only)
+              if (e.shiftKey && e.key.toLowerCase() === "r" && !selected.is_untracked) {
+                e.preventDefault();
+                runFileAction("discard_changes", selected.path, `Discard changes to "${selected.path}"? This cannot be undone.`);
+                return;
+              }
+              // Delete File — Ctrl+Del / ⌘⌫ (untracked files only)
+              if ((e.key === "Delete" || e.key === "Backspace") && selected.is_untracked) {
+                e.preventDefault();
+                runFileAction("delete_untracked", selected.path, `Delete "${selected.path}"? This cannot be undone.`);
+                return;
+              }
+            }
             if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
             if (allFiles.length === 0) return;
             e.preventDefault();
@@ -342,8 +365,10 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
                     className={`wt-commit-btn${canCommit ? " wt-commit-btn--enabled" : ""}`}
                     disabled={!canCommit}
                     onClick={doCommit}
+                    title={`Commit (${shortcutLabel("Enter")})`}
                   >
                     Commit
+                    <span className="wt-commit-kbd">{shortcutLabel("Enter")}</span>
                   </button>
                 </div>
               )}
@@ -418,6 +443,7 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
             <>
               <Menu.Item
                 leftSection={<IconArrowBarToUp size={14} />}
+                rightSection={<span className="menu-kbd">{plusShortcut}</span>}
                 onClick={() => runFileAction("stage_file", ctx!.entry.path)}
               >
                 {ctx?.entry.status === "?" ? "Add File" : "Stage"}
@@ -425,6 +451,7 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
               {ctx?.entry.status === "?" ? (
                 <Menu.Item
                   leftSection={<IconTrash size={14} />}
+                  rightSection={<span className="menu-kbd">{deleteShortcut}</span>}
                   color="red"
                   onClick={() =>
                     runFileAction(
@@ -439,6 +466,7 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
               ) : (
                 <Menu.Item
                   leftSection={<IconRotate2 size={14} />}
+                  rightSection={<span className="menu-kbd">{shortcutLabel("R", { shift: true })}</span>}
                   color="red"
                   onClick={() =>
                     runFileAction(
@@ -505,6 +533,7 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
           </Menu.Item>
           <Menu.Item
             leftSection={<IconGitCompare size={14} />}
+            rightSection={<span className="menu-kbd">{shortcutLabel("D")}</span>}
             onClick={() => invoke("open_working_tree_diff_external", {
               tabId,
               filePath: ctx!.entry.path,
