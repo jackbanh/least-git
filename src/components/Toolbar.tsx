@@ -42,7 +42,7 @@ function ToolbarIconBtn({ icon, onClick, title, badge }: { icon: React.ReactNode
     >
       {icon}
       {badge != null && badge > 0 && (
-        <span className="toolbar-icon-badge">{badge}</span>
+        <span className="toolbar-icon-badge" role="img" aria-label={`${badge} settings need attention`} />
       )}
     </button>
   );

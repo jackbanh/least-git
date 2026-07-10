@@ -153,9 +153,11 @@
   border-left-color: var(--lg-diff-rem-bar);
 }
 
-/* Following the recommendation → diff-green marker. */
+/* Following the recommendation → neutral / de-emphasised: no card background
+   and no accent bar, so the eye is drawn only to rows that need attention. */
 .gc-row--ok {
-  border-left-color: var(--lg-diff-add-bar);
+  background: transparent;
+  border-color: transparent;
 }
 
 .gc-row-text {
@@ -210,14 +212,15 @@
 .gc-status {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   font-family: var(--lg-font-sans);
-  font-size: 11px;
+  font-size: 12.5px;
   font-weight: 500;
 }
 
+/* Following the recommendation is the quiet, expected state — muted, not green. */
 .gc-status--ok {
-  color: var(--lg-diff-add-fg);
+  color: var(--lg-ink-muted);
 }
 
 .gc-status--warn {

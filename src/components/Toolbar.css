@@ -95,25 +95,18 @@
 }
 
 /* Amber count badge for git settings that aren't following the recommendation. */
+/* A small "needs attention" dot — no count, no glyph. The panel-coloured ring
+   separates it from the icon beneath. */
 .toolbar-icon-badge {
   position: absolute;
-  top: -2px;
-  right: -2px;
-  min-width: 14px;
-  height: 14px;
-  padding: 0 3px;
+  top: -1px;
+  right: -1px;
+  width: 9px;
+  height: 9px;
   box-sizing: border-box;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--lg-font-mono);
-  font-size: 9px;
-  font-weight: 600;
-  line-height: 1;
-  color: #fff;
-  background: var(--lg-uncommitted);
+  background: var(--lg-diff-rem-bar);
   border: 1.5px solid var(--lg-panel-bg);
-  border-radius: 8px;
+  border-radius: 50%;
 }
 
 /* ── Pull dropdown ────────────────────────────────────────────────── */

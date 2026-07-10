@@ -68,11 +68,11 @@ function GitConfigSection() {
                 {!loading && (
                   following ? (
                     <span className="gc-status gc-status--ok">
-                      <IconCircleCheck size={13} /> Following recommendation
+                      <IconCircleCheck size={15} /> Following recommendation
                     </span>
                   ) : (
                     <span className="gc-status gc-status--warn">
-                      <IconAlertTriangle size={13} /> Recommended: {recommendLabel}
+                      <IconAlertTriangle size={15} /> Recommended: {recommendLabel}
                     </span>
                   )
                 )}
