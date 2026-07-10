@@ -9,6 +9,7 @@ import { useResize } from "../hooks/useResize";
 import { useContextMenu } from "../hooks/useContextMenu";
 import { AnchoredMenuTarget } from "./FileRow";
 import { FileTree } from "./FileTree";
+import { joinRepoPath } from "../lib/paths";
 import DiffViewer from "./DiffViewer";
 import WorkingTreeDetail from "./WorkingTreeDetail";
 import "./CommitDetail.css";
@@ -182,7 +183,13 @@ function CommitDetailInner({
             leftSection={<IconCopy size={14} />}
             onClick={() => navigator.clipboard.writeText(ctx!.path)}
           >
-            Copy Path
+            Copy Relative Path
+          </Menu.Item>
+          <Menu.Item
+            leftSection={<IconCopy size={14} />}
+            onClick={() => navigator.clipboard.writeText(joinRepoPath(tabId, ctx!.path))}
+          >
+            Copy Full Path
           </Menu.Item>
           <Menu.Item
             leftSection={<IconGitCompare size={14} />}

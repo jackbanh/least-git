@@ -19,6 +19,7 @@ import { useResize } from "../hooks/useResize";
 import { useContextMenu } from "../hooks/useContextMenu";
 import { AnchoredMenuTarget } from "./FileRow";
 import { FileTree } from "./FileTree";
+import { joinRepoPath } from "../lib/paths";
 import InteractiveDiffViewer from "./InteractiveDiffViewer";
 import FilePreview, { type FilePreviewData } from "./FilePreview";
 import "./CommitDetail.css";
@@ -494,7 +495,13 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
             leftSection={<IconCopy size={14} />}
             onClick={() => navigator.clipboard.writeText(ctx!.entry.path)}
           >
-            Copy Path
+            Copy Relative Path
+          </Menu.Item>
+          <Menu.Item
+            leftSection={<IconCopy size={14} />}
+            onClick={() => navigator.clipboard.writeText(joinRepoPath(tabId, ctx!.entry.path))}
+          >
+            Copy Full Path
           </Menu.Item>
           <Menu.Item
             leftSection={<IconGitCompare size={14} />}

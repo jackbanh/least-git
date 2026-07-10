@@ -158,8 +158,8 @@ fn checkout_and_add(path: &Path, flag: &str, file_path: &str) -> Result<(), Stri
 }
 
 /// Resolve a conflict by keeping the local branch's version.
-/// During a rebase --ours/--theirs are inverted vs a merge, so we detect
-/// the operation type and pick the correct flag automatically.
+/// A rebase inverts --ours/--theirs relative to every other conflict source,
+/// so we detect an in-progress rebase and pick the correct flag automatically.
 #[tauri::command]
 pub async fn resolve_conflict_local(
     tab_id: String,
@@ -168,8 +168,10 @@ pub async fn resolve_conflict_local(
 ) -> Result<(), String> {
     let path = get_repo_path(&tab_id, &state)?;
     let git_dir = path.join(".git");
-    // Rebase: --theirs = commits being replayed (local branch)
-    // Merge:  --ours   = HEAD (local branch)
+    // In-progress rebase: our commits are being replayed, so the local branch
+    // is --theirs. Any other conflict in the working tree — a merge, cherry-pick
+    // or revert started outside least-git (terminal / AI agent) — is a normal
+    // merge, where the local branch is --ours (HEAD).
     let flag = if git_dir.join("rebase-merge").exists() { "--theirs" } else { "--ours" };
     info!("resolve_conflict_local tab={tab_id} file={file_path} flag={flag}");
     checkout_and_add(&path, flag, &file_path)
@@ -184,8 +186,10 @@ pub async fn resolve_conflict_incoming(
 ) -> Result<(), String> {
     let path = get_repo_path(&tab_id, &state)?;
     let git_dir = path.join(".git");
-    // Rebase: --ours   = target (incoming to local branch)
-    // Merge:  --theirs = MERGE_HEAD (incoming branch)
+    // In-progress rebase: --ours is the rebase target, i.e. the incoming side.
+    // Any other conflict left in the working tree — a merge, cherry-pick or
+    // revert started outside least-git (terminal / AI agent) — is a normal
+    // merge, where the incoming branch is --theirs (MERGE_HEAD).
     let flag = if git_dir.join("rebase-merge").exists() { "--ours" } else { "--theirs" };
     info!("resolve_conflict_incoming tab={tab_id} file={file_path} flag={flag}");
     checkout_and_add(&path, flag, &file_path)
