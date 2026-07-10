@@ -162,6 +162,7 @@ function CommitDetailInner({
             key={detail.oid}
             files={detail.files}
             selected={showDescription ? null : selectedFile}
+            showTooltips={!contextMenu}
             onSelect={(path) => setSelectedFile(path)}
             onContextMenu={(e, path) => {
               const file = detail.files.find((f) => f.path === path)!;

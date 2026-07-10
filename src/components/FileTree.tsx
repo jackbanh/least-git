@@ -86,11 +86,15 @@ export function FileTree({
   selected,
   onSelect,
   onContextMenu,
+  showTooltips = true,
 }: {
   files: FileTreeEntry[];
   selected: string | null;
   onSelect: (path: string) => void;
   onContextMenu?: (e: React.MouseEvent, path: string) => void;
+  // Native `title` tooltips render above everything (including the context
+  // menu). Callers pass false while a menu is open so they don't cover it.
+  showTooltips?: boolean;
 }) {
   const tree = useMemo(() => buildTree(files), [files]);
   const [expanded, setExpanded] = useState<Set<string>>(() => collectFolderPaths(tree));
@@ -123,6 +127,7 @@ export function FileTree({
         selected={selected}
         onSelect={onSelect}
         onContextMenu={onContextMenu}
+        showTooltips={showTooltips}
         hideRoot
       />
     </div>
@@ -130,7 +135,7 @@ export function FileTree({
 }
 
 function TreeFolder({
-  node, depth, expanded, onToggle, selected, onSelect, onContextMenu, hideRoot,
+  node, depth, expanded, onToggle, selected, onSelect, onContextMenu, showTooltips, hideRoot,
 }: {
   node: TreeNode;
   depth: number;
@@ -139,6 +144,7 @@ function TreeFolder({
   selected: string | null;
   onSelect: (path: string) => void;
   onContextMenu?: (e: React.MouseEvent, path: string) => void;
+  showTooltips: boolean;
   hideRoot?: boolean;
 }) {
   const isOpen = hideRoot || expanded.has(node.path);
@@ -172,6 +178,7 @@ function TreeFolder({
               selected={selected}
               onSelect={onSelect}
               onContextMenu={onContextMenu}
+              showTooltips={showTooltips}
             />
           ))}
           {node.sortedFiles.map(f => (
@@ -182,6 +189,7 @@ function TreeFolder({
               selected={selected === f.path}
               onSelect={onSelect}
               onContextMenu={onContextMenu}
+              showTooltips={showTooltips}
             />
           ))}
         </div>
@@ -191,13 +199,14 @@ function TreeFolder({
 }
 
 function TreeFileRow({
-  file, depth, selected, onSelect, onContextMenu,
+  file, depth, selected, onSelect, onContextMenu, showTooltips,
 }: {
   file: FileTreeEntry;
   depth: number;
   selected: boolean;
   onSelect: (path: string) => void;
   onContextMenu?: (e: React.MouseEvent, path: string) => void;
+  showTooltips: boolean;
 }) {
   const name = file.path.split("/").pop()!;
   return (
@@ -215,7 +224,7 @@ function TreeFileRow({
       <span className={`file-status file-status--${file.status.toLowerCase()}`}>
         {file.status}
       </span>
-      <span className="file-tree-filename" title={file.path}>{name}</span>
+      <span className="file-tree-filename" title={showTooltips ? file.path : undefined}>{name}</span>
     </div>
   );
 }

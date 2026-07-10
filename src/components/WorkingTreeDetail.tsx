@@ -312,6 +312,7 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
                 <FileTree
                   files={status.staged}
                   selected={selected?.staged ? selected.path : null}
+                  showTooltips={!contextMenu}
                   onSelect={(path) => {
                     const f = status.staged.find((e) => e.path === path)!;
                     selectFile(f, true);
@@ -401,6 +402,7 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
                 <FileTree
                   files={[...status.unstaged, ...(untracked ?? [])]}
                   selected={selected?.staged ? null : selected?.path ?? null}
+                  showTooltips={!contextMenu}
                   onSelect={(path) => {
                     const allUnstaged = [...status.unstaged, ...(untracked ?? [])];
                     const f = allUnstaged.find((e) => e.path === path)!;
