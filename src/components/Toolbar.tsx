@@ -1,4 +1,3 @@
-import { useEffect, useRef, useState } from "react";
 import {
   IconRefresh,
   IconArrowBarDown,
@@ -7,6 +6,7 @@ import {
   IconChevronDown,
   IconArrowsExchange,
 } from "@tabler/icons-react";
+import { ActionIcon, Indicator, Menu } from "@mantine/core";
 import type { PullTarget } from "./PullDrawer";
 export type { PullTarget };
 export interface PullRequest { target?: PullTarget; rebase: boolean; }
@@ -14,36 +14,11 @@ import "./Toolbar.css";
 
 const ICON_SIZE = 14;
 
-function ToolbarBtn({ icon, label, badge, onClick }: { icon: React.ReactNode; label: string; badge?: string; onClick?: () => void }) {
-  const [hover, setHover] = useState(false);
+function ToolbarBtn({ icon, label, onClick }: { icon: React.ReactNode; label: string; onClick?: () => void }) {
   return (
-    <button
-      className={`toolbar-btn${hover ? " toolbar-btn--hover" : ""}`}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      onClick={onClick}
-    >
+    <button className="toolbar-btn" onClick={onClick}>
       <span className="toolbar-btn-icon">{icon}</span>
       {label}
-      {badge && <span className="toolbar-btn-badge">{badge}</span>}
-    </button>
-  );
-}
-
-function ToolbarIconBtn({ icon, onClick, title, badge }: { icon: React.ReactNode; onClick?: () => void; title?: string; badge?: number }) {
-  const [hover, setHover] = useState(false);
-  return (
-    <button
-      className={`toolbar-icon-btn${hover ? " toolbar-icon-btn--hover" : ""}`}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      onClick={onClick}
-      title={title}
-    >
-      {icon}
-      {badge != null && badge > 0 && (
-        <span className="toolbar-icon-badge" role="img" aria-label={`${badge} settings need attention`} />
-      )}
     </button>
   );
 }
@@ -58,21 +33,6 @@ function PullMenuBtn({ onPull, pullBranchInfo }: {
   onPull?: (req: PullRequest) => void;
   pullBranchInfo?: PullBranchInfo;
 }) {
-  const [open, setOpen] = useState(false);
-  const [hover, setHover] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [open]);
-
   const { hasMain, hasMaster, headBranch } = pullBranchInfo ?? {
     hasMain: false, hasMaster: false, headBranch: null,
   };
@@ -99,79 +59,47 @@ function PullMenuBtn({ onPull, pullBranchInfo }: {
   ];
 
   return (
-    <div ref={ref} className="pull-menu-wrap">
-      <button
-        className={`toolbar-btn pull-menu-btn${hover ? " toolbar-btn--hover" : ""}${open ? " toolbar-btn--hover" : ""}`}
-        onMouseEnter={() => setHover(true)}
-        onMouseLeave={() => setHover(false)}
-        onClick={() => setOpen((o) => !o)}
-      >
-        <span className="toolbar-btn-icon"><IconArrowBarDown size={ICON_SIZE} /></span>
-        Pull
-        <IconChevronDown size={10} className={`pull-menu-chevron${open ? " pull-menu-chevron--open" : ""}`} />
-      </button>
-      {open && (
-        <div className="pull-menu-dropdown">
-          {options.map((opt) => (
-            <button
-              key={opt.label}
-              className={`pull-menu-item${opt.disabled ? " pull-menu-item--disabled" : ""}`}
-              disabled={opt.disabled}
-              onClick={() => {
-                setOpen(false);
-                onPull?.(opt.req);
-              }}
-            >
-              <span className="pull-menu-item-label">{opt.label}</span>
-              <span className="pull-menu-item-sublabel">{opt.sublabel}</span>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
+    <Menu position="bottom-start" width={210} shadow="md" radius="md">
+      <Menu.Target>
+        <button className="toolbar-btn pull-menu-btn">
+          <span className="toolbar-btn-icon"><IconArrowBarDown size={ICON_SIZE} /></span>
+          Pull
+          <IconChevronDown size={10} className="pull-menu-chevron" />
+        </button>
+      </Menu.Target>
+      <Menu.Dropdown>
+        {options.map((opt) => (
+          <Menu.Item key={opt.label} disabled={opt.disabled} onClick={() => onPull?.(opt.req)}>
+            <span className="pull-menu-item-label">{opt.label}</span>
+            <span className="pull-menu-item-sublabel">{opt.sublabel}</span>
+          </Menu.Item>
+        ))}
+      </Menu.Dropdown>
+    </Menu>
   );
 }
 
 function RebaseMenuBtn({ disabled, onContinue, onAbort }: { disabled?: boolean; onContinue?: () => void; onAbort?: () => void }) {
-  const [open, setOpen] = useState(false);
-  const [hover, setHover] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [open]);
-
   return (
-    <div ref={ref} className="pull-menu-wrap">
-      <button
-        className={`toolbar-btn pull-menu-btn${hover || open ? " toolbar-btn--hover" : ""}${disabled ? " toolbar-btn--disabled" : ""}`}
-        onMouseEnter={() => setHover(true)}
-        onMouseLeave={() => setHover(false)}
-        onClick={() => !disabled && setOpen((o) => !o)}
-        disabled={disabled}
-      >
-        <span className="toolbar-btn-icon"><IconArrowsExchange size={ICON_SIZE} /></span>
-        Rebase
-        <IconChevronDown size={10} className={`pull-menu-chevron${open ? " pull-menu-chevron--open" : ""}`} />
-      </button>
-      {open && (
-        <div className="pull-menu-dropdown">
-          <button className="pull-menu-item" onClick={() => { setOpen(false); onContinue?.(); }}>
-            <span className="pull-menu-item-label">Continue Rebase</span>
-            <span className="pull-menu-item-sublabel">git rebase --continue</span>
-          </button>
-          <button className="pull-menu-item pull-menu-item--abort" onClick={() => { setOpen(false); onAbort?.(); }}>
-            <span className="pull-menu-item-label">Abort Rebase</span>
-            <span className="pull-menu-item-sublabel">git rebase --abort</span>
-          </button>
-        </div>
-      )}
-    </div>
+    <Menu position="bottom-start" width={220} shadow="md" radius="md">
+      <Menu.Target>
+        <button className="toolbar-btn pull-menu-btn" disabled={disabled}>
+          <span className="toolbar-btn-icon"><IconArrowsExchange size={ICON_SIZE} /></span>
+          Rebase
+          <IconChevronDown size={10} className="pull-menu-chevron" />
+        </button>
+      </Menu.Target>
+      <Menu.Dropdown>
+        <Menu.Item onClick={onContinue}>
+          <span className="pull-menu-item-label">Continue Rebase</span>
+          <span className="pull-menu-item-sublabel">git rebase --continue</span>
+        </Menu.Item>
+        <Menu.Item color="red" onClick={onAbort}>
+          <span className="pull-menu-item-label">Abort Rebase</span>
+          <span className="pull-menu-item-sublabel">git rebase --abort</span>
+        </Menu.Item>
+      </Menu.Dropdown>
+    </Menu>
   );
 }
 
@@ -198,6 +126,7 @@ export default function Toolbar({
   onToggleTweaks?: () => void;
   settingsBadge?: number;
 }) {
+  const needsAttention = settingsBadge != null && settingsBadge > 0;
   return (
     <div className="toolbar">
       <ToolbarBtn icon={<IconRefresh size={ICON_SIZE} />} label="Refresh" onClick={onRefresh} />
@@ -211,7 +140,25 @@ export default function Toolbar({
           <span className="toolbar-branch-name">{currentBranch}</span>
         </div>
       )}
-      <ToolbarIconBtn icon={<IconAdjustments size={ICON_SIZE} />} onClick={onToggleTweaks} title="Settings" badge={settingsBadge} />
+      <Indicator
+        color="var(--lg-diff-rem-bar)"
+        size={9}
+        offset={5}
+        withBorder
+        disabled={!needsAttention}
+        aria-label={needsAttention ? `${settingsBadge} settings need attention` : undefined}
+      >
+        <ActionIcon
+          className="toolbar-icon-btn"
+          variant="subtle"
+          color="gray"
+          onClick={onToggleTweaks}
+          title="Settings"
+          aria-label="Settings"
+        >
+          <IconAdjustments size={ICON_SIZE} />
+        </ActionIcon>
+      </Indicator>
     </div>
   );
 }

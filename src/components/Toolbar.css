@@ -26,31 +26,24 @@
   transition: background 80ms ease;
 }
 
-.toolbar-btn--hover {
+.toolbar-btn:hover,
+.pull-menu-btn[aria-expanded="true"] {
   background: var(--lg-hover-bg);
 }
 
-.toolbar-btn--disabled,
 .toolbar-btn:disabled {
   opacity: 0.4;
   cursor: default;
+}
+
+.toolbar-btn:disabled:hover {
+  background: transparent;
 }
 
 .toolbar-btn-icon {
   color: var(--lg-ink-muted);
   display: flex;
   align-items: center;
-}
-
-.toolbar-btn-badge {
-  margin-left: 2px;
-  font-size: 10px;
-  font-weight: 500;
-  color: var(--lg-accent-text);
-  background: var(--lg-accent-soft);
-  padding: 1px 5px;
-  border-radius: 8px;
-  font-family: var(--lg-font-mono);
 }
 
 .toolbar-spacer {
@@ -75,45 +68,16 @@
   color: var(--lg-ink);
 }
 
+/* Settings gear — Mantine ActionIcon tinted to the app's neutral ink. */
 .toolbar-icon-btn {
-  position: relative;
-  width: 28px;
-  height: 26px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: none;
-  border-radius: 6px;
   color: var(--lg-ink-muted);
-  cursor: pointer;
-  transition: background 80ms ease;
 }
 
-.toolbar-icon-btn--hover {
+.toolbar-icon-btn:hover {
   background: var(--lg-hover-bg);
 }
 
-/* Amber count badge for git settings that aren't following the recommendation. */
-/* A small "needs attention" dot — no count, no glyph. The panel-coloured ring
-   separates it from the icon beneath. */
-.toolbar-icon-badge {
-  position: absolute;
-  top: -1px;
-  right: -1px;
-  width: 9px;
-  height: 9px;
-  box-sizing: border-box;
-  background: var(--lg-diff-rem-bar);
-  border: 1.5px solid var(--lg-panel-bg);
-  border-radius: 50%;
-}
-
-/* ── Pull dropdown ────────────────────────────────────────────────── */
-
-.pull-menu-wrap {
-  position: relative;
-}
+/* ── Pull / Rebase dropdown triggers (Mantine Menu targets) ───────────── */
 
 .pull-menu-btn {
   gap: 5px;
@@ -125,71 +89,24 @@
   flex-shrink: 0;
 }
 
-.pull-menu-chevron--open {
+.pull-menu-btn[aria-expanded="true"] .pull-menu-chevron {
   transform: rotate(180deg);
 }
 
-.pull-menu-dropdown {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  z-index: 200;
-  min-width: 230px;
-  background: var(--lg-panel-bg);
-  border: 0.5px solid var(--lg-border);
-  border-radius: 8px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.10), 0 1px 4px rgba(0, 0, 0, 0.06);
-  padding: 4px;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-[data-theme="dark"] .pull-menu-dropdown {
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35), 0 1px 4px rgba(0, 0, 0, 0.2);
-}
-
-.pull-menu-item {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  padding: 7px 10px;
-  border: none;
-  border-radius: 5px;
-  background: transparent;
-  cursor: pointer;
-  text-align: left;
-  transition: background 80ms ease;
-}
-
-.pull-menu-item:hover {
-  background: var(--lg-hover-bg);
-}
-
+/* Two-line menu items (label + git command) inside Mantine Menu.Item.
+   Label colour is left to Mantine so the red "Abort" item stays red. */
 .pull-menu-item-label {
+  display: block;
   font-family: var(--lg-font-sans);
   font-size: 12px;
   font-weight: 500;
-  color: var(--lg-ink);
   letter-spacing: 0.1px;
 }
 
 .pull-menu-item-sublabel {
+  display: block;
+  margin-top: 2px;
   font-family: var(--lg-font-mono);
   font-size: 10.5px;
   color: var(--lg-ink-faint);
-}
-
-.pull-menu-item--disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-
-.pull-menu-item--disabled:hover {
-  background: transparent;
-}
-
-.pull-menu-item--abort .pull-menu-item-label {
-  color: var(--mantine-color-red-6);
 }

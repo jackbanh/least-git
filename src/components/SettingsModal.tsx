@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useRef, useState } from "react";
-import { Anchor, Modal, ScrollArea, Stack, Switch, TableOfContents, Text } from "@mantine/core";
-import { IconCircleCheck, IconAlertTriangle } from "@tabler/icons-react";
+import { Anchor, ColorSwatch, Modal, ScrollArea, SegmentedControl, Stack, Switch, TableOfContents, Text } from "@mantine/core";
+import { IconCircleCheck, IconAlertTriangle, IconCheck } from "@tabler/icons-react";
 import { getVersion } from "@tauri-apps/api/app";
 import { GIT_CONFIG_SETTINGS, countNotFollowing, isFollowing, switchOn } from "../gitConfig";
 import { useGitConfigStore } from "../gitConfigStore";
@@ -219,37 +219,38 @@ export default function SettingsModal({
 
               <div className="settings-row">
                 <span className="settings-label">Theme</span>
-                <div className="settings-seg">
-                  <button
-                    className={`settings-seg-btn${theme === "light" ? " settings-seg-btn--on" : ""}`}
-                    onClick={() => setTheme("light")}
-                  >Light</button>
-                  <button
-                    className={`settings-seg-btn${theme === "dark" ? " settings-seg-btn--on" : ""}`}
-                    onClick={() => setTheme("dark")}
-                  >Dark</button>
-                </div>
+                <SegmentedControl
+                  value={theme}
+                  onChange={(v) => setTheme(v as "light" | "dark")}
+                  size="xs"
+                  data={[
+                    { label: "Light", value: "light" },
+                    { label: "Dark", value: "dark" },
+                  ]}
+                />
               </div>
 
               <div className="settings-row">
                 <span className="settings-label">Accent</span>
                 <div>
                   <div className="settings-swatches">
-                    {ACCENT_HUES.map((h) => (
-                      <button
-                        key={h.value}
-                        title={h.label}
-                        className={`settings-swatch${accentHue === h.value ? " settings-swatch--on" : ""}`}
-                        onClick={() => setAccentHue(h.value)}
-                      >
-                        <div
-                          className="settings-swatch-dot"
-                          style={{
-                            background: `oklch(${theme === "dark" ? "72%" : "55%"} 0.08 ${h.value})`,
-                          }}
-                        />
-                      </button>
-                    ))}
+                    {ACCENT_HUES.map((h) => {
+                      const color = `oklch(${theme === "dark" ? "72%" : "55%"} 0.08 ${h.value})`;
+                      return (
+                        <ColorSwatch
+                          key={h.value}
+                          component="button"
+                          color={color}
+                          size={26}
+                          onClick={() => setAccentHue(h.value)}
+                          title={h.label}
+                          aria-label={h.label}
+                          style={{ cursor: "pointer", color: "#fff" }}
+                        >
+                          {accentHue === h.value && <IconCheck size={15} />}
+                        </ColorSwatch>
+                      );
+                    })}
                   </div>
                   <div className="settings-hue-label">hue: {accentHue}°</div>
                 </div>
