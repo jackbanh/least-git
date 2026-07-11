@@ -21,6 +21,8 @@ import { AnchoredMenuTarget } from "./FileRow";
 import { FileTree } from "./FileTree";
 import { joinRepoPath } from "../lib/paths";
 import { shortcutLabel, plusShortcut, deleteShortcut } from "../lib/platform";
+import ErrorBoundary from "./ErrorBoundary";
+import DiffErrorFallback from "./DiffErrorFallback";
 import InteractiveDiffViewer from "./InteractiveDiffViewer";
 import FilePreview, { type FilePreviewData } from "./FilePreview";
 import "./CommitDetail.css";
@@ -554,32 +556,37 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
 
       {/* Right column: diff */}
       <div className="detail-diff">
-        {!selected ? (
-          <div className="diff-loading">
-            <span className="diff-loading-text">Select a file to view diff</span>
-          </div>
-        ) : diffLoading ? (
-          <div className="diff-loading"><Loader size="sm" /></div>
-        ) : selected.is_untracked ? (
-          preview ? (
-            <FilePreview path={selected.path} preview={preview} />
+        <ErrorBoundary
+          resetKeys={[selected?.path, selected?.staged]}
+          fallback={(_e, reset) => <DiffErrorFallback reset={reset} />}
+        >
+          {!selected ? (
+            <div className="diff-loading">
+              <span className="diff-loading-text">Select a file to view diff</span>
+            </div>
+          ) : diffLoading ? (
+            <div className="diff-loading"><Loader size="sm" /></div>
+          ) : selected.is_untracked ? (
+            preview ? (
+              <FilePreview path={selected.path} preview={preview} />
+            ) : (
+              <div className="diff-loading">
+                <span className="diff-loading-text">No preview available</span>
+              </div>
+            )
+          ) : diff ? (
+            <InteractiveDiffViewer
+              diff={diff}
+              staged={selected.staged}
+              onApplyHunk={(patch) => applyPatch(patch, selected.staged)}
+              onApplyLines={(patch) => applyPatch(patch, selected.staged)}
+            />
           ) : (
             <div className="diff-loading">
-              <span className="diff-loading-text">No preview available</span>
+              <span className="diff-loading-text">No diff available</span>
             </div>
-          )
-        ) : diff ? (
-          <InteractiveDiffViewer
-            diff={diff}
-            staged={selected.staged}
-            onApplyHunk={(patch) => applyPatch(patch, selected.staged)}
-            onApplyLines={(patch) => applyPatch(patch, selected.staged)}
-          />
-        ) : (
-          <div className="diff-loading">
-            <span className="diff-loading-text">No diff available</span>
-          </div>
-        )}
+          )}
+        </ErrorBoundary>
       </div>
     </div>
   );

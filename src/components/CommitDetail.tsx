@@ -11,6 +11,8 @@ import { AnchoredMenuTarget } from "./FileRow";
 import { FileTree } from "./FileTree";
 import { joinRepoPath } from "../lib/paths";
 import { shortcutLabel } from "../lib/platform";
+import ErrorBoundary from "./ErrorBoundary";
+import DiffErrorFallback from "./DiffErrorFallback";
 import DiffViewer from "./DiffViewer";
 import WorkingTreeDetail from "./WorkingTreeDetail";
 import "./CommitDetail.css";
@@ -210,17 +212,22 @@ function CommitDetailInner({
       <div className="resize-handle resize-handle--vertical" onMouseDown={startLeftResize} />
 
       <div className="detail-diff">
-        {showDescription ? (
-          <DescriptionPane detail={detail} />
-        ) : diffLoading ? (
-          <div className="diff-loading"><Loader size="sm" /></div>
-        ) : diff ? (
-          <DiffViewer diff={diff} />
-        ) : (
-          <div className="diff-loading">
-            <span className="diff-loading-text">Select a file to view diff</span>
-          </div>
-        )}
+        <ErrorBoundary
+          resetKeys={[selectedFile, showDescription, detail.oid]}
+          fallback={(_e, reset) => <DiffErrorFallback reset={reset} />}
+        >
+          {showDescription ? (
+            <DescriptionPane detail={detail} />
+          ) : diffLoading ? (
+            <div className="diff-loading"><Loader size="sm" /></div>
+          ) : diff ? (
+            <DiffViewer diff={diff} />
+          ) : (
+            <div className="diff-loading">
+              <span className="diff-loading-text">Select a file to view diff</span>
+            </div>
+          )}
+        </ErrorBoundary>
       </div>
     </div>
   );

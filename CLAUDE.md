@@ -22,6 +22,12 @@ Positioned as a **companion to an AI coding workflow**: the AI agent makes most 
 - Repos are opened fresh per command call (`gix::open`) — no cached `Repository` handle
 - IPC pattern: frontend calls `invoke()`, Rust returns data or emits streaming events via `tauri::emit`
 
+## UI components — use the framework, don't rebuild it
+
+- **Before hand-rolling any interactive primitive, check `@mantine/core` first — it almost certainly exists.** This includes: dropdown/menu → `Menu`, popover → `Popover`, dialog → `Modal`, drawer → `Drawer`, segmented toggle → `SegmentedControl`, colour picker swatch → `ColorSwatch`, badge/dot → `Badge`/`Indicator`, tooltip → `Tooltip`, text field → `TextInput`/`Textarea`, button/icon button → `Button`/`ActionIcon`, progress → `Progress`, spinner → `Loader`. Hand-rolled HTML is **only** for virtualised list rows (see perf rule).
+- **Behaviour hooks live in `@mantine/hooks`** (a dependency): `useClickOutside`, `useDisclosure`, `useLocalStorage`, `useDebouncedValue`, etc. Don't reimplement click-outside listeners or localStorage effects.
+- **Mantine is themed** (`src/theme.ts`): components inherit the app fonts and the accent (which follows `--lg-accent-hue`), and Mantine's colour scheme is synced to the app theme in `App.tsx`. So a Mantine component should already match the app — **do not add per-component CSS palette overrides**. If one looks wrong, fix the theme, not the component.
+
 ## Critical perf rules
 
 - **Never use Mantine components inside virtualised list rows** — `CommitList` rows are plain divs with CSS classes only; Mantine is for the shell (tabs, toolbar, dialogs, forms)

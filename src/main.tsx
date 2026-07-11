@@ -6,6 +6,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { restoreStateCurrent } from "@tauri-apps/plugin-window-state";
 import "./tokens.css";
 import App from "./App";
+import { theme } from "./theme";
+import ErrorBoundary from "./components/ErrorBoundary";
+import AppCrash from "./components/AppCrash";
 
 restoreStateCurrent();
 
@@ -24,8 +27,10 @@ const queryClient = new QueryClient({
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
-      <MantineProvider>
-        <App />
+      <MantineProvider theme={theme} defaultColorScheme="light">
+        <ErrorBoundary fallback={(error, reset) => <AppCrash error={error} reset={reset} />}>
+          <App />
+        </ErrorBoundary>
       </MantineProvider>
     </QueryClientProvider>
   </React.StrictMode>,
