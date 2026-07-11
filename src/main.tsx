@@ -4,6 +4,14 @@ import { MantineProvider } from "@mantine/core";
 import "@mantine/core/styles.css";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { restoreStateCurrent } from "@tauri-apps/plugin-window-state";
+// Self-hosted fonts (bundled — no CDN, works offline). Code/diff view uses the
+// platform's native editor font instead (see --lg-font-code in tokens.css).
+import "@fontsource-variable/fraunces";
+import "@fontsource/ibm-plex-sans/400.css";
+import "@fontsource/ibm-plex-sans/500.css";
+import "@fontsource/ibm-plex-sans/600.css";
+import "@fontsource/ibm-plex-mono/400.css";
+import "@fontsource/ibm-plex-mono/500.css";
 import "./tokens.css";
 import App from "./App";
 import { theme } from "./theme";

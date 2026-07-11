@@ -29,7 +29,7 @@
 }
 
 .fp-line-no {
-  font-family: var(--lg-font-mono);
+  font-family: var(--lg-font-code);
   font-size: 11px;
   line-height: 18px;
   color: var(--lg-ink-faint);
@@ -38,7 +38,7 @@
 .fp-code {
   margin: 0;
   padding: 8px 12px;
-  font-family: var(--lg-font-mono);
+  font-family: var(--lg-font-code);
   font-size: 12px;
   line-height: 18px;
   color: var(--lg-ink);

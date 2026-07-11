@@ -21,7 +21,7 @@ const sage: MantineColorsTuple = [
 export const theme = createTheme({
   fontFamily: "'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif",
   fontFamilyMonospace: "'IBM Plex Mono', 'SF Mono', Menlo, Consolas, monospace",
-  headings: { fontFamily: "'Fraunces', 'Iowan Old Style', Georgia, serif" },
+  headings: { fontFamily: "'Fraunces Variable', 'Fraunces', 'Iowan Old Style', Georgia, serif" },
   colors: { sage },
   primaryColor: "sage",
   primaryShade: { light: 6, dark: 5 },

@@ -48,7 +48,7 @@
 
 /* Map react-diff-view CSS vars to our design tokens */
 .diff-scroll .diff {
-  --diff-font-family: var(--lg-font-mono);
+  --diff-font-family: var(--lg-font-code);
   --diff-background-color: transparent;
   --diff-text-color: var(--lg-ink);
 

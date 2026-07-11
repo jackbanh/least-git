@@ -15,6 +15,9 @@
     "lint:rust": "cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings"
   },
   "dependencies": {
+    "@fontsource-variable/fraunces": "^5.2.9",
+    "@fontsource/ibm-plex-mono": "^5.2.7",
+    "@fontsource/ibm-plex-sans": "^5.2.8",
     "@mantine/core": "^9.2.1",
     "@mantine/hooks": "^9.2.1",
     "@tabler/icons-react": "^3.44.0",

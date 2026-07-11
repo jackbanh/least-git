@@ -64,9 +64,13 @@
   --lg-diff-rem-bg: oklch(96% 0.022 25);
   --lg-diff-rem-bar: oklch(62% 0.20 25);
 
-  --lg-font-serif: 'Fraunces', 'Iowan Old Style', Georgia, serif;
+  --lg-font-serif: 'Fraunces Variable', 'Fraunces', 'Iowan Old Style', Georgia, serif;
   --lg-font-sans: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+  /* Branded mono for UI chrome (SHAs, config keys, kbd, small labels). */
   --lg-font-mono: 'IBM Plex Mono', 'SF Mono', Menlo, Consolas, monospace;
+  /* Code/diff view font — follows VS Code's editor.fontFamily per-platform
+     defaults (native editor font), switched via <html data-platform>. */
+  --lg-font-code: Menlo, Monaco, Consolas, 'Droid Sans Mono', 'Courier New', monospace;
   /* Native UI font, resolved per-platform. Used for keyboard-shortcut labels so
      the macOS modifier glyphs (⌘ ⇧ ⌥ ⌫) render at correct proportions. */
   --lg-font-system: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
@@ -115,3 +119,9 @@
   --lg-diff-rem-bg: oklch(26% 0.025 25);
   --lg-diff-rem-bar: oklch(66% 0.20 25);
 }
+
+/* Code/diff font per platform, matching VS Code's editor.fontFamily defaults
+   (set on <html> by App.tsx). */
+[data-platform="macos"] { --lg-font-code: Menlo, Monaco, 'Courier New', monospace; }
+[data-platform="windows"] { --lg-font-code: Consolas, 'Courier New', monospace; }
+[data-platform="linux"] { --lg-font-code: 'Droid Sans Mono', 'monospace', monospace; }
