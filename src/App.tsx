@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { info as logInfo } from "@tauri-apps/plugin-log";
 import { open } from "@tauri-apps/plugin-dialog";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Tabs, Button, Group, Text } from "@mantine/core";
+import { Tabs, Button, Group, Text, useMantineColorScheme } from "@mantine/core";
 import { listen } from "@tauri-apps/api/event";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTabStore, Tab } from "./store";
@@ -53,10 +53,14 @@ export default function App() {
     return parseInt(localStorage.getItem("lg-accent-hue") ?? "155", 10);
   });
 
+  // Keep Mantine's colour scheme in step with the app theme, otherwise Mantine
+  // surfaces (Modal, Menu, Switch…) stay light while our tokens go dark.
+  const { setColorScheme } = useMantineColorScheme();
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
     localStorage.setItem("lg-theme", theme);
-  }, [theme]);
+    setColorScheme(theme);
+  }, [theme, setColorScheme]);
 
   useEffect(() => {
     document.documentElement.style.setProperty("--lg-accent-hue", String(accentHue));
