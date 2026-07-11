@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { warn as logWarn, info as logInfo } from "@tauri-apps/plugin-log";
-import { Loader, Menu } from "@mantine/core";
+import { Loader, Menu, Textarea } from "@mantine/core";
 import {
   IconArrowBarToDown,
   IconArrowBarToUp,
@@ -348,11 +348,14 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
                       Committing to <strong>{status?.head_branch ?? "…"}</strong>
                     </span>
                   </div>
-                  <textarea
-                    className="wt-commit-input"
+                  <Textarea
+                    classNames={{ root: "wt-commit-input-root", input: "wt-commit-input" }}
                     placeholder="Commit message"
+                    autosize
+                    minRows={2}
+                    maxRows={10}
                     value={commitMessage}
-                    onChange={(e) => setCommitMessage(e.target.value)}
+                    onChange={(e) => setCommitMessage(e.currentTarget.value)}
                     onKeyDown={(e) => {
                       // Keep arrow/⌘D file-nav from hijacking edits in this field.
                       e.stopPropagation();
