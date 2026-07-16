@@ -242,11 +242,103 @@ pub async fn get_file_diff(
     Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
+/// Maps a reset mode from the frontend onto a git flag.
+///
+/// Only `soft` and `hard` are accepted. The mode is matched against a fixed set
+/// rather than forwarded, so an unexpected value can never reach git's argument
+/// list as an arbitrary flag.
+pub(crate) fn reset_mode_flag(mode: &str) -> Result<&'static str, String> {
+    match mode {
+        "soft" => Ok("--soft"),
+        "hard" => Ok("--hard"),
+        other => Err(format!("invalid reset mode: {other}")),
+    }
+}
+
+/// Rejects anything that is not a plain hex object id.
+///
+/// Beyond catching typos, this stops a value starting with `-` from being
+/// parsed by git as an option instead of a commit.
+pub(crate) fn validate_oid(oid: &str) -> Result<(), String> {
+    let ok = (4..=64).contains(&oid.len()) && oid.bytes().all(|b| b.is_ascii_hexdigit());
+    if ok { Ok(()) } else { Err(format!("invalid commit id: {oid}")) }
+}
+
+/// Move the current branch to `oid`.
+///
+/// `soft` keeps the index and working tree, so the reset commits' changes are
+/// left staged. `hard` discards them — it is destructive and unrecoverable for
+/// uncommitted work, so the confirmation lives in the UI.
+#[tauri::command]
+pub async fn reset_to_commit(
+    tab_id: String,
+    oid: String,
+    mode: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let flag = reset_mode_flag(&mode)?;
+    validate_oid(&oid)?;
+    let path = get_repo_path(&tab_id, &state)?;
+
+    let out = git_async()
+        .args(["reset", flag, &oid])
+        .current_dir(&path)
+        .output()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if !out.status.success() {
+        let msg = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        warn!("reset_to_commit failed: {msg}");
+        return Err(if msg.is_empty() { "git reset failed".to_string() } else { msg });
+    }
+
+    info!("reset_to_commit: {flag} {oid}");
+    Ok(())
+}
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ── reset validation ─────────────────────────────────────────────────────
+
+    #[test]
+    fn reset_mode_maps_known_modes() {
+        assert_eq!(reset_mode_flag("soft").unwrap(), "--soft");
+        assert_eq!(reset_mode_flag("hard").unwrap(), "--hard");
+    }
+
+    #[test]
+    fn reset_mode_rejects_unknown_modes() {
+        // --mixed is deliberately not offered by the UI.
+        assert!(reset_mode_flag("mixed").is_err());
+        assert!(reset_mode_flag("").is_err());
+        assert!(reset_mode_flag("HARD").is_err());
+    }
+
+    #[test]
+    fn reset_mode_rejects_flag_injection() {
+        assert!(reset_mode_flag("--hard").is_err());
+        assert!(reset_mode_flag("hard --force").is_err());
+    }
+
+    #[test]
+    fn validate_oid_accepts_hex_ids() {
+        assert!(validate_oid("a059057751409dc2b48a62445879e1fa26b60682").is_ok());
+        assert!(validate_oid("706a68e").is_ok());
+    }
+
+    #[test]
+    fn validate_oid_rejects_non_hex_and_options() {
+        assert!(validate_oid("--hard").is_err());
+        assert!(validate_oid("-HEAD").is_err());
+        assert!(validate_oid("HEAD~1").is_err());
+        assert!(validate_oid("main").is_err());
+        assert!(validate_oid("").is_err());
+    }
 
     // ── split_message ────────────────────────────────────────────────────────
 

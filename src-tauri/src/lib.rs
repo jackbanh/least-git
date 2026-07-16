@@ -565,6 +565,7 @@ pub fn run() {
             commits::load_commits,
             commits::get_commit_detail,
             commits::get_file_diff,
+            commits::reset_to_commit,
             branches::list_branches,
             branches::create_branch,
             branches::checkout_branch,

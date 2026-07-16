@@ -12,6 +12,7 @@ import {
 import { useTabStore } from "../store";
 import { UNCOMMITTED } from "./CommitDetail";
 import GitOutputDrawer from "./GitOutputDrawer";
+import ResetDialog from "./ResetDialog";
 import { useContextMenu } from "../hooks/useContextMenu";
 import { AnchoredMenuTarget } from "./FileRow";
 import "./CommitList.css";
@@ -61,6 +62,8 @@ export default function CommitList({ tabId, listKey }: { tabId: string; listKey:
   const { contextMenu, contextTargetRef, open: openContextMenu, close: closeContextMenu } = useContextMenu<string>();
   const [rebaseDrawerOpen, setRebaseDrawerOpen] = useState(false);
   const [rebaseOid, setRebaseOid] = useState<string | null>(null);
+  const [resetDialogOpen, setResetDialogOpen] = useState(false);
+  const [resetOid, setResetOid] = useState<string | null>(null);
   const bumpListKey = useTabStore((s) => s.bumpListKey);
   const parentRef = useRef<HTMLDivElement>(null);
   const isLoadingRef = useRef(false);
@@ -348,7 +351,18 @@ export default function CommitList({ tabId, listKey }: { tabId: string; listKey:
             >
               Rebase Interactively onto Here
             </Menu.Item>
-            <Menu.Item leftSection={<IconRotate2 size={14} />} color="red">Reset to Here…</Menu.Item>
+            <Menu.Item
+              leftSection={<IconRotate2 size={14} />}
+              color="red"
+              onClick={() => {
+                if (contextTargetRef.current) {
+                  setResetOid(contextTargetRef.current.data);
+                  setResetDialogOpen(true);
+                }
+              }}
+            >
+              Reset to Here…
+            </Menu.Item>
           </Menu.Dropdown>
         </Menu>
         <GitOutputDrawer
@@ -361,6 +375,16 @@ export default function CommitList({ tabId, listKey }: { tabId: string; listKey:
           displayCommand={`git rebase -i ${rebaseOid ?? ""}`}
           onClose={() => setRebaseDrawerOpen(false)}
           onSuccess={() => bumpListKey(tabId)}
+        />
+        <ResetDialog
+          tabId={tabId}
+          opened={resetDialogOpen}
+          oid={resetOid}
+          summary={commits.find((c) => c.oid === resetOid)?.summary}
+          onClose={() => setResetDialogOpen(false)}
+          // Reset moves HEAD and rewrites the index/working tree; listKey drives
+          // a full refresh of both the history and the working-tree status.
+          onReset={() => bumpListKey(tabId)}
         />
       </div>
     </div>
