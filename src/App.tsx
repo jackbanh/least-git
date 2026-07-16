@@ -22,6 +22,7 @@ import SettingsModal from "./components/SettingsModal";
 import Toasts from "./components/Toasts";
 import { toastError } from "./toastStore";
 import { platform } from "./lib/platform";
+import { createRepoChangedThrottle, type RepoChangedThrottle } from "./lib/repoChangedThrottle";
 import "./App.css";
 
 export default function App() {
@@ -30,7 +31,14 @@ export default function App() {
     sidebarWidth, setSidebarWidth,
   } = useTabStore();
 
-  const repoChangedThrottle = useRef<Record<string, number>>({});
+  // Coalesces FS-watcher `repo:changed` bursts into refreshes (created once).
+  const repoChangedThrottle = useRef<RepoChangedThrottle>(null);
+  if (!repoChangedThrottle.current) {
+    repoChangedThrottle.current = createRepoChangedThrottle(2000, (tabId, kind) => {
+      if (kind === "refs") bumpListKey(tabId);
+      else if (kind === "index") bumpStatusKey(tabId);
+    });
+  }
 
   // Git config drives the "needs attention" badges on the toolbar + settings nav.
   const gitConfigValues = useGitConfigStore((s) => s.values);
@@ -88,23 +96,16 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    const throttle = repoChangedThrottle.current!;
     const unlisten = listen<{ tab_id: string; kind: string }>("repo:changed", (e) => {
       const { tab_id, kind } = e.payload;
-      const key = `${tab_id}:${kind}`;
-      const now = Date.now();
-      const COOLDOWN_MS = 2000;
-      const sinceLastMs = now - (repoChangedThrottle.current[key] ?? 0);
-      if (sinceLastMs < COOLDOWN_MS) {
-        logInfo(`App repo:changed throttled tab=${tab_id} kind=${kind} sinceLastMs=${sinceLastMs}`);
-        return;
-      }
-      repoChangedThrottle.current[key] = now;
-      logInfo(`App repo:changed dispatching tab=${tab_id} kind=${kind}`);
-      if (kind === "refs") bumpListKey(tab_id);
-      else if (kind === "index") bumpStatusKey(tab_id);
+      const outcome = throttle.handle(tab_id, kind);
+      logInfo(`App repo:changed ${outcome} tab=${tab_id} kind=${kind}`);
     });
-    return () => { unlisten.then((fn) => fn()); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => {
+      unlisten.then((fn) => fn());
+      throttle.dispose();
+    };
   }, []);
 
   useEffect(() => {
@@ -169,8 +170,7 @@ export default function App() {
   }, [activeTabId, activeTab?.listKey, activeTab?.statusKey]);
 
   function preArmThrottle(tabId: string, kind: string) {
-    const key = `${tabId}:${kind}`;
-    repoChangedThrottle.current[key] = Date.now();
+    repoChangedThrottle.current!.arm(tabId, kind);
     logInfo(`App preArmThrottle tab=${tabId} kind=${kind}`);
   }
 
