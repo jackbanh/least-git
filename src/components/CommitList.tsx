@@ -40,6 +40,20 @@ function getInitials(name: string): string {
   return (words[0][0] + words[words.length - 1][0]).toUpperCase();
 }
 
+// Stable per-author hue (0–359). Keyed on email so the same identity always
+// maps to the same color regardless of display-name variations.
+const authorHueCache = new Map<string, number>();
+function getAuthorHue(email: string): number {
+  const key = email.trim().toLowerCase();
+  const cached = authorHueCache.get(key);
+  if (cached !== undefined) return cached;
+  let h = 0;
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) | 0;
+  const hue = ((h % 360) + 360) % 360;
+  authorHueCache.set(key, hue);
+  return hue;
+}
+
 function formatDate(ts: number): string {
   const nowS = Date.now() / 1000;
   const diff = nowS - ts;
@@ -315,7 +329,12 @@ export default function CommitList({ tabId, listKey }: { tabId: string; listKey:
                       </div>
                       <div className="commit-author-cell">
                         <div className="commit-author-identity">
-                          <div className="commit-initials-avatar">{getInitials(commit.author_name)}</div>
+                          <div
+                            className="commit-initials-avatar"
+                            style={{ "--author-hue": getAuthorHue(commit.author_email) } as React.CSSProperties}
+                          >
+                            {getInitials(commit.author_name)}
+                          </div>
                           <span className="commit-author-text">{commit.author_name}</span>
                         </div>
                         <span className="commit-date">{formatDate(commit.timestamp)}</span>

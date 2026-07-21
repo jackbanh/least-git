@@ -166,8 +166,8 @@
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  background: var(--lg-accent-soft);
-  color: var(--lg-accent-text);
+  background: hsl(var(--author-hue, 210) 45% 45%);
+  color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
