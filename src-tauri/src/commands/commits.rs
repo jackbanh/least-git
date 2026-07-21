@@ -1,6 +1,7 @@
 use crate::{git_async, get_repo_path, AppState, ChangedFile, CommitDetail, CommitInfo};
 use gix::bstr::ByteSlice;
 use log::{info, warn};
+use std::path::Path;
 use tauri::State;
 
 /// Splits a raw git commit message into (summary, body).
@@ -14,6 +15,36 @@ pub(crate) fn split_message(msg: &[u8]) -> (String, String) {
         String::new()
     };
     (summary, body)
+}
+
+/// Decode a commit's metadata (summary, body, author name/email, author time)
+/// via gix. Returns the gix `open` duration as the last field for perf logging.
+///
+/// Split out from `get_commit_detail` so the gix object/decode path can be
+/// exercised against real repositories in tests.
+pub(crate) fn commit_meta_at(
+    path: &Path,
+    oid: &str,
+) -> Result<(String, String, String, String, i64, u128), String> {
+    let open_t = std::time::Instant::now();
+    let repo = gix::open(path).map_err(|e| e.to_string())?;
+    let open_ms = open_t.elapsed().as_millis();
+    let commit_id = gix::ObjectId::from_hex(oid.trim().as_bytes())
+        .map_err(|e| format!("Invalid OID: {e}"))?;
+    let object = repo.find_object(commit_id).map_err(|e| e.to_string())?;
+    let commit = object.try_into_commit().map_err(|e| format!("not a commit: {e:?}"))?;
+    let decoded = commit.decode().map_err(|e| e.to_string())?;
+    // gix ≥0.71: CommitRef.author is the raw header; author() parses it.
+    let author = decoded.author().map_err(|e| e.to_string())?;
+    let (summary, body) = split_message(decoded.message);
+    Ok((
+        summary,
+        body,
+        author.name.to_str_lossy().to_string(),
+        author.email.to_str_lossy().to_string(),
+        author.seconds(),
+        open_ms,
+    ))
 }
 
 /// Parse `git diff-tree --name-status` output into a list of changed files.
@@ -48,9 +79,24 @@ pub fn load_commits(
     limit: usize,
     state: State<'_, AppState>,
 ) -> Result<Vec<CommitInfo>, String> {
+    let path = get_repo_path(&tab_id, &state)?;
+    load_commits_at(&path, after_oid.as_deref(), limit)
+}
+
+/// First-parent walk from HEAD (or from `after_oid`, inclusive) returning up to
+/// `limit` commits, newest first. `after_oid` is the first-parent OID of the
+/// last commit already shown (from `CommitInfo.parent_oid`), so paging never
+/// duplicates.
+///
+/// Split out from the command so the gix walk/decode path can be exercised
+/// against real repositories in tests.
+pub(crate) fn load_commits_at(
+    path: &Path,
+    after_oid: Option<&str>,
+    limit: usize,
+) -> Result<Vec<CommitInfo>, String> {
     let t = std::time::Instant::now();
     let from_cursor = after_oid.is_some();
-    let path = get_repo_path(&tab_id, &state)?;
 
     // Determine where to start the walk.
     // `after_oid` is the first-parent OID of the last commit already shown
@@ -64,7 +110,7 @@ pub fn load_commits(
     // open_ms is logged separately so we can measure the benefit of caching
     // the gix Repository handle in RepoEntry (perf recommendation #2).
     let open_t = std::time::Instant::now();
-    let repo = gix::open(&path).map_err(|e| e.to_string())?;
+    let repo = gix::open(path).map_err(|e| e.to_string())?;
     let open_ms = open_t.elapsed().as_millis();
 
     let cursor_t = std::time::Instant::now();
@@ -98,6 +144,8 @@ pub fn load_commits(
             .try_into_commit()
             .map_err(|e| format!("not a commit: {e:?}"))?;
         let decoded = commit.decode().map_err(|e| e.to_string())?;
+        // gix ≥0.71: CommitRef.author is the raw header; author() parses it.
+        let author = decoded.author().map_err(|e| e.to_string())?;
 
         let end = decoded.message.find_byte(b'\n').unwrap_or(decoded.message.len());
         let summary = decoded.message[..end].to_str_lossy().trim().to_string();
@@ -107,9 +155,9 @@ pub fn load_commits(
             oid: oid_str,
             short_oid,
             summary,
-            author_name: decoded.author.name.to_str_lossy().to_string(),
-            author_email: decoded.author.email.to_str_lossy().to_string(),
-            timestamp: decoded.author.time.seconds,
+            author_name: author.name.to_str_lossy().to_string(),
+            author_email: author.email.to_str_lossy().to_string(),
+            timestamp: author.seconds(),
             parent_oid,
         });
     }
@@ -163,25 +211,7 @@ pub async fn get_commit_detail(
     let meta_fut = tokio::task::spawn_blocking({
         let path = path.clone();
         let oid = oid.clone();
-        move || -> Result<(String, String, String, String, i64, u128), String> {
-            let open_t = std::time::Instant::now();
-            let repo = gix::open(&path).map_err(|e| e.to_string())?;
-            let open_ms = open_t.elapsed().as_millis();
-            let commit_id = gix::ObjectId::from_hex(oid.trim().as_bytes())
-                .map_err(|e| format!("Invalid OID: {e}"))?;
-            let object = repo.find_object(commit_id).map_err(|e| e.to_string())?;
-            let commit = object.try_into_commit().map_err(|e| format!("not a commit: {e:?}"))?;
-            let decoded = commit.decode().map_err(|e| e.to_string())?;
-            let (summary, body) = split_message(decoded.message);
-            Ok((
-                summary,
-                body,
-                decoded.author.name.to_str_lossy().to_string(),
-                decoded.author.email.to_str_lossy().to_string(),
-                decoded.author.time.seconds,
-                open_ms,
-            ))
-        }
+        move || commit_meta_at(&path, &oid)
     });
 
     // --first-parent: on merge commits, only diff against the first parent.
@@ -302,6 +332,81 @@ pub async fn reset_to_commit(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::commands::test_repo;
+
+    // ── gix regression tests (real repositories) ─────────────────────────────
+    // These exercise the gix walk/decode paths against actual repos so a gix
+    // upgrade that changes walk order, paging, first-parent behavior, or
+    // timestamp/author decoding is caught behaviorally, not just at compile time.
+
+    #[test]
+    fn load_commits_at_walks_newest_first_with_metadata() {
+        let repo = test_repo::linear_repo();
+        let commits = load_commits_at(repo.path(), None, 10).unwrap();
+        let summaries: Vec<&str> = commits.iter().map(|c| c.summary.as_str()).collect();
+        assert_eq!(summaries, ["third commit", "second commit", "first commit"]);
+
+        // Author fields and timestamp decode correctly.
+        assert_eq!(commits[0].author_name, "Test Author");
+        assert_eq!(commits[0].author_email, "author@example.com");
+        assert_eq!(commits[0].timestamp, test_repo::EPOCH_SECONDS);
+
+        // parent_oid chains to the next commit; the root commit has no parent.
+        assert_eq!(commits[0].parent_oid.as_deref(), Some(commits[1].oid.as_str()));
+        assert_eq!(commits[1].parent_oid.as_deref(), Some(commits[2].oid.as_str()));
+        assert!(commits[2].parent_oid.is_none());
+
+        // short_oid is the 7-char prefix of the full oid.
+        assert_eq!(commits[0].short_oid, commits[0].oid[..7]);
+    }
+
+    #[test]
+    fn load_commits_at_respects_limit_and_cursor_paging() {
+        let repo = test_repo::linear_repo();
+        let page1 = load_commits_at(repo.path(), None, 2).unwrap();
+        assert_eq!(page1.len(), 2);
+        assert_eq!(page1[0].summary, "third commit");
+        assert_eq!(page1[1].summary, "second commit");
+
+        // Next page starts at the last-shown commit's first parent (inclusive),
+        // so it must not duplicate and must yield the remaining commit.
+        let cursor = page1[1].parent_oid.as_deref().unwrap();
+        let page2 = load_commits_at(repo.path(), Some(cursor), 10).unwrap();
+        assert_eq!(page2.len(), 1);
+        assert_eq!(page2[0].summary, "first commit");
+    }
+
+    #[test]
+    fn load_commits_at_follows_first_parent_only_through_merges() {
+        let repo = test_repo::merge_repo();
+        let summaries: Vec<String> = load_commits_at(repo.path(), None, 10)
+            .unwrap()
+            .into_iter()
+            .map(|c| c.summary)
+            .collect();
+        // The merge's second parent ("side commit") is excluded by the walk.
+        assert_eq!(summaries, ["merge side", "base three", "base two", "base one"]);
+        assert!(!summaries.iter().any(|s| s == "side commit"));
+    }
+
+    #[test]
+    fn commit_meta_at_decodes_summary_body_and_author() {
+        let repo = test_repo::linear_repo();
+        let oid = load_commits_at(repo.path(), None, 1).unwrap()[0].oid.clone();
+        let (summary, body, name, email, ts, _open_ms) =
+            commit_meta_at(repo.path(), &oid).unwrap();
+        assert_eq!(summary, "third commit");
+        assert_eq!(body, "Body line one.\nBody line two.");
+        assert_eq!(name, "Test Author");
+        assert_eq!(email, "author@example.com");
+        assert_eq!(ts, test_repo::EPOCH_SECONDS);
+    }
+
+    #[test]
+    fn commit_meta_at_rejects_invalid_oid() {
+        let repo = test_repo::linear_repo();
+        assert!(commit_meta_at(repo.path(), "notavalidhexoid").is_err());
+    }
 
     // ── reset validation ─────────────────────────────────────────────────────
 

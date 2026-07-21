@@ -1,6 +1,6 @@
 [package]
 name = "least-git"
-version = "0.5.0"
+version = "0.6.0"
 description = "least-git — a minimal Git GUI for large monorepos"
 authors = []
 edition = "2021"
@@ -24,13 +24,16 @@ tauri-plugin-dialog = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["full"] }
-gix = { version = "0.70", features = ["revision"] }
+gix = { version = "0.85", features = ["revision"] }
 notify-debouncer-mini = "0.7"
 dashmap = "6"
 tauri-plugin-window-state = "2.4.1"
 tauri-plugin-clipboard-manager = "2.3.2"
 tauri-plugin-log = "2.8.0"
 log = "0.4.29"
+
+[dev-dependencies]
+tempfile = "3"
 
 [lints.rust]
 unsafe_code = "forbid"

@@ -1,6 +1,7 @@
 use crate::{git_async, get_repo_path, stream_child, AppState, BranchInfo};
 use gix::bstr::ByteSlice;
 use log::{info, warn};
+use std::path::Path;
 use tauri::State;
 
 /// Parse `git branch` text output into a sorted BranchInfo list.
@@ -27,55 +28,61 @@ pub(crate) fn parse_branches(raw: &str) -> Vec<BranchInfo> {
 
 #[tauri::command]
 pub async fn list_branches(tab_id: String, state: State<'_, AppState>) -> Result<Vec<BranchInfo>, String> {
-    let t = std::time::Instant::now();
     let path = get_repo_path(&tab_id, &state)?;
+    tokio::task::spawn_blocking(move || list_branches_at(&path))
+        .await
+        .map_err(|e| e.to_string())?
+}
 
-    // Use gix directly instead of spawning `git branch` — avoids subprocess
-    // overhead (git startup, config parsing, process spawn) which is especially
-    // expensive on network shares. gix reads packed-refs in-process.
-    tokio::task::spawn_blocking(move || -> Result<Vec<BranchInfo>, String> {
-        let open_t = std::time::Instant::now();
-        let repo = gix::open(&path).map_err(|e| e.to_string())?;
-        let open_ms = open_t.elapsed().as_millis();
+/// Enumerate local branches (main/master first, then alphabetical) with the
+/// current HEAD marked. Reads refs via gix directly instead of spawning
+/// `git branch` — avoids subprocess overhead (git startup, config parsing,
+/// process spawn), which is especially expensive on network shares. gix reads
+/// packed-refs in-process.
+///
+/// Split out from the command so it can be exercised against real repositories
+/// in tests (see the gix regression suite below).
+pub(crate) fn list_branches_at(path: &Path) -> Result<Vec<BranchInfo>, String> {
+    let t = std::time::Instant::now();
+    let open_t = std::time::Instant::now();
+    let repo = gix::open(path).map_err(|e| e.to_string())?;
+    let open_ms = open_t.elapsed().as_millis();
 
-        // Resolve the current HEAD branch name; None when HEAD is detached.
-        let head_short: Option<String> = repo
-            .head_name()
-            .ok()
-            .flatten()
-            .map(|n| n.shorten().to_str_lossy().into_owned());
+    // Resolve the current HEAD branch name; None when HEAD is detached.
+    let head_short: Option<String> = repo
+        .head_name()
+        .ok()
+        .flatten()
+        .map(|n| n.shorten().to_str_lossy().into_owned());
 
-        let refs_t = std::time::Instant::now();
-        let mut branches: Vec<BranchInfo> = repo
-            .references()
-            .map_err(|e| e.to_string())?
-            .local_branches()
-            .map_err(|e| e.to_string())?
-            .filter_map(Result::ok)
-            .map(|r| {
-                let name = r.name().shorten().to_str_lossy().into_owned();
-                let is_head = head_short.as_deref() == Some(name.as_str());
-                BranchInfo { name, is_head }
-            })
-            .collect();
-        let refs_ms = refs_t.elapsed().as_millis();
+    let refs_t = std::time::Instant::now();
+    let mut branches: Vec<BranchInfo> = repo
+        .references()
+        .map_err(|e| e.to_string())?
+        .local_branches()
+        .map_err(|e| e.to_string())?
+        .filter_map(Result::ok)
+        .map(|r| {
+            let name = r.name().shorten().to_str_lossy().into_owned();
+            let is_head = head_short.as_deref() == Some(name.as_str());
+            BranchInfo { name, is_head }
+        })
+        .collect();
+    let refs_ms = refs_t.elapsed().as_millis();
 
-        branches.sort_unstable_by(|a, b| {
-            let rank = |name: &str| match name { "main" | "master" => 0u8, _ => 1 };
-            rank(&a.name).cmp(&rank(&b.name)).then(a.name.cmp(&b.name))
-        });
+    branches.sort_unstable_by(|a, b| {
+        let rank = |name: &str| match name { "main" | "master" => 0u8, _ => 1 };
+        rank(&a.name).cmp(&rank(&b.name)).then(a.name.cmp(&b.name))
+    });
 
-        let total_ms = t.elapsed().as_millis();
-        let msg = format!(
-            "list_branches returned={} open_ms={} refs_ms={} total_ms={}",
-            branches.len(), open_ms, refs_ms, total_ms,
-        );
-        if total_ms > 2000 { warn!("[SLOW] {msg}"); } else { info!("{msg}"); }
+    let total_ms = t.elapsed().as_millis();
+    let msg = format!(
+        "list_branches returned={} open_ms={} refs_ms={} total_ms={}",
+        branches.len(), open_ms, refs_ms, total_ms,
+    );
+    if total_ms > 2000 { warn!("[SLOW] {msg}"); } else { info!("{msg}"); }
 
-        Ok(branches)
-    })
-    .await
-    .map_err(|e| e.to_string())?
+    Ok(branches)
 }
 
 #[tauri::command]
@@ -169,6 +176,32 @@ pub async fn checkout_branch(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::commands::test_repo;
+
+    // ── gix regression tests (real repositories) ─────────────────────────────
+    // These exercise list_branches_at against actual repos so a gix upgrade that
+    // changes ref enumeration or HEAD detection is caught behaviorally.
+
+    #[test]
+    fn list_branches_at_returns_all_local_sorted_with_head_marked() {
+        let repo = test_repo::linear_repo();
+        let branches = list_branches_at(repo.path()).unwrap();
+        let names: Vec<&str> = branches.iter().map(|b| b.name.as_str()).collect();
+        // main pinned first, then alphabetical.
+        assert_eq!(names, ["main", "feature/x", "zebra"]);
+        let head: Vec<&str> = branches.iter().filter(|b| b.is_head).map(|b| b.name.as_str()).collect();
+        assert_eq!(head, ["main"]);
+    }
+
+    #[test]
+    fn list_branches_at_marks_only_checked_out_branch() {
+        let repo = test_repo::linear_repo();
+        let branches = list_branches_at(repo.path()).unwrap();
+        assert_eq!(branches.iter().filter(|b| b.is_head).count(), 1);
+        assert!(!branches.iter().find(|b| b.name == "zebra").unwrap().is_head);
+    }
+
+    // ── parse_branches (pure string helper) ──────────────────────────────────
 
     #[test]
     fn parse_branches_main_sorted_first() {

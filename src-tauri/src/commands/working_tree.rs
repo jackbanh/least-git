@@ -78,7 +78,7 @@ fn read_head_branch(git_dir: &Path) -> String {
         .unwrap_or_else(|| "HEAD".to_string())
 }
 
-fn resolve_sha_to_local_branch(repo_path: &Path, sha: &str) -> Option<String> {
+pub(crate) fn resolve_sha_to_local_branch(repo_path: &Path, sha: &str) -> Option<String> {
     let repo = gix::open(repo_path).ok()?;
     let sha = sha.trim();
     repo.references().ok()?
@@ -86,7 +86,7 @@ fn resolve_sha_to_local_branch(repo_path: &Path, sha: &str) -> Option<String> {
         .ok()?
         .filter_map(Result::ok)
         .find_map(|mut r| {
-            let id = r.peel_to_id_in_place().ok()?.to_string();
+            let id = r.peel_to_id().ok()?.to_string();
             (id.starts_with(sha) || sha.starts_with(&id[..7.min(id.len())]))
                 .then(|| r.name().shorten().to_str_lossy().into_owned())
         })
@@ -577,6 +577,23 @@ pub async fn commit_staged(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::commands::commits::load_commits_at;
+    use crate::commands::test_repo;
+
+    // ── gix regression test (real repository) ────────────────────────────────
+    // resolve_sha_to_local_branch peels refs via gix (peel_to_id_in_place) — a
+    // distinct API surface from list_branches, so it gets its own coverage.
+
+    #[test]
+    fn resolve_sha_to_local_branch_matches_only_branch_tips() {
+        let repo = test_repo::linear_repo();
+        let commits = load_commits_at(repo.path(), None, 3).unwrap();
+        let tip_sha = &commits[0].oid; // main/feature/x/zebra all point here
+        let mid_sha = &commits[1].oid; // no branch points at this commit
+
+        assert!(resolve_sha_to_local_branch(repo.path(), &tip_sha[..12]).is_some());
+        assert!(resolve_sha_to_local_branch(repo.path(), mid_sha).is_none());
+    }
 
     #[test]
     fn porcelain_untracked() {
