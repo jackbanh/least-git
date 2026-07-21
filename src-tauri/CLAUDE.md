@@ -1,5 +1,17 @@
 # Rust / Git operations
 
+## Async rule — never block the executor
+
+**Every invocation of the system `git` binary inside a `#[tauri::command]` must be async.** Use `git_async()` (returns `tokio::process::Command`) and `.await` the result. The synchronous `git()` helper (`std::process::Command`) exists *only* to define the two factory functions — calling it from a command blocks a Tokio worker thread for the whole process duration (seconds on checkout/pull in a large repo).
+
+```rust
+// WRONG — blocks the async executor
+let out = git().args([...]).output()?;
+
+// CORRECT
+let out = git_async().args([...]).output().await?;
+```
+
 ## Commands (`src/lib.rs`)
 
 All commands take `tab_id: String` as their first arg. `State` and `AppHandle` are injected by Tauri — do not pass from the frontend.

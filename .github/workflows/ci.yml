@@ -53,3 +53,6 @@ jobs:
 
       - name: Clippy
         run: npm run lint:rust
+
+      - name: Rust tests
+        run: npm run test:rust

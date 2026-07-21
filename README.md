@@ -1,108 +1,95 @@
-**Project: least-git** — a Git GUI client intentionally limited to 4 core operations (view history, switch branches, commit, pull), purpose-built for performance on large monorepos with 100k+ commits, thousands of files, and many branches/remotes.
+<div align="center">
 
-**Direction:** least-git is a **companion to an AI coding workflow**. The AI agent makes most of the writes; the developer uses least-git to *review* those changes — scanning history, reading diffs, and staging/committing at the hunk level — then hands publishing (push) back to the terminal or agent. It is a fast review-and-commit surface, not a full Git driver, which is why push is deliberately absent.
+# least-git
 
-**Platforms:** macOS and Windows (both testable; code signing scoped to macOS only, not a current priority)
+### The Git GUI that stays instant on 100k-commit monorepos.
 
-**Stack:**
-- **Tauri 2** (native shell, ~50ms startup, no Chromium overhead)
-- **React + TypeScript** (UI layer — thin renderer only)
-- **Rust + async Tokio** (all Git logic and state)
-- **gitoxide** (pure Rust Git library — parallel pack reads, lazy streaming object access, better than libgit2 for this use case)
-- **System git binary** (shelled out for pull/checkout only — no reimplementing SSH/HTTPS transport for MVP)
-- **Mantine v8** — UI components for app chrome only (tabs, toolbar, dialogs, forms)
-- **Zustand** — tab state
-- **@tanstack/react-virtual** — virtualised lists
-- **tauri-plugin-log** — structured logging; stdout + log file in dev, log file only in release
+**Your AI agent writes the code. least-git is how you review it — fast.**
 
-**Architecture:**
-- `AppState` is `DashMap<String, RepoEntry>` (tab id → repo path + name + detail cache), managed by Tauri
-- Tab id is the canonicalised repo path
-- Repos are opened fresh per command call (`gix::open`) — no cached `Repository` handle
-- Commit metadata is cached in `RepoEntry.detail_cache: Mutex<HashMap<String, CommitDetailData>>` — cleared on refresh
-- IPC pattern: frontend calls `invoke()`, Rust returns data or emits streaming events via `tauri::emit`
-- Commit graph loaded in paginated chunks (25 at a time) via `gix::revision::Walk` — never full DAG in memory
-- UI uses virtualised lists (`@tanstack/react-virtual`) for history and file tree — ~30 DOM rows max at any time
-- Native menu (Repository > Refresh, Repository > Branch…) emits `menu:refresh` / `menu:branch` Tauri events
+[![CI](https://github.com/jackbanh/least-git/actions/workflows/ci.yml/badge.svg)](https://github.com/jackbanh/least-git/actions/workflows/ci.yml)
+[![Version](https://img.shields.io/badge/version-0.6.0-blue)](package.json)
+![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-lightgrey)
+[![Built with Tauri](https://img.shields.io/badge/built%20with-Tauri%202-24C8DB)](https://tauri.app)
+[![Backend: gitoxide](https://img.shields.io/badge/git%20backend-gitoxide-orange)](https://github.com/GitoxideLabs/gitoxide)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-**UI design:**
-- Follows a subset of Sourcetree's layout and conventions — familiar to existing Sourcetree users but stripped to only the 4 core operations
-- Remote branches are not shown anywhere in the UI — local branches only
-- **Styling: Mantine v8** for app chrome (tabs, toolbar, branch panel, dialogs, commit form) — v7+ uses CSS modules internally, no runtime CSS-in-JS overhead
-- Virtualised list rows (commit history, file tree) use plain CSS classes only — no Mantine components inside rows, as prop overhead compounds across high-frequency mount/unmount cycles during scroll
-- **State management: Zustand** — one store slice per open repo tab, avoids prop-drilling across the tab/panel hierarchy
+</div>
 
-**Rules for Rust commands:**
+---
 
-- **All external process calls must be async.** Every invocation of the system `git` binary must use `git_async()` (returns `tokio::process::Command`) and `.await` the result. Using the synchronous `git()` helper inside a `#[tauri::command]` blocks a Tokio worker thread for the entire duration of the process — seconds for checkout or pull on large repos.
+## Why least-git exists
 
-  ```rust
-  // WRONG — blocks the async executor
-  let out = git().args([...]).output()?;
+Open a large monorepo — hundreds of thousands of commits, hundreds of thousands of files, thousands of branches — in Sourcetree, GitButler, or a heavy Electron client, and the app slows to a crawl: long spinners, a frozen window, a history view that keeps loading and never finishes. These tools try to do everything, and they get slow at scale.
 
-  // CORRECT
-  let out = git_async().args([...]).output().await?;
-  ```
+**least-git does four things, and does them instantly.**
 
-  `git()` (sync, `std::process::Command`) exists solely to define the two factory functions and must not be called from any Tauri command.
+It is built for a modern workflow: your **AI coding agent makes most of the changes**, and you need a simple, fast way to *review* them — read the history, look at the diffs, stage the changes that belong together, and commit. Publishing (push) stays in the terminal or with the agent. least-git does not try to do all of Git. It is a fast tool for reviewing and committing an agent's work.
 
-- **Long-running operations must stream output.** Operations that can take more than ~200ms (checkout, pull, rebase) must stream stdout/stderr line-by-line to the frontend via Tauri events rather than buffering and returning on completion. Use the `PullLine` / `PullDone` structs and the `GitOutputDrawer` frontend component. Event naming convention: `<operation>:line` and `<operation>:done`.
+## What it does
 
-**Key performance constraints to design around:**
-- History view must render recent commits on the current branch with no perceptible delay — first page of results must appear near-instantly even in repos with 100k+ total commits; virtual scroll handles the rest
-- Branch switcher must feel instant for local branches — listing and switching must not block the UI; checkout should stream progress back rather than freezing until done
-- Branch panel needs fuzzy search filter (thousands of branches) — filter runs client-side on already-loaded branch list, no round-trip per keystroke
-- File tree must also be virtualised
-- `git status` calls use Git's built-in FSMonitor daemon — latest Git version is required, no fallback for older versions
+Four operations. Nothing extra.
 
-**Assumptions:**
-- Git credentials are pre-configured in the system; pull may hang if they are not (acceptable for MVP)
-- Minimum Git version: latest stable release (FSMonitor, `--pathspec-from-file`, and other modern features assumed available)
+| Operation | What you get |
+|---|---|
+| **Read history** | A first-parent commit list that shows the first page *instantly*, even at 100k+ commits. Virtual scrolling loads the rest — the full commit graph is never held in memory. |
+| **Switch branches** | Type to filter thousands of local branches, with no delay between keystrokes. Checkout shows live progress instead of freezing the window. |
+| **Commit, hunk by hunk** | Stage and unstage individual hunks and lines in an interactive diff view. See exactly what the agent changed, then commit only the parts that belong together. |
+| **Pull with rebase** | One-click pull that detects `origin/main` or `origin/master` automatically and shows the output live. |
 
-**Scope limits (do not add without discussion):**
-- Push / publishing is out of scope — the AI agent or terminal handles pushing; least-git is a review-and-commit companion, not a full Git driver
-- Remote branches are not shown anywhere — local branches only
-- No tab persistence across restarts (deferred)
-- No credential UI — assume creds pre-configured in system git
-- No diff view beyond what's needed for the commit panel
+That is the whole app. There is no merge graph, no submodule scanning, no tag lookups, and no stash manager — each of those makes a large repo slower, and none of them is what you need when reviewing an agent's work.
 
-**Validated decisions:**
-- Name is **least-git** — no conflicts with existing git clients, intentional minimalism is the brand
-- No existing free GUI client solves this — lazygit, GitButler, Sourcetree all have documented performance failures at this repo scale
-- gitoxide over libgit2 for the Git backend; system git for network ops
-- UI modelled on Sourcetree's layout — familiar baseline, not a blank-slate design
-- Remote branches explicitly out of scope — reduces branch state complexity significantly
-- Mantine Menu allowed inside virtualised list only with `overflowY: hidden` on the container while open (prevents scroll during menu interaction)
+## Why it's fast
 
-## Frontend structure
+least-git is fast because of how it is built, not because of later tuning. Speed is the main goal.
 
-- `src/store.ts` — Zustand store: `tabs`, `activeTabId`, `openTab`, `closeTab`, `setActiveTab`, `bumpListKey`, `selectCommit`, `sidebarWidth`, `detailHeight`
-- `src/App.tsx` — tabbed shell, Open Folder dialog, native menu event listeners
-- `src/components/CommitList.tsx` — virtualised commit history (plain CSS rows, no Mantine inside); stale-while-revalidate via `staleCommitsRef`; context menu (Copy SHA-1, Pull with Rebase, Rebase Interactively, Reset to Here)
-- `src/components/BranchSwitcher.tsx` — branch list with fuzzy filter; stale-while-revalidate; delegates checkout to `GitOutputDrawer`
-- `src/components/BranchDialog.tsx` — modal dialog (Repository > Branch…); tabs for New Branch and Delete Branch
-- `src/components/CommitDetail.tsx` — routing shell (uncommitted → `WorkingTreeDetail`, commit → `CommitDetailInner`); resizable file list + diff pane
-- `src/components/WorkingTreeDetail.tsx` — staged/unstaged file list with interactive staging via `InteractiveDiffViewer`
-- `src/components/DiffViewer.tsx` — read-only unified diff display
-- `src/components/InteractiveDiffViewer.tsx` — hunk/line-level staging using `react-diff-view`
-- `src/components/GitOutputDrawer.tsx` — generic streaming output drawer parameterised by `command`, `commandArgs`, `eventPrefix`; used by checkout and pull
-- `src/components/PullDrawer.tsx` — thin wrapper around `GitOutputDrawer` for pull with rebase
-- `src/components/ProgressBar.tsx` — thin loading bar shown during fetches
-- Mantine CSS imported once in `src/main.tsx`
+- **Native shell, no Chromium.** Built on **Tauri 2** — it starts in about 50 ms and uses much less memory than an Electron client. The UI is a thin React layer; nothing heavy runs in the webview.
+- **Rust and gitoxide backend.** All Git logic runs in async Rust on **[gitoxide](https://github.com/GitoxideLabs/gitoxide)** (a pure-Rust Git library with parallel pack reads and lazy, streaming object access). No libgit2, and no Node.js in the performance-critical path.
+- **Paginated, first-parent history.** Commits load in small pages using a first-parent walk. The first screen appears with no visible delay in repos with 100k+ commits, and scrolling loads more as you go.
+- **Virtual scrolling everywhere.** The history and file trees keep only about 30 rows in the DOM at a time, no matter how large the repo. Rows use plain, tuned CSS — no component cost that adds up while scrolling.
+- **FSMonitor-aware status.** `git status` uses Git's built-in FSMonitor daemon. Tracked changes appear in about **400 ms** on a 300k-file monorepo, compared to about **2.9 s** for a full untracked-file scan. Untracked files are loaded separately, in parallel, so they never block the changes you care about.
+- **Nothing blocks the window.** Every long operation — checkout, pull — runs async and streams its output line by line to the UI. The app never freezes while waiting on Git.
 
-## Rust commands (`src-tauri/src/lib.rs`)
+## Built for the AI coding workflow
 
-- `open_repo(path)` → `TabInfo` — canonicalises path, validates git repo, registers in AppState
-- `close_tab(tab_id)` — removes from AppState
-- `clear_detail_cache(tab_id)` — clears the commit metadata cache for a tab (called on refresh)
-- `load_commits(tab_id, offset, limit)` → `Vec<CommitInfo>` — first-parent walk via gix, paginated by offset (page size: 25)
-- `list_branches(tab_id)` → `Vec<BranchInfo>` — local branches only; main/master sorted first, rest alphabetical
-- `create_branch(tab_id, name)` — runs `git checkout -b <name>` (creates and switches)
-- `checkout_branch(tab_id, branch)` — streams progress via `checkout:line` / `checkout:done`
-- `get_commit_detail(tab_id, oid)` → `CommitDetailData` — commit metadata + changed file list; results cached in AppState
-- `get_file_diff(tab_id, oid, file_path)` → `String` — unified diff for a single file in a commit
-- `get_working_tree_status(tab_id)` → staged + unstaged file lists
-- `get_staged_diff(tab_id, file_path)` → `String` — diff of staged changes for a file
-- `get_unstaged_diff(tab_id, file_path)` → `String` — diff of unstaged changes for a file
-- `apply_patch(tab_id, patch, reverse)` — applies a partial patch for interactive staging/unstaging
-- `pull_with_rebase(tab_id)` — auto-detects origin/main or origin/master; streams via `pull:line` / `pull:done`
+least-git assumes you are no longer typing most of the diffs yourself.
+
+- **Review first.** The interface is built for *reading* an agent's changes and *choosing what to keep*. Hunk-level staging is the main feature, not an add-on.
+- **Push is left out on purpose.** Your agent or terminal handles publishing. Leaving it out keeps the app small and the branch model simple — local branches only, with no ahead/behind tracking.
+- **Familiar layout.** The UI follows a reduced version of Sourcetree's conventions, so it is easy to read if you have used a Git GUI before — without the parts that made the older tools slow.
+
+## Screenshots
+
+> _Coming soon._ Add screenshots or a short demo GIF here. The clearest ones to show are the history view, hunk-level staging, and the branch switcher.
+
+<!--
+![History view](docs/screenshots/history.png)
+![Hunk-level staging](docs/screenshots/staging.png)
+![Branch switcher](docs/screenshots/branches.png)
+-->
+
+## Tech stack
+
+| Layer | Choice | Why |
+|---|---|---|
+| Shell | **Tauri 2** | Native and small; starts in about 50 ms; no Chromium |
+| UI | **React + TypeScript + Vite** | A thin rendering layer only |
+| Git logic | **Rust + Tokio** | Async, non-blocking, with all state on the backend |
+| Git backend | **gitoxide** | Pure Rust, parallel pack reads, streaming access |
+| Network Git | **System `git` binary** | Pull and checkout only — no reimplementing SSH/HTTPS transport |
+| Components | **Mantine v9** | App chrome only; never inside virtualised rows |
+| State | **Zustand** | One store slice per open repo tab |
+| Lists | **@tanstack/react-virtual** | Keeps the DOM small at any repo size |
+
+## Contributing
+
+Working on least-git? The design constraints and internals are documented for both people and AI agents in the `CLAUDE.md` files:
+
+- [`CLAUDE.md`](CLAUDE.md) — project overview, architecture, and scope limits
+- [`src-tauri/CLAUDE.md`](src-tauri/CLAUDE.md) — Rust commands, streaming events, and the performance-driven git flags
+- [`src/CLAUDE.md`](src/CLAUDE.md) — frontend structure, CSS tokens, and the browser-mock preview workflow
+
+The scope limits in those files are intentional. Please open a discussion before adding operations beyond the core four.
+
+## License
+
+[MIT](LICENSE) © Jack Banh
