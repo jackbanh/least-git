@@ -44,6 +44,10 @@ function delay(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+// Track branches "deleted" during a browser-mock session so list_branches
+// reflects them — the real backend removes the ref, so the preview should too.
+const deletedBranches = new Set<string>();
+
 export async function invoke<T = unknown>(cmd: string, _args?: Record<string, unknown>): Promise<T> {
 
   switch (cmd) {
@@ -64,7 +68,14 @@ export async function invoke<T = unknown>(cmd: string, _args?: Record<string, un
 
     case "list_branches":
       await delay(LATENCY.list_branches);
-      return MOCK_BRANCHES as T;
+      return MOCK_BRANCHES.filter((b) => !deletedBranches.has(b.name)) as T;
+
+    case "delete_branches": {
+      await delay(LATENCY.default);
+      const names = (_args?.names as string[]) ?? [];
+      names.forEach((n) => deletedBranches.add(n));
+      return undefined as T;
+    }
 
     case "load_commits": {
       const args = _args as { afterOid: string | null; limit?: number };

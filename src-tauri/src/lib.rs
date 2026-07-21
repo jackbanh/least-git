@@ -568,6 +568,7 @@ pub fn run() {
             commits::reset_to_commit,
             branches::list_branches,
             branches::create_branch,
+            branches::delete_branches,
             branches::checkout_branch,
             working_tree::get_conflict_branch_info,
             working_tree::resolve_conflict_local,

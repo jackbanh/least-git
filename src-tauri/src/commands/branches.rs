@@ -105,6 +105,36 @@ pub async fn create_branch(
 }
 
 #[tauri::command]
+pub async fn delete_branches(
+    tab_id: String,
+    names: Vec<String>,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    if names.is_empty() {
+        return Ok(());
+    }
+    let path = get_repo_path(&tab_id, &state)?;
+    let path_str = path.to_string_lossy().to_string();
+
+    // Force delete (`-D`) local branches only — remotes are never touched.
+    // `--` terminates option parsing so a branch name can't be read as a flag.
+    let mut cmd = git_async();
+    cmd.arg("-C").arg(&path_str).arg("branch").arg("-D").arg("--");
+    for name in &names {
+        cmd.arg(name);
+    }
+
+    let out = cmd.output().await.map_err(|e| e.to_string())?;
+    if !out.status.success() {
+        let msg = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        warn!("delete_branches failed: {msg}");
+        return Err(msg);
+    }
+    info!("deleted branches: {}", names.join(", "));
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn checkout_branch(
     tab_id: String,
     branch: String,

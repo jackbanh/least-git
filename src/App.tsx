@@ -344,7 +344,7 @@ export default function App() {
           tabId={activeTabId}
           opened={branchDialogOpen}
           onClose={() => setBranchDialogOpen(false)}
-          onCreated={() => { preArmThrottle(activeTabId, "refs"); bumpListKey(activeTabId); }}
+          onChanged={() => { preArmThrottle(activeTabId, "refs"); bumpListKey(activeTabId); }}
         />
       )}
       {activeTabId && (
