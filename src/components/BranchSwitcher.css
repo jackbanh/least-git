@@ -70,7 +70,7 @@
   flex-shrink: 0;
 }
 
-/* ── Popover dropdown ─────────────────────────────────────────────── */
+/* ── Menu dropdown (class name kept for test/style stability) ──────── */
 
 .branch-popover-dropdown {
   padding: 4px 0 !important;
@@ -82,14 +82,11 @@
   overflow-y: auto;
 }
 
-/* ── Branch list (shared by popover + inline) ─────────────────────── */
+/* ── Branch list (Mantine Menu.Item, restyled) ────────────────────── */
 
-.branch-list {
-  display: flex;
-  flex-direction: column;
-}
-
-.branch-row {
+/* Scope under the dropdown so these win over Mantine's .mantine-Menu-item
+   defaults (padding, hover background) without needing !important. */
+.branch-popover-dropdown .branch-row {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -100,8 +97,21 @@
   transition: background 60ms ease;
 }
 
-.branch-row:hover {
+/* Mouse hover uses [data-hovered]; keyboard nav moves focus, so match both so
+   the highlight looks the same however the row is reached. */
+.branch-popover-dropdown .branch-row[data-hovered],
+.branch-popover-dropdown .branch-row:focus,
+.branch-popover-dropdown .branch-row:focus-visible {
   background: var(--lg-hover-bg);
+}
+
+/* Menu.Item wraps children in .mantine-Menu-itemLabel — make it the flex row
+   so the icon, name (ellipsised), and "current" badge lay out as before. */
+.branch-popover-dropdown .mantine-Menu-itemLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
 }
 
 .branch-row--checking {

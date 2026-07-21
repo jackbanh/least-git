@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { warn as logWarn, info as logInfo } from "@tauri-apps/plugin-log";
-import { Loader, Popover } from "@mantine/core";
+import { Loader, Menu } from "@mantine/core";
 import { IconGitBranch, IconChevronDown } from "@tabler/icons-react";
 import { useTabStore } from "../store";
 import GitOutputDrawer from "./GitOutputDrawer";
@@ -102,6 +102,15 @@ export default function BranchSwitcher({
   const headBranch = useMemo(() => branches.find((b) => b.is_head), [branches]);
   const displayName = checkoutBranch ?? headBranch?.name ?? "—";
 
+  // Order the menu independently of however the data source returned it:
+  // main/master pinned to the top, everything else alphabetical.
+  const sortedBranches = useMemo(() => {
+    const rank = (name: string) => (name === "main" || name === "master" ? 0 : 1);
+    return [...branches].sort(
+      (a, b) => rank(a.name) - rank(b.name) || a.name.localeCompare(b.name),
+    );
+  }, [branches]);
+
   // Close the dropdown when HEAD changes out from under us (e.g. another
   // process or a terminal switches the branch — surfaced via FSMonitor refetch).
   const prevHeadRef = useRef(headBranch?.name);
@@ -118,17 +127,16 @@ export default function BranchSwitcher({
 
       <div className="branch-switcher-inner">
         <span className="branch-switcher-label">Branch</span>
-        <Popover
+        <Menu
           opened={dropdownOpen}
-          onClose={() => setDropdownOpen(false)}
+          onChange={setDropdownOpen}
           position="bottom-start"
           width="target"
           shadow="md"
         >
-          <Popover.Target>
+          <Menu.Target>
             <button
               className="branch-dropdown-btn"
-              onClick={() => setDropdownOpen((o) => !o)}
               // Only block interaction during a checkout, or the very first load
               // when there's nothing cached to show. A background refresh with
               // cached branches present must stay openable (no blank flash).
@@ -141,24 +149,22 @@ export default function BranchSwitcher({
                 : <IconChevronDown size={11} strokeWidth={1.75} className="branch-dropdown-chevron" />
               }
             </button>
-          </Popover.Target>
+          </Menu.Target>
 
-          <Popover.Dropdown className="branch-popover-dropdown">
-            <div className="branch-list">
-              {branches.map((branch) => (
-                <BranchRow
-                  key={branch.name}
-                  branch={branch}
-                  isChecking={checkoutBranch === branch.name}
-                  onClick={() => handleCheckout(branch.name)}
-                />
-              ))}
-              {branches.length === 0 && (
-                <div className="branch-empty">No branches.</div>
-              )}
-            </div>
-          </Popover.Dropdown>
-        </Popover>
+          <Menu.Dropdown className="branch-popover-dropdown">
+            {sortedBranches.map((branch) => (
+              <BranchRow
+                key={branch.name}
+                branch={branch}
+                isChecking={checkoutBranch === branch.name}
+                onClick={() => handleCheckout(branch.name)}
+              />
+            ))}
+            {branches.length === 0 && (
+              <div className="branch-empty">No branches.</div>
+            )}
+          </Menu.Dropdown>
+        </Menu>
       </div>
 
       <GitOutputDrawer
@@ -186,13 +192,15 @@ function BranchRow({
   onClick: () => void;
 }) {
   return (
-    <div
+    <Menu.Item
       className={[
         "branch-row",
         branch.is_head ? "branch-row--head" : "",
         isChecking ? "branch-row--checking" : "",
       ].filter(Boolean).join(" ")}
-      onClick={branch.is_head ? undefined : onClick}
+      // The current branch is clickable but handleCheckout no-ops on HEAD, so
+      // clicking it simply closes the menu without a redundant checkout.
+      onClick={onClick}
     >
       <IconGitBranch
         size={12}
@@ -203,6 +211,6 @@ function BranchRow({
       {branch.is_head && (
         <span className="branch-row-current">current</span>
       )}
-    </div>
+    </Menu.Item>
   );
 }

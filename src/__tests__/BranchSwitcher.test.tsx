@@ -46,7 +46,7 @@ function Wrapper({
   );
 }
 
-// Branches live in a Popover dropdown — open it to make them visible.
+// Branches live in a Menu dropdown — open it to make them visible.
 function openDropdown() {
   fireEvent.click(document.querySelector(".branch-dropdown-btn")!);
 }
@@ -73,7 +73,7 @@ describe("BranchSwitcher", () => {
 
     // Head branch appears in the button label before the dropdown is opened
     await waitFor(() => expect(screen.getByText("main")).toBeInTheDocument());
-    // Non-head branches are inside the Popover — open it first
+    // Non-head branches are inside the Menu dropdown — open it first
     openDropdown();
     await waitFor(() => expect(branchListNames()).toContain("feature/new-ui"));
     expect(branchListNames()).toContain("main");
