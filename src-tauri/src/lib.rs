@@ -9,7 +9,7 @@ use notify_debouncer_mini::notify::RecursiveMode;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 #[allow(unused_imports)]
 #[cfg(target_os = "macos")]
@@ -42,6 +42,14 @@ pub(crate) fn git_sync() -> std::process::Command {
 
 // ── Shared state ─────────────────────────────────────────────────────────────
 
+/// Broadcast handle for an in-flight untracked-file scan, or `None` when idle.
+///
+/// The untracked walk takes 5–9 s on a large monorepo — far longer than the gap
+/// between refreshes — so callers that arrive mid-scan subscribe to the running
+/// one instead of spawning another `git` process. See `get_untracked_files`.
+pub type UntrackedInflight =
+    Arc<Mutex<Option<tokio::sync::broadcast::Sender<Result<Vec<String>, String>>>>>;
+
 pub struct RepoEntry {
     pub path: PathBuf,
     pub name: String,
@@ -49,6 +57,8 @@ pub struct RepoEntry {
     pub detail_cache: Mutex<HashMap<String, CommitDetail>>,
     /// Keeps the filesystem watcher alive for the lifetime of the tab.
     pub _watcher: Mutex<Option<notify_debouncer_mini::Debouncer<notify_debouncer_mini::notify::RecommendedWatcher>>>,
+    /// Single-flight slot for `get_untracked_files`.
+    pub untracked_inflight: UntrackedInflight,
 }
 
 pub type AppState = DashMap<String, RepoEntry>;
@@ -57,6 +67,19 @@ pub(crate) fn get_repo_path(tab_id: &str, state: &State<'_, AppState>) -> Result
     state
         .get(tab_id)
         .map(|e| e.path.clone())
+        .ok_or_else(|| format!("Tab not found: {tab_id}"))
+}
+
+/// Clone the tab's single-flight slot out of the map. Cloning the `Arc` (rather
+/// than holding the `DashMap` ref) means the shard lock is released before the
+/// caller awaits the scan.
+pub(crate) fn get_untracked_inflight(
+    tab_id: &str,
+    state: &State<'_, AppState>,
+) -> Result<UntrackedInflight, String> {
+    state
+        .get(tab_id)
+        .map(|e| e.untracked_inflight.clone())
         .ok_or_else(|| format!("Tab not found: {tab_id}"))
 }
 
@@ -310,6 +333,7 @@ fn open_repo(
             name: name.clone(),
             detail_cache: Mutex::new(HashMap::new()),
             _watcher: Mutex::new(watcher),
+            untracked_inflight: Arc::new(Mutex::new(None)),
         },
     );
 

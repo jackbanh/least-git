@@ -1,4 +1,7 @@
-use crate::{git_async, get_repo_path, AppState, StatusEntry, WorkingTreeStatus};
+use crate::{
+    git_async, get_repo_path, get_untracked_inflight, AppState, StatusEntry, UntrackedInflight,
+    WorkingTreeStatus,
+};
 use gix::bstr::ByteSlice;
 use log::{info, warn};
 use serde::Serialize;
@@ -257,19 +260,55 @@ pub async fn get_working_tree_status(
     Ok(WorkingTreeStatus { staged, unstaged, head_branch })
 }
 
-/// Return paths of untracked (new) files — the slow part of `git status`.
+/// Run `scan` unless one is already running for `inflight`, in which case await
+/// the running one's result instead of starting a second.
 ///
-/// Uses `git ls-files --others` instead of embedding untracked scanning in
-/// `get_working_tree_status`. The caller fires both commands in parallel so
-/// tracked changes (staged/modified) appear in ~400 ms while the untracked
-/// walk (~2–3 s on large monorepos) finishes in the background.
-#[tauri::command]
-pub async fn get_untracked_files(
-    tab_id: String,
-    state: State<'_, AppState>,
-) -> Result<Vec<String>, String> {
-    let t = std::time::Instant::now();
-    let path = get_repo_path(&tab_id, &state)?;
+/// Returns `(result, joined)` — `joined` is true when we followed someone else's
+/// scan rather than performing our own.
+pub(crate) async fn single_flight<F, Fut>(
+    inflight: &UntrackedInflight,
+    scan: F,
+) -> (Result<Vec<String>, String>, bool)
+where
+    F: FnOnce() -> Fut,
+    Fut: std::future::Future<Output = Result<Vec<String>, String>>,
+{
+    // Claim the slot, or take a receiver for whoever holds it. Both branches run
+    // under the mutex so exactly one caller becomes the leader.
+    let follower = {
+        let mut slot = inflight.lock().unwrap();
+        match slot.as_ref() {
+            Some(tx) => Some(tx.subscribe()),
+            None => {
+                let (tx, _rx) = tokio::sync::broadcast::channel(1);
+                *slot = Some(tx);
+                None
+            }
+        }
+    };
+
+    if let Some(mut rx) = follower {
+        // The leader buffers its result before dropping the sender, so this
+        // resolves even if the scan finished between subscribe and recv.
+        let result = rx
+            .recv()
+            .await
+            .unwrap_or_else(|_| Err("untracked scan cancelled".to_string()));
+        return (result, true);
+    }
+
+    let result = scan().await;
+
+    // Clear the slot before publishing so the next call starts a fresh scan.
+    if let Some(tx) = inflight.lock().unwrap().take() {
+        let _ = tx.send(result.clone()); // Err only when nobody joined
+    }
+    (result, false)
+}
+
+/// Run one untracked walk. Always spawns a `git` process — callers go through
+/// [`get_untracked_files`], which coalesces concurrent requests.
+async fn scan_untracked(path: &Path) -> Result<Vec<String>, String> {
     let path_str = path.to_string_lossy().to_string();
 
     let output = git_async()
@@ -293,9 +332,49 @@ pub async fn get_untracked_files(
     }
 
     let raw = String::from_utf8_lossy(&output.stdout);
-    let files: Vec<String> = raw.split('\0').filter(|s| !s.is_empty()).map(str::to_string).collect();
-    info!("get_untracked_files count={} ms={}", files.len(), t.elapsed().as_millis());
-    Ok(files)
+    Ok(raw.split('\0').filter(|s| !s.is_empty()).map(str::to_string).collect())
+}
+
+/// Return paths of untracked (new) files — the slow part of `git status`.
+///
+/// Uses `git ls-files --others` instead of embedding untracked scanning in
+/// `get_working_tree_status`. The caller fires both commands in parallel so
+/// tracked changes (staged/modified) appear in ~400 ms while the untracked
+/// walk (~2–3 s on large monorepos) finishes in the background.
+///
+/// **Single-flight**: on a large monorepo the walk takes longer than the gap
+/// between refreshes (5–9 s observed, vs. refreshes every 2 s during a watcher
+/// burst), so unguarded calls stack up and the concurrent walks contend for the
+/// same I/O — making each one slower than it would have been alone. A caller
+/// that arrives while a scan is running awaits that scan's result instead of
+/// spawning another `git`.
+///
+/// The trade-off is staleness: a follower can receive a list assembled before
+/// its own request. The frontend covers that by dropping any untracked path
+/// that the (never-coalesced) tracked status reports as staged.
+#[tauri::command]
+pub async fn get_untracked_files(
+    tab_id: String,
+    state: State<'_, AppState>,
+) -> Result<Vec<String>, String> {
+    let t = std::time::Instant::now();
+    let path = get_repo_path(&tab_id, &state)?;
+    let inflight = get_untracked_inflight(&tab_id, &state)?;
+
+    let (result, joined) = single_flight(&inflight, || scan_untracked(&path)).await;
+
+    let ms = t.elapsed().as_millis();
+    let msg = format!(
+        "get_untracked_files count={} ms={ms}{}",
+        result.as_ref().map_or(0, Vec::len),
+        if joined { " (joined in-flight scan)" } else { "" },
+    );
+    if ms > 1000 && !joined {
+        warn!("[SLOW] {msg}");
+    } else {
+        info!("{msg}");
+    }
+    result
 }
 
 /// Stage a file (or untracked file) — `git add -- <path>`.
@@ -579,6 +658,82 @@ mod tests {
     use super::*;
     use crate::commands::commits::load_commits_at;
     use crate::commands::test_repo;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::{Arc, Mutex};
+
+    // ── single_flight ────────────────────────────────────────────────────────
+    // Guards the coalescing behind get_untracked_files: on a large monorepo the
+    // untracked walk outlasts the gap between refreshes, so concurrent callers
+    // must share one scan rather than each spawning a git process.
+
+    fn empty_slot() -> UntrackedInflight {
+        Arc::new(Mutex::new(None))
+    }
+
+    #[tokio::test]
+    async fn single_flight_runs_one_scan_for_concurrent_callers() {
+        let slot = empty_slot();
+        let calls = Arc::new(AtomicUsize::new(0));
+
+        let scan = || {
+            let calls = calls.clone();
+            async move {
+                calls.fetch_add(1, Ordering::SeqCst);
+                // Long enough that the other two callers arrive mid-scan.
+                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                Ok(vec!["a.txt".to_string()])
+            }
+        };
+
+        let (a, b, c) = tokio::join!(
+            single_flight(&slot, scan),
+            single_flight(&slot, scan),
+            single_flight(&slot, scan),
+        );
+
+        assert_eq!(calls.load(Ordering::SeqCst), 1, "only the leader scans");
+        for (result, _) in [&a, &b, &c] {
+            assert_eq!(result.as_deref(), Ok(["a.txt".to_string()].as_slice()));
+        }
+        assert!(!a.1, "first caller leads");
+        assert!(b.1 && c.1, "later callers join");
+        assert!(slot.lock().unwrap().is_none(), "slot released after the scan");
+    }
+
+    #[tokio::test]
+    async fn single_flight_starts_a_new_scan_once_the_previous_finished() {
+        let slot = empty_slot();
+        let calls = Arc::new(AtomicUsize::new(0));
+        let scan = || {
+            let calls = calls.clone();
+            async move {
+                calls.fetch_add(1, Ordering::SeqCst);
+                Ok(vec![])
+            }
+        };
+
+        let (_, first_joined) = single_flight(&slot, scan).await;
+        let (_, second_joined) = single_flight(&slot, scan).await;
+
+        assert_eq!(calls.load(Ordering::SeqCst), 2, "sequential calls each scan");
+        assert!(!first_joined && !second_joined);
+    }
+
+    #[tokio::test]
+    async fn single_flight_propagates_scan_errors_to_followers() {
+        let slot = empty_slot();
+        let scan = || async {
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            Err("git ls-files failed: boom".to_string())
+        };
+
+        let (leader, follower) = tokio::join!(single_flight(&slot, scan), single_flight(&slot, scan));
+
+        assert_eq!(leader.0, Err("git ls-files failed: boom".to_string()));
+        assert_eq!(follower.0, leader.0, "follower sees the same failure");
+        assert!(follower.1);
+        assert!(slot.lock().unwrap().is_none(), "a failed scan still releases the slot");
+    }
 
     // ── gix regression test (real repository) ────────────────────────────────
     // resolve_sha_to_local_branch peels refs via gix (peel_to_id_in_place) — a
