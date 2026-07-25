@@ -303,3 +303,76 @@ describe("CommitList", () => {
     expect(screen.queryByText("old commit")).not.toBeInTheDocument();
   });
 });
+
+// A refresh used to always refetch one page, leaving the virtualiser to page the
+// rest back in — 3 round trips and 3 repo opens to restore a 75-commit list.
+describe("CommitList refresh restore", () => {
+  // Own tabId per test: the module-level commit cache is keyed by tab and seeds
+  // the stale list that the restore limit is derived from.
+  function renderWithTab(tabId: string, listKey = 0) {
+    return render(
+      <MantineProvider>
+        <CommitList tabId={tabId} listKey={listKey} />
+      </MantineProvider>
+    );
+  }
+  function rerenderWithTab(
+    rerender: (ui: React.ReactElement) => void,
+    tabId: string,
+    listKey: number
+  ) {
+    rerender(
+      <MantineProvider>
+        <CommitList tabId={tabId} listKey={listKey} />
+      </MantineProvider>
+    );
+  }
+
+  // Root commit last (parent_oid: null) so hasMore goes false and the virtualiser
+  // fires no follow-up pages — the loaded count is exactly `n`.
+  function page(n: number) {
+    return Array.from({ length: n }, (_, i) => ({
+      ...STUB_COMMIT,
+      oid: `oid${i}`,
+      short_oid: `oid${i}`,
+      summary: `commit ${i}`,
+      parent_oid: i === n - 1 ? null : `parent${i}`,
+    }));
+  }
+
+  beforeEach(() => {
+    mockInvoke.mockReset();
+  });
+
+  it("refetches the whole loaded list in one call", async () => {
+    mockInvoke.mockResolvedValue(page(30));
+    const { rerender } = renderWithTab("restore-tab", 0);
+    await waitFor(() => expect(screen.getByText("commit 0")).toBeInTheDocument());
+
+    mockInvoke.mockClear();
+    rerenderWithTab(rerender, "restore-tab", 1);
+
+    await waitFor(() => expect(mockInvoke).toHaveBeenCalledTimes(1));
+    expect(mockInvoke).toHaveBeenCalledWith("load_commits", {
+      tabId: "restore-tab",
+      afterOid: null,
+      limit: 30,
+    });
+  });
+
+  it("caps the restore so a deeply scrolled list stays one bounded walk", async () => {
+    mockInvoke.mockResolvedValue(page(150));
+    const { rerender } = renderWithTab("deep-tab", 0);
+    await waitFor(() => expect(screen.getByText("commit 0")).toBeInTheDocument());
+
+    mockInvoke.mockClear();
+    rerenderWithTab(rerender, "deep-tab", 1);
+
+    await waitFor(() => expect(mockInvoke).toHaveBeenCalledTimes(1));
+    expect(mockInvoke).toHaveBeenCalledWith("load_commits", {
+      tabId: "deep-tab",
+      afterOid: null,
+      limit: 100,
+    });
+  });
+});

@@ -28,6 +28,8 @@ interface CommitInfo {
 }
 
 const PAGE_SIZE = 25;
+// Upper bound on the single-call restore after a refresh (4 pages).
+const RESTORE_CAP = 100;
 
 // Module-level cache: survives CommitList remounts on tab switch.
 // Keyed by tabId. Seeded into staleCommitsRef on mount so the previously
@@ -160,14 +162,23 @@ export default function CommitList({ tabId, listKey }: { tabId: string; listKey:
     if (savingStale) {
       staleCommitsRef.current = commitsRef.current;
     }
-    logInfo(`CommitList[${tabId}] refresh listKey=${listKey} current=${currentCount} savingStale=${savingStale} staleNow=${staleCommitsRef.current.length}`);
+    // Refetch what was on screen in one call. The stale list stays visible during
+    // the refresh, so the virtualiser immediately fires loadMore() until the new
+    // list matches its length — previously 3 round trips (25 + 25 + 25) and 3
+    // repo opens to get back to 75. Capped so a deeply scrolled list doesn't turn
+    // one refresh into a huge walk; beyond the cap the old paging path takes over.
+    const restoreLimit = Math.min(
+      Math.max(currentCount, staleCommitsRef.current.length, PAGE_SIZE),
+      RESTORE_CAP,
+    );
+    logInfo(`CommitList[${tabId}] refresh listKey=${listKey} current=${currentCount} savingStale=${savingStale} staleNow=${staleCommitsRef.current.length} limit=${restoreLimit}`);
     lastOidRef.current = null;
     setCommits([]);
     setHasMore(true);
     isLoadingRef.current = true;
 
     const t0 = performance.now();
-    invoke<CommitInfo[]>("load_commits", { tabId, afterOid: null, limit: PAGE_SIZE })
+    invoke<CommitInfo[]>("load_commits", { tabId, afterOid: null, limit: restoreLimit })
       .then((fresh) => {
         const ms = Math.round(performance.now() - t0);
         logInfo(`CommitList[${tabId}] refresh done count=${fresh.length} ms=${ms} clearingStale=${staleCommitsRef.current.length}`);
@@ -176,7 +187,7 @@ export default function CommitList({ tabId, listKey }: { tabId: string; listKey:
         }
         staleCommitsRef.current = [];
         setCommits(fresh);
-        if (fresh.length < PAGE_SIZE || fresh[fresh.length - 1]?.parent_oid === null) setHasMore(false);
+        if (fresh.length < restoreLimit || fresh[fresh.length - 1]?.parent_oid === null) setHasMore(false);
         // Re-validate selection: if the previously selected OID is no longer in
         // the fresh list, clear it. UNCOMMITTED is always kept — the working tree
         // is valid regardless of which commits are visible.
