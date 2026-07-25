@@ -2,7 +2,19 @@
 
 ## Structure
 
-- `store.ts` — Zustand store: `tabs`, `activeTabId`, `openTab`, `closeTab`, `setActiveTab`, `bumpListKey`, `bumpStatusKey`
+- `store.ts` — Zustand store: `tabs`, `activeTabId`, `openTab`, `closeTab`, `setActiveTab`, `bumpListKey`, `bumpStatusKey`, `bumpUntrackedKey`
+
+## Refresh signals — three keys, three costs
+
+Each tab carries three counters. Bumping the wrong one is a performance bug, not just a redundant fetch:
+
+| key | triggers | cost | bumped by |
+|---|---|---|---|
+| `listKey` | commit list + branches + tracked status | ~100 ms | `refs` watcher events, manual Refresh, commit, pull |
+| `statusKey` | tracked working-tree status only | ~300 ms | `index` watcher events, window focus |
+| `untrackedKey` | untracked-file scan **only** | **5–9 s** on a large monorepo | window focus (20 s cooldown), manual Refresh, the Scan button |
+
+`untrackedKey` is separate because the scan is a full directory walk (measured: 27k directories on a 100k-file repo, no benefit from `core.untrackedCache`) and because nothing else can tell us about new files — the FS watcher covers `.git/` only. Staging, unstaging, committing and branch switches cannot create untracked files, so they must never bump it.
 - `App.tsx` — tabbed shell, platform detection, Open Folder dialog, Windows title bar + controls
 - `tokens.css` — all `--lg-*` design tokens; naming convention guide at the top of the file
 - `components/CommitList.tsx` — virtualised commit history (plain CSS rows, no Mantine inside)

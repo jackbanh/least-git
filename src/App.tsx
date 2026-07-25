@@ -25,10 +25,13 @@ import { platform } from "./lib/platform";
 import { createRepoChangedThrottle, type RepoChangedThrottle } from "./lib/repoChangedThrottle";
 import "./App.css";
 
+// Minimum gap between focus-triggered untracked scans.
+const UNTRACKED_FOCUS_COOLDOWN_MS = 20_000;
+
 export default function App() {
   const {
     tabs, activeTabId, openTab, closeTab, setActiveTab, bumpListKey, bumpStatusKey,
-    sidebarWidth, setSidebarWidth,
+    bumpUntrackedKey, sidebarWidth, setSidebarWidth,
   } = useTabStore();
 
   // Coalesces FS-watcher `repo:changed` bursts into refreshes (created once).
@@ -108,13 +111,26 @@ export default function App() {
     };
   }, []);
 
+  // Regaining focus is the only signal that new working-tree files may exist —
+  // the FS watcher covers `.git/` only, so files an agent or editor created are
+  // invisible until then. The scan behind it costs 5–9 s on a large monorepo, so
+  // rapid alt-tabbing gets one scan per cooldown window rather than one each.
+  const lastUntrackedBumpRef = useRef(0);
   useEffect(() => {
     let unlisten: (() => void) | null = null;
     getCurrentWindow().onFocusChanged(({ payload: focused }) => {
-      if (focused && activeTabId) bumpStatusKey(activeTabId);
+      if (!focused || !activeTabId) return;
+      bumpStatusKey(activeTabId);
+      const since = Date.now() - lastUntrackedBumpRef.current;
+      if (since >= UNTRACKED_FOCUS_COOLDOWN_MS) {
+        lastUntrackedBumpRef.current = Date.now();
+        bumpUntrackedKey(activeTabId);
+      } else {
+        logInfo(`App focus untracked scan skipped (last was ${Math.round(since / 1000)}s ago)`);
+      }
     }).then((fn) => { unlisten = fn; });
     return () => { unlisten?.(); };
-  }, [activeTabId, bumpStatusKey]);
+  }, [activeTabId, bumpStatusKey, bumpUntrackedKey]);
 
   // Primary operations, shared by the macOS native menu, the toolbar, and the
   // Windows/Linux keyboard shortcuts below.
@@ -123,7 +139,11 @@ export default function App() {
     invoke("clear_detail_cache", { tabId: activeTabId });
     preArmThrottle(activeTabId, "refs");
     bumpListKey(activeTabId);
-  }, [activeTabId, bumpListKey]);
+    // An explicit refresh always rescans, cooldown or not — this is the user's
+    // way of asking "show me everything, including files you can't see change".
+    lastUntrackedBumpRef.current = Date.now();
+    bumpUntrackedKey(activeTabId);
+  }, [activeTabId, bumpListKey, bumpUntrackedKey]);
 
   const doBranch = useCallback(() => setBranchDialogOpen(true), []);
 

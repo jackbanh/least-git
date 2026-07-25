@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { warn as logWarn, info as logInfo } from "@tauri-apps/plugin-log";
-import { Loader, Menu, Textarea } from "@mantine/core";
+import { ActionIcon, Loader, Menu, Textarea, Tooltip } from "@mantine/core";
 import {
   IconArrowBarToDown,
   IconArrowBarToUp,
@@ -10,6 +10,7 @@ import {
   IconGitBranch,
   IconGitCompare,
   IconGitMerge,
+  IconRefresh,
   IconRotate2,
   IconTrash,
 } from "@tabler/icons-react";
@@ -52,8 +53,10 @@ interface ContextData { entry: StatusEntry; staged: boolean }
 export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId: string; listKey: number; statusKey: number }) {
   const [status, setStatus] = useState<WorkingTreeStatus | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
-  // Untracked files arrive separately (~2–3 s later). null = still loading.
+  // Untracked files arrive separately (~2–3 s later). null = never loaded for
+  // this tab; the previous list is kept on screen while a rescan runs.
   const [untracked, setUntracked] = useState<StatusEntry[] | null>(null);
+  const [untrackedLoading, setUntrackedLoading] = useState(false);
   const [selected, setSelected] = useState<SelectedFile | null>(null);
   const [diff, setDiff] = useState<string>("");
   // Untracked files have no diff; we show their contents instead.
@@ -69,6 +72,11 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
   const commitBoxExpanded = useTabStore((s) => s.commitBoxExpanded);
   const setCommitBoxExpanded = useTabStore((s) => s.setCommitBoxExpanded);
   const bumpListKey = useTabStore((s) => s.bumpListKey);
+  // Read straight from the store rather than threading another prop through
+  // CommitDetail — this is a signal for this pane only.
+  const untrackedKey = useTabStore(
+    (s) => s.tabs.find((t) => t.id === tabId)?.untrackedKey ?? 0
+  );
   const [commitMessage, setCommitMessage] = useState("");
 
   // ── Context menu ────────────────────────────────────────────────────────
@@ -104,6 +112,11 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
     if (confirm && !window.confirm(confirm)) return;
     try {
       await invoke(command, { tabId, filePath });
+      // Drop it locally first: staging or deleting an untracked file removes it
+      // from the list, but the rescan takes seconds and may return a list that
+      // predates this action.
+      lastMutationRef.current = Date.now();
+      setUntracked((prev) => prev?.filter((f) => f.path !== filePath) ?? prev);
       refreshStatus();
       // Clear diff if the acted-on file was selected
       if (selected?.path === filePath) {
@@ -116,19 +129,24 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
     }
   }
 
-  // Generation counter: incrementing on each refresh causes in-flight results
-  // from a previous generation to be discarded rather than overwriting fresh state.
+  // Generation counters: incrementing causes in-flight results from a previous
+  // generation to be discarded rather than overwriting fresh state. The two
+  // phases now run on independent schedules, so they count separately.
   const refreshGenRef = useRef(0);
+  const untrackedGenRef = useRef(0);
+  // When the last stage/delete completed. A scan that started before it carries
+  // pre-mutation data, so its result is discarded rather than trusted.
+  const lastMutationRef = useRef(0);
 
+  // Tracked changes — cheap (~300 ms even on a 100k-file monorepo, since
+  // `git status` runs with --untracked-files=no). Safe to run on every event.
   const refreshStatus = useCallback(() => {
     const gen = ++refreshGenRef.current;
     setStatus(null);
-    setUntracked(null);
     setStatusError(null);
     const t0 = performance.now();
     logInfo(`WorkingTreeDetail[${tabId}] refreshStatus start gen=${gen}`);
 
-    // Phase 1: tracked changes only (~400 ms — untracked scanning skipped).
     invoke<WorkingTreeStatus>("get_working_tree_status", { tabId })
       .then((s) => {
         if (refreshGenRef.current !== gen) return;
@@ -141,39 +159,97 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
         logWarn(`WorkingTreeDetail[${tabId}] refreshStatus failed error=${e}`);
         setStatusError(String(e));
       });
+  }, [tabId]);
 
-    // Phase 2: untracked files (~2–3 s — runs in parallel, appended when ready).
+  // Untracked files — expensive. Measured on a 100k-file monorepo: a full walk of
+  // 27k directories, 5–9 s, with no benefit from core.untrackedCache. So it runs
+  // only when new files could plausibly have appeared: first load, window focus,
+  // an explicit refresh, or the Scan button. Index events (stage, unstage,
+  // commit) cannot create untracked files and no longer trigger it.
+  const scanUntracked = useCallback(() => {
+    const gen = ++untrackedGenRef.current;
+    // Deliberately not clearing `untracked` first: the scan takes seconds, and
+    // blanking the list for that long flickers. Stale entries are filtered
+    // against the fresh tracked status where the list is rendered.
+    setUntrackedLoading(true);
+    const t0 = performance.now();
+    const startedAt = Date.now();
+    logInfo(`WorkingTreeDetail[${tabId}] untracked scan start gen=${gen}`);
+
     invoke<string[]>("get_untracked_files", { tabId })
       .then((paths) => {
-        if (refreshGenRef.current !== gen) return;
+        if (untrackedGenRef.current !== gen) return;
         const ms = Math.round(performance.now() - t0);
+        setUntrackedLoading(false);
+        // A file was staged or deleted while this scan was running, so it would
+        // reinstate an entry we already removed. The local list is correct —
+        // keep it and wait for the next scan. (Rust coalesces concurrent scans,
+        // so even a scan started after the mutation can be an older one.)
+        if (lastMutationRef.current > startedAt) {
+          logInfo(`WorkingTreeDetail[${tabId}] untracked result discarded — mutated mid-scan (ms=${ms})`);
+          return;
+        }
         logInfo(`WorkingTreeDetail[${tabId}] untracked done count=${paths.length} ms=${ms}`);
         setUntracked(paths.map((path) => ({ path, old_path: null, status: "?", is_conflict: false })));
       })
-      .catch(() => {
-        if (refreshGenRef.current !== gen) return;
-        setUntracked([]); // fail gracefully — don't block the UI
+      .catch((e) => {
+        if (untrackedGenRef.current !== gen) return;
+        logWarn(`WorkingTreeDetail[${tabId}] untracked scan failed error=${e}`);
+        // Keep whatever we last saw — a failed rescan must not wipe a good list.
+        setUntracked((prev) => prev ?? []);
+        setUntrackedLoading(false);
       });
   }, [tabId]);
 
+  // Track the keys we last refreshed for, so these effects fire only on an
+  // actual change. Without this they would all run on mount and on every tab
+  // switch, firing identical refreshes at once — concurrent `git status` runs
+  // that contend and take ~2× as long as one.
+  const prevListKeyRef = useRef(listKey);
+  const prevStatusKeyRef = useRef(statusKey);
+  const prevUntrackedKeyRef = useRef(untrackedKey);
+
   useEffect(() => {
+    // Runs before the effects below (declaration order), so seeding the refs
+    // here also suppresses their duplicate refresh on a tab switch.
+    prevListKeyRef.current = listKey;
+    prevStatusKeyRef.current = statusKey;
+    prevUntrackedKeyRef.current = untrackedKey;
     setStatus(null);
+    setUntracked(null); // stale entries belong to the tab we just left
     setSelected(null);
     setDiff("");
     refreshStatus();
-  }, [tabId, refreshStatus]);
+    scanUntracked(); // no list for this tab yet, so pay for one scan
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tabId, refreshStatus, scanUntracked]);
 
   useEffect(() => {
+    if (listKey === prevListKeyRef.current) return;
+    prevListKeyRef.current = listKey;
     refreshStatus();
-  // listKey changes signal a full refresh (branch switch, new commit, pull…)
+  // listKey changes signal a full refresh (branch switch, new commit, pull…).
+  // Tracked only: none of those create untracked files, and an explicit refresh
+  // bumps untrackedKey separately.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listKey]);
 
   useEffect(() => {
+    if (statusKey === prevStatusKeyRef.current) return;
+    prevStatusKeyRef.current = statusKey;
     refreshStatus();
   // statusKey changes signal an index-only refresh (stage/unstage via watcher)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusKey]);
+
+  useEffect(() => {
+    if (untrackedKey === prevUntrackedKeyRef.current) return;
+    prevUntrackedKeyRef.current = untrackedKey;
+    scanUntracked();
+  // untrackedKey changes are the explicit "look for new files" signal: window
+  // focus (cooldown-limited) and the toolbar/menu Refresh.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [untrackedKey]);
 
   const refreshDiff = useCallback((sel: SelectedFile) => {
     setDiffLoading(true);
@@ -219,7 +295,17 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
     setSelected({ path: entry.path, staged, is_untracked: entry.status === "?" });
   }
 
-  const isLoading = (status === null || untracked === null) && !statusError;
+  // The untracked list survives a refresh and the Rust side coalesces concurrent
+  // scans, so it can be one scan behind. The tracked status is never coalesced —
+  // anything it already accounts for (a file staged mid-scan) is dropped here.
+  const untrackedFiles = useMemo(() => {
+    if (!untracked) return [];
+    if (!status) return untracked;
+    const tracked = new Set([...status.staged, ...status.unstaged].map((f) => f.path));
+    return untracked.filter((f) => !tracked.has(f.path));
+  }, [untracked, status]);
+
+  const isLoading = (status === null || untrackedLoading) && !statusError;
   const spinnerLabel = status === null ? "Checking tracked changes…" : "Scanning untracked files…";
 
   // Flat ordered list used for ArrowUp/ArrowDown navigation across both sections.
@@ -227,7 +313,7 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
     ? [
         ...status.staged.map((f) => ({ ...f, staged: true })),
         ...status.unstaged.map((f) => ({ ...f, staged: false })),
-        ...(untracked ?? []).map((f) => ({ ...f, staged: false })),
+        ...untrackedFiles.map((f) => ({ ...f, staged: false })),
       ]
     : [];
   const selectedIndex = allFiles.findIndex(
@@ -388,15 +474,32 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
           <div className="wt-pane wt-pane--unstaged">
             <div className="wt-section-header">
               <span className="wt-section-label">Unstaged</span>
-              {status && (
-                <span className="wt-section-count">
-                  {status.unstaged.length + (untracked ?? []).length}
-                  {untracked === null && "+"}
-                </span>
-              )}
+              <div className="wt-section-actions">
+                {status && (
+                  <span className="wt-section-count">
+                    {status.unstaged.length + untrackedFiles.length}
+                    {untrackedLoading && "+"}
+                  </span>
+                )}
+                {/* New files are invisible to the FS watcher (it covers .git/
+                    only) and the scan is too slow to run on every refresh, so
+                    this is the manual way to go looking for them. */}
+                <Tooltip label="Scan for new files" withArrow openDelay={400}>
+                  <ActionIcon
+                    variant="subtle"
+                    color="gray"
+                    size="sm"
+                    aria-label="Scan for new files"
+                    loading={untrackedLoading}
+                    onClick={scanUntracked}
+                  >
+                    <IconRefresh size={13} />
+                  </ActionIcon>
+                </Tooltip>
+              </div>
             </div>
             <div className="wt-pane-scroll">
-              {status && status.unstaged.length === 0 && (untracked ?? []).length === 0 && untracked !== null && (
+              {status && status.unstaged.length === 0 && untrackedFiles.length === 0 && !untrackedLoading && (
                 <div className="wt-section-hint">
                   {status.staged.length === 0 && !statusError
                     ? "Working tree clean."
@@ -405,16 +508,16 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
               )}
               {status && (
                 <FileTree
-                  files={[...status.unstaged, ...(untracked ?? [])]}
+                  files={[...status.unstaged, ...untrackedFiles]}
                   selected={selected?.staged ? null : selected?.path ?? null}
                   showTooltips={!contextMenu}
                   onSelect={(path) => {
-                    const allUnstaged = [...status.unstaged, ...(untracked ?? [])];
+                    const allUnstaged = [...status.unstaged, ...untrackedFiles];
                     const f = allUnstaged.find((e) => e.path === path)!;
                     selectFile(f, false);
                   }}
                   onContextMenu={(e, path) => {
-                    const allUnstaged = [...status.unstaged, ...(untracked ?? [])];
+                    const allUnstaged = [...status.unstaged, ...untrackedFiles];
                     const f = allUnstaged.find((e) => e.path === path)!;
                     openContextMenu(e, f, false);
                   }}

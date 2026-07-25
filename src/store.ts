@@ -8,6 +8,13 @@ export interface Tab {
   selectedOid: string | null;
   listKey: number;
   statusKey: number;
+  /**
+   * Bumped to request an untracked-file scan. Separate from statusKey because
+   * the scan costs 5–9 s on a large monorepo and almost nothing triggers it:
+   * the FS watcher only sees `.git/`, so new working-tree files are invisible
+   * to us until the window regains focus or the user asks.
+   */
+  untrackedKey: number;
 }
 
 interface TabStore {
@@ -17,12 +24,13 @@ interface TabStore {
   detailLeftWidth: number;
   detailStagedHeight: number;
   commitBoxExpanded: boolean;
-  openTab: (tab: Omit<Tab, "selectedOid" | "listKey" | "statusKey">) => void;
+  openTab: (tab: Omit<Tab, "selectedOid" | "listKey" | "statusKey" | "untrackedKey">) => void;
   closeTab: (id: string) => void;
   setActiveTab: (id: string) => void;
   selectCommit: (tabId: string, oid: string | null) => void;
   bumpListKey: (tabId: string) => void;
   bumpStatusKey: (tabId: string) => void;
+  bumpUntrackedKey: (tabId: string) => void;
   setSidebarWidth: (width: number) => void;
   setDetailLeftWidth: (width: number) => void;
   setDetailStagedHeight: (height: number) => void;
@@ -45,7 +53,10 @@ export const useTabStore = create<TabStore>()(
             return { activeTabId: tab.id };
           }
           return {
-            tabs: [...state.tabs, { ...tab, selectedOid: null, listKey: 0, statusKey: 0 }],
+            tabs: [
+              ...state.tabs,
+              { ...tab, selectedOid: null, listKey: 0, statusKey: 0, untrackedKey: 0 },
+            ],
             activeTabId: tab.id,
           };
         }),
@@ -83,6 +94,15 @@ export const useTabStore = create<TabStore>()(
           ),
         })),
 
+      bumpUntrackedKey: (tabId) =>
+        set((state) => ({
+          tabs: state.tabs.map((t) =>
+            // ?? 0 because tabs persisted before untrackedKey existed rehydrate
+            // without it, and undefined + 1 is NaN.
+            t.id === tabId ? { ...t, untrackedKey: (t.untrackedKey ?? 0) + 1 } : t
+          ),
+        })),
+
       setSidebarWidth: (width) => set({ sidebarWidth: width }),
       setDetailLeftWidth: (width) => set({ detailLeftWidth: width }),
       setDetailStagedHeight: (height) => set({ detailStagedHeight: height }),
@@ -98,6 +118,7 @@ export const useTabStore = create<TabStore>()(
           selectedOid: null,
           listKey: 0,
           statusKey: 0,
+          untrackedKey: 0,
         })),
         activeTabId: state.activeTabId,
         sidebarWidth: state.sidebarWidth,

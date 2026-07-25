@@ -64,6 +64,14 @@
   color: var(--lg-ink-faint);
 }
 
+/* Count + Scan button. Centred rather than baseline-aligned so the icon button
+   sits level with the count instead of hanging below it. */
+.wt-section-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .wt-section-empty {
   display: flex;
   align-items: center;
