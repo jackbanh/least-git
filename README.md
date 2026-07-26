@@ -7,7 +7,7 @@
 **Your AI agent writes the code. least-git is how you review it — fast.**
 
 [![CI](https://github.com/jackbanh/least-git/actions/workflows/ci.yml/badge.svg)](https://github.com/jackbanh/least-git/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-0.6.0-blue)](package.json)
+[![Version](https://img.shields.io/badge/version-0.7.0-blue)](package.json)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-lightgrey)
 [![Built with Tauri](https://img.shields.io/badge/built%20with-Tauri%202-24C8DB)](https://tauri.app)
 [![Backend: gitoxide](https://img.shields.io/badge/git%20backend-gitoxide-orange)](https://github.com/GitoxideLabs/gitoxide)
