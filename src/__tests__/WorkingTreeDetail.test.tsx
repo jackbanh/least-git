@@ -86,8 +86,19 @@ describe("WorkingTreeDetail error state", () => {
     await waitFor(() =>
       expect(screen.getByText(/git status failed/)).toBeInTheDocument()
     );
-    // The spinner must not still be present once the error is shown
-    expect(document.querySelector(".mantine-Loader-root")).toBeNull();
+    // The pane spinner must not still be present once the error is shown —
+    // isLoading is gated on !statusError, so an error replaces it rather than
+    // sitting under it.
+    //
+    // Scope this to .wt-spinner-footer rather than matching .mantine-Loader-root
+    // globally. The Scan button is a second, unrelated loader tied to
+    // untrackedLoading, which is legitimately still true here — a tracked-status
+    // failure doesn't cancel the untracked scan. Worse, Mantine mounts that
+    // loader through a transition, so .mantine-Loader-root appears a beat after
+    // the button flips to data-loading="true". The global selector therefore
+    // raced that mount and failed only on CI, where the assertion landed on the
+    // far side of it.
+    expect(document.querySelector(".wt-spinner-footer")).toBeNull();
   });
 });
 
