@@ -42,20 +42,21 @@ const STUB_STATUS = {
   ],
 };
 
-function renderWTD(props: { listKey?: number; statusKey?: number } = {}) {
-  const { listKey = 0, statusKey = 0 } = props;
+function renderWTD(props: { listKey?: number; statusKey?: number; tabId?: string } = {}) {
+  const { listKey = 0, statusKey = 0, tabId = "test-tab" } = props;
   const result = render(
     <MantineProvider>
-      <WorkingTreeDetail tabId="test-tab" listKey={listKey} statusKey={statusKey} />
+      <WorkingTreeDetail tabId={tabId} listKey={listKey} statusKey={statusKey} />
     </MantineProvider>
   );
   return {
     ...result,
-    setKeys: (next: { listKey?: number; statusKey?: number }) =>
+    // `tabId` here switches tabs — the component treats it as a fresh repo.
+    setKeys: (next: { listKey?: number; statusKey?: number; tabId?: string }) =>
       result.rerender(
         <MantineProvider>
           <WorkingTreeDetail
-            tabId="test-tab"
+            tabId={next.tabId ?? tabId}
             listKey={next.listKey ?? listKey}
             statusKey={next.statusKey ?? statusKey}
           />
@@ -262,6 +263,111 @@ describe("WorkingTreeDetail refresh behaviour", () => {
     expect(getFilePath("src/new.ts")).toBeInTheDocument();
   });
 
+  // Same rule for tracked changes: `git status` is cheap but not instant, and it
+  // reruns on every index event and window focus. Blanking both panes each time
+  // flickers, so the previous lists stay up until the fresh ones land.
+  it("keeps tracked files on screen while a status refresh is in flight", async () => {
+    const { setKeys } = renderWTD();
+    await waitFor(() => expect(getFilePath("src/unstaged1.ts")).toBeInTheDocument());
+
+    // Refresh that never settles, standing in for a slow `git status`.
+    mockInvoke.mockClear();
+    mockInvoke.mockImplementation((cmd: string) => {
+      if (cmd === "get_working_tree_status") return new Promise(() => {});
+      if (cmd === "get_untracked_files") return Promise.resolve(["src/new.ts"]);
+      return Promise.resolve("");
+    });
+    setKeys({ statusKey: 1 });
+
+    await waitFor(() => expect(callsTo("get_working_tree_status")).toBe(1));
+    expect(getFilePath("src/unstaged1.ts")).toBeInTheDocument();
+    expect(getFilePath("src/staged1.ts")).toBeInTheDocument();
+    // …and the footer spinner marks the refresh rather than an empty pane.
+    expect(document.querySelector(".wt-spinner-footer")).toHaveTextContent(
+      "Checking tracked changes…"
+    );
+  });
+
+  // listKey is the other refresh trigger (branch switch, commit, pull) and runs
+  // through the same code path, so it must not blank the panes either.
+  it("keeps tracked files on screen while a listKey refresh is in flight", async () => {
+    const { setKeys } = renderWTD();
+    await waitFor(() => expect(getFilePath("src/unstaged1.ts")).toBeInTheDocument());
+
+    mockInvoke.mockClear();
+    mockInvoke.mockImplementation((cmd: string) => {
+      if (cmd === "get_working_tree_status") return new Promise(() => {});
+      if (cmd === "get_untracked_files") return Promise.resolve(["src/new.ts"]);
+      return Promise.resolve("");
+    });
+    setKeys({ listKey: 1 });
+
+    await waitFor(() => expect(callsTo("get_working_tree_status")).toBe(1));
+    expect(getFilePath("src/unstaged1.ts")).toBeInTheDocument();
+    expect(getFilePath("src/staged1.ts")).toBeInTheDocument();
+  });
+
+  // The refresh a stage/unstage kicks off is the most frequent one of all, and
+  // the one where an emptied pane is most jarring — the click and the blank land
+  // together, so it reads as if the file list was destroyed by the action.
+  it("keeps the other files on screen while the refresh after staging runs", async () => {
+    renderWTD();
+    await waitFor(() => expect(getFilePath("src/unstaged1.ts")).toBeInTheDocument());
+
+    mockInvoke.mockImplementation((cmd: string) => {
+      if (cmd === "get_working_tree_status") return new Promise(() => {});
+      if (cmd === "get_untracked_files") return Promise.resolve(["src/new.ts"]);
+      return Promise.resolve(undefined); // stage_file
+    });
+
+    // Stage the selected file (Ctrl+Plus), mirroring the context menu action.
+    const panes = document.querySelector(".detail-files-panes") as HTMLElement;
+    fireEvent.click(getFilePath("src/unstaged1.ts"));
+    fireEvent.keyDown(panes, { key: "+", ctrlKey: true });
+
+    await waitFor(() => expect(callsTo("stage_file")).toBe(1));
+    expect(getFilePath("src/staged1.ts")).toBeInTheDocument();
+    expect(getFilePath("src/unstaged1.ts")).toBeInTheDocument();
+  });
+
+  // The one case where blanking is right: entries from the tab we just left are
+  // about a different repo, so they must not linger while the new tab loads.
+  it("clears both lists on a tab switch", async () => {
+    const { setKeys } = renderWTD();
+    await waitFor(() => expect(getFilePath("src/unstaged1.ts")).toBeInTheDocument());
+
+    mockInvoke.mockImplementation((cmd: string) => {
+      if (cmd === "get_working_tree_status") return new Promise(() => {});
+      if (cmd === "get_untracked_files") return new Promise(() => {});
+      return Promise.resolve("");
+    });
+    setKeys({ tabId: "other-tab" });
+
+    await waitFor(() =>
+      expect(screen.queryByTitle("src/unstaged1.ts")).not.toBeInTheDocument()
+    );
+    expect(screen.queryByTitle("src/staged1.ts")).not.toBeInTheDocument();
+    expect(screen.queryByTitle("src/new.ts")).not.toBeInTheDocument();
+  });
+
+  // A failed `git status` is different from a failed scan: we no longer know what
+  // is staged, so the stale list must go rather than sit under the error.
+  it("clears the tracked lists when a status refresh fails", async () => {
+    const { setKeys } = renderWTD();
+    await waitFor(() => expect(getFilePath("src/unstaged1.ts")).toBeInTheDocument());
+
+    mockInvoke.mockImplementation((cmd: string) => {
+      if (cmd === "get_working_tree_status") return Promise.reject("git status failed");
+      if (cmd === "get_untracked_files") return Promise.resolve(["src/new.ts"]);
+      return Promise.resolve("");
+    });
+    setKeys({ statusKey: 1 });
+
+    await waitFor(() => expect(screen.getByText(/git status failed/)).toBeInTheDocument());
+    expect(screen.queryByTitle("src/unstaged1.ts")).not.toBeInTheDocument();
+    expect(screen.queryByTitle("src/staged1.ts")).not.toBeInTheDocument();
+  });
+
   // A coalesced scan can return a list assembled before the file was staged; the
   // tracked status is never coalesced, so it wins.
   it("drops untracked entries that the tracked status already reports", async () => {
@@ -320,5 +426,137 @@ describe("WorkingTreeDetail refresh behaviour", () => {
 
     await waitFor(() => expect(callsTo("get_untracked_files")).toBe(2));
     expect(getFilePath("src/new.ts")).toBeInTheDocument();
+  });
+});
+
+// Folder rows carry the same path-copy actions as files, plus a bulk discard.
+// The discard is one `git restore <dir>` call rather than a per-file fan-out —
+// on a monorepo folder that difference is seconds.
+describe("WorkingTreeDetail folder context menu", () => {
+  const FOLDER_STATUS = {
+    head_branch: "main",
+    staged: [
+      { path: "src/staged1.ts", old_path: null, status: "M", is_conflict: false },
+    ],
+    unstaged: [
+      { path: "src/components/Foo.tsx", old_path: null, status: "M", is_conflict: false },
+      { path: "src/components/Bar.tsx", old_path: null, status: "M", is_conflict: false },
+    ],
+  };
+
+  beforeEach(() => {
+    setUntrackedKey(0);
+    mockInvoke.mockReset();
+    mockInvoke.mockImplementation((cmd: string) => {
+      if (cmd === "get_working_tree_status") return Promise.resolve(FOLDER_STATUS);
+      // Untracked-only folder, so its Discard has nothing to act on.
+      if (cmd === "get_untracked_files") return Promise.resolve(["notes/scratch.md"]);
+      return Promise.resolve("");
+    });
+  });
+
+  // The row div carries title={path}; FileTree collapses "src" → "components"
+  // into one row but keeps the real path.
+  function rightClickFolder(path: string) {
+    fireEvent.contextMenu(screen.getByTitle(path));
+  }
+
+  async function setup() {
+    renderWTD();
+    await waitFor(() => expect(getFilePath("notes/scratch.md")).toBeInTheDocument());
+  }
+
+  // Mantine v9 renders items as plain buttons (no menuitem role), and a label
+  // may be followed by its shortcut hint — so match on the leading text.
+  function queryMenuItem(label: string) {
+    const items = [...document.querySelectorAll<HTMLElement>("[class*='mantine-Menu-item']")];
+    return items.find((i) => (i.textContent ?? "").trim().startsWith(label)) ?? null;
+  }
+
+  function menuItem(label: string) {
+    const item = queryMenuItem(label);
+    if (!item) throw new Error(`no menu item starting with "${label}"`);
+    return item;
+  }
+
+  it("offers discard and both copy actions, and nothing file-specific", async () => {
+    await setup();
+    rightClickFolder("src/components");
+
+    await waitFor(() => expect(queryMenuItem("Discard Changes")).not.toBeNull());
+    expect(queryMenuItem("Copy Relative Path")).not.toBeNull();
+    expect(queryMenuItem("Copy Full Path")).not.toBeNull();
+    // Staging a folder, diffing it externally and resolving conflicts are all
+    // file-level actions — they must not leak into the folder menu.
+    expect(queryMenuItem("Stage")).toBeNull();
+    expect(queryMenuItem("Diff in External App")).toBeNull();
+  });
+
+  it("discards the whole folder with a single directory-pathspec call", async () => {
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    await setup();
+    rightClickFolder("src/components");
+    await waitFor(() => expect(queryMenuItem("Discard Changes")).not.toBeNull());
+
+    fireEvent.click(menuItem("Discard Changes"));
+
+    await waitFor(() => expect(callsTo("discard_changes")).toBe(1));
+    expect(mockInvoke).toHaveBeenCalledWith("discard_changes", {
+      tabId: "test-tab",
+      filePath: "src/components",
+    });
+    // The confirm names the folder and the number of files it covers.
+    expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining("2 files in \"src/components\""));
+    confirmSpy.mockRestore();
+  });
+
+  it("does not discard when the confirm is dismissed", async () => {
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+    await setup();
+    rightClickFolder("src/components");
+    await waitFor(() => expect(queryMenuItem("Discard Changes")).not.toBeNull());
+
+    fireEvent.click(menuItem("Discard Changes"));
+
+    await waitFor(() => expect(confirmSpy).toHaveBeenCalled());
+    expect(callsTo("discard_changes")).toBe(0);
+    confirmSpy.mockRestore();
+  });
+
+  // `git restore` has nothing to restore an untracked file to — the pathspec
+  // would just error, so the item is disabled rather than offered and failing.
+  it("disables discard for a folder holding only untracked files", async () => {
+    await setup();
+    rightClickFolder("notes");
+
+    await waitFor(() => expect(queryMenuItem("Discard Changes")).not.toBeNull());
+    expect(menuItem("Discard Changes")).toHaveAttribute("data-disabled", "true");
+  });
+
+  // Staged files are undone with Unstage, not discard; offering a bulk discard
+  // there would throw away work the user has already staged.
+  it("omits discard for folders in the staged pane", async () => {
+    await setup();
+    const stagedPane = document.querySelector(".wt-pane--staged") as HTMLElement;
+    fireEvent.contextMenu(stagedPane.querySelector(".file-tree-folder")!);
+
+    await waitFor(() => expect(queryMenuItem("Copy Relative Path")).not.toBeNull());
+    expect(queryMenuItem("Discard Changes")).toBeNull();
+  });
+
+  it("copies the folder's relative and full paths", async () => {
+    const writeText = vi.fn();
+    Object.assign(navigator, { clipboard: { writeText } });
+    await setup();
+
+    rightClickFolder("src/components");
+    await waitFor(() => expect(queryMenuItem("Copy Relative Path")).not.toBeNull());
+    fireEvent.click(menuItem("Copy Relative Path"));
+    expect(writeText).toHaveBeenCalledWith("src/components");
+
+    rightClickFolder("src/components");
+    await waitFor(() => expect(queryMenuItem("Copy Full Path")).not.toBeNull());
+    fireEvent.click(menuItem("Copy Full Path"));
+    expect(writeText).toHaveBeenLastCalledWith("test-tab/src/components");
   });
 });

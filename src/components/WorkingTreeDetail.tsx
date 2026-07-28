@@ -48,10 +48,22 @@ interface SelectedFile {
   is_untracked: boolean;
 }
 
-interface ContextData { entry: StatusEntry; staged: boolean }
+// One menu serves both row kinds; `kind` picks which items render.
+type ContextData =
+  | { kind: "file"; entry: StatusEntry; staged: boolean }
+  | { kind: "folder"; path: string; staged: boolean; entries: StatusEntry[] };
+
+// Files under a folder, by path prefix. The trailing slash keeps "src/comp"
+// from matching "src/components/…".
+function entriesUnder(folderPath: string, files: StatusEntry[]) {
+  return files.filter((f) => f.path.startsWith(`${folderPath}/`));
+}
 
 export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId: string; listKey: number; statusKey: number }) {
+  // null = nothing loaded for this tab yet; the previous status stays on screen
+  // while a refresh runs (see refreshStatus).
   const [status, setStatus] = useState<WorkingTreeStatus | null>(null);
+  const [statusLoading, setStatusLoading] = useState(false);
   const [statusError, setStatusError] = useState<string | null>(null);
   // Untracked files arrive separately (~2–3 s later). null = never loaded for
   // this tab; the previous list is kept on screen while a rescan runs.
@@ -87,12 +99,40 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
 
   function openContextMenu(e: React.MouseEvent, entry: StatusEntry, staged: boolean) {
     selectFile(entry, staged);
-    openMenu(e, { entry, staged });
+    openMenu(e, { kind: "file", entry, staged });
     if (entry.is_conflict) {
       setConflictBranches(null);
       invoke<{ local: string; incoming: string }>("get_conflict_branch_info", { tabId })
         .then(setConflictBranches)
         .catch(() => setConflictBranches({ local: "local", incoming: "incoming" }));
+    }
+  }
+
+  // Folder rows carry no selection — right-clicking one acts on its contents
+  // without changing which file's diff is on screen.
+  function openFolderContextMenu(e: React.MouseEvent, folderPath: string, staged: boolean, files: StatusEntry[]) {
+    openMenu(e, { kind: "folder", path: folderPath, staged, entries: entriesUnder(folderPath, files) });
+  }
+
+  // `git restore` takes a directory pathspec, so the whole folder is one call
+  // rather than a per-file fan-out. Untracked files have nothing to restore to
+  // and are excluded from the count — `git restore` leaves them alone.
+  async function discardFolder(folderPath: string, tracked: StatusEntry[]) {
+    const n = tracked.length;
+    if (!window.confirm(
+      `Discard changes to ${n} file${n === 1 ? "" : "s"} in "${folderPath}"? This cannot be undone.`
+    )) return;
+    try {
+      await invoke("discard_changes", { tabId, filePath: folderPath });
+      refreshStatus();
+      // The selected file may have been one of the discarded ones.
+      if (selected && tracked.some((f) => f.path === selected.path)) {
+        setSelected(null);
+        setDiff("");
+      }
+    } catch (e) {
+      logWarn(`WorkingTreeDetail[${tabId}] discard folder failed: ${e}`);
+      toastError("Couldn't discard changes", e);
     }
   }
 
@@ -142,7 +182,11 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
   // `git status` runs with --untracked-files=no). Safe to run on every event.
   const refreshStatus = useCallback(() => {
     const gen = ++refreshGenRef.current;
-    setStatus(null);
+    // Deliberately not clearing `status` first: even at ~300 ms, blanking the
+    // staged and unstaged lists on every index event, focus or stage/unstage
+    // flickers. The previous lists stay up until the fresh ones land, with the
+    // footer spinner marking the refresh — same rule the untracked scan follows.
+    setStatusLoading(true);
     setStatusError(null);
     const t0 = performance.now();
     logInfo(`WorkingTreeDetail[${tabId}] refreshStatus start gen=${gen}`);
@@ -153,11 +197,16 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
         const ms = Math.round(performance.now() - t0);
         logInfo(`WorkingTreeDetail[${tabId}] tracked done staged=${s.staged.length} modified=${s.unstaged.length} ms=${ms}`);
         setStatus(s);
+        setStatusLoading(false);
       })
       .catch((e) => {
         if (refreshGenRef.current !== gen) return;
         logWarn(`WorkingTreeDetail[${tabId}] refreshStatus failed error=${e}`);
+        // Unlike a failed untracked scan, keeping the old list here would be a
+        // lie: `git status` failing means we no longer know what is staged.
+        setStatus(null);
         setStatusError(String(e));
+        setStatusLoading(false);
       });
   }, [tabId]);
 
@@ -305,8 +354,8 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
     return untracked.filter((f) => !tracked.has(f.path));
   }, [untracked, status]);
 
-  const isLoading = (status === null || untrackedLoading) && !statusError;
-  const spinnerLabel = status === null ? "Checking tracked changes…" : "Scanning untracked files…";
+  const isLoading = (statusLoading || untrackedLoading) && !statusError;
+  const spinnerLabel = statusLoading ? "Checking tracked changes…" : "Scanning untracked files…";
 
   // Flat ordered list used for ArrowUp/ArrowDown navigation across both sections.
   const allFiles = status
@@ -321,6 +370,11 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
   );
 
   const ctx = contextTargetRef.current?.data;
+  // The path the copy items act on — a file's own path, or the folder's.
+  const ctxPath = ctx ? (ctx.kind === "file" ? ctx.entry.path : ctx.path) : "";
+  // Untracked entries are excluded: `git restore` can't touch them.
+  const trackedInFolder =
+    ctx?.kind === "folder" ? ctx.entries.filter((f) => f.status !== "?") : [];
   const hasStaged = status !== null && status.staged.length > 0;
   const canCommit = hasStaged && commitMessage.trim().length > 0;
 
@@ -409,6 +463,9 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
                     const f = status.staged.find((e) => e.path === path)!;
                     openContextMenu(e, f, true);
                   }}
+                  onFolderContextMenu={(e, folder) =>
+                    openFolderContextMenu(e, folder, true, status.staged)
+                  }
                 />
               )}
             </div>
@@ -521,6 +578,9 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
                     const f = allUnstaged.find((e) => e.path === path)!;
                     openContextMenu(e, f, false);
                   }}
+                  onFolderContextMenu={(e, folder) =>
+                    openFolderContextMenu(e, folder, false, [...status.unstaged, ...untrackedFiles])
+                  }
                 />
               )}
               {isLoading && (
@@ -542,7 +602,19 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
       >
         <AnchoredMenuTarget contextMenu={contextMenu} />
         <Menu.Dropdown>
-          {ctx?.staged ? (
+          {ctx?.kind === "folder" && !ctx.staged && (
+            <Menu.Item
+              leftSection={<IconRotate2 size={14} />}
+              color="red"
+              // `git restore` has nothing to restore an untracked file to, so a
+              // folder holding only new files has no changes to discard.
+              disabled={trackedInFolder.length === 0}
+              onClick={() => discardFolder(ctx.path, trackedInFolder)}
+            >
+              Discard Changes
+            </Menu.Item>
+          )}
+          {ctx?.kind === "file" && (ctx.staged ? (
             <Menu.Item
               leftSection={<IconArrowBarToDown size={14} />}
               onClick={() => runFileAction("unstage_file", ctx.entry.path)}
@@ -554,11 +626,11 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
               <Menu.Item
                 leftSection={<IconArrowBarToUp size={14} />}
                 rightSection={<span className="menu-kbd">{plusShortcut}</span>}
-                onClick={() => runFileAction("stage_file", ctx!.entry.path)}
+                onClick={() => runFileAction("stage_file", ctx.entry.path)}
               >
-                {ctx?.entry.status === "?" ? "Add File" : "Stage"}
+                {ctx.entry.status === "?" ? "Add File" : "Stage"}
               </Menu.Item>
-              {ctx?.entry.status === "?" ? (
+              {ctx.entry.status === "?" ? (
                 <Menu.Item
                   leftSection={<IconTrash size={14} />}
                   rightSection={<span className="menu-kbd">{deleteShortcut}</span>}
@@ -581,8 +653,8 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
                   onClick={() =>
                     runFileAction(
                       "discard_changes",
-                      ctx!.entry.path,
-                      `Discard changes to "${ctx!.entry.path}"? This cannot be undone.`,
+                      ctx.entry.path,
+                      `Discard changes to "${ctx.entry.path}"? This cannot be undone.`,
                     )
                   }
                 >
@@ -590,8 +662,8 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
                 </Menu.Item>
               )}
             </>
-          )}
-          {ctx?.entry.is_conflict && (
+          ))}
+          {ctx?.kind === "file" && ctx.entry.is_conflict && (
             <Menu.Sub>
               <Menu.Sub.Target>
                 <Menu.Sub.Item leftSection={<IconGitMerge size={14} />}>
@@ -631,27 +703,29 @@ export default function WorkingTreeDetail({ tabId, listKey, statusKey }: { tabId
           <Menu.Divider />
           <Menu.Item
             leftSection={<IconCopy size={14} />}
-            onClick={() => navigator.clipboard.writeText(ctx!.entry.path)}
+            onClick={() => navigator.clipboard.writeText(ctxPath)}
           >
             Copy Relative Path
           </Menu.Item>
           <Menu.Item
             leftSection={<IconCopy size={14} />}
-            onClick={() => navigator.clipboard.writeText(joinRepoPath(tabId, ctx!.entry.path))}
+            onClick={() => navigator.clipboard.writeText(joinRepoPath(tabId, ctxPath))}
           >
             Copy Full Path
           </Menu.Item>
-          <Menu.Item
-            leftSection={<IconGitCompare size={14} />}
-            rightSection={<span className="menu-kbd">{shortcutLabel("D")}</span>}
-            onClick={() => invoke("open_working_tree_diff_external", {
-              tabId,
-              filePath: ctx!.entry.path,
-              staged: ctx!.staged,
-            })}
-          >
-            Diff in External App
-          </Menu.Item>
+          {ctx?.kind === "file" && (
+            <Menu.Item
+              leftSection={<IconGitCompare size={14} />}
+              rightSection={<span className="menu-kbd">{shortcutLabel("D")}</span>}
+              onClick={() => invoke("open_working_tree_diff_external", {
+                tabId,
+                filePath: ctx.entry.path,
+                staged: ctx.staged,
+              })}
+            >
+              Diff in External App
+            </Menu.Item>
+          )}
         </Menu.Dropdown>
       </Menu>
 

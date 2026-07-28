@@ -86,12 +86,16 @@ export function FileTree({
   selected,
   onSelect,
   onContextMenu,
+  onFolderContextMenu,
   showTooltips = true,
 }: {
   files: FileTreeEntry[];
   selected: string | null;
   onSelect: (path: string) => void;
   onContextMenu?: (e: React.MouseEvent, path: string) => void;
+  // Folder rows get their own menu. The path is the real full path even for a
+  // collapsed chain ("src/components"), so callers can prefix-match on it.
+  onFolderContextMenu?: (e: React.MouseEvent, folderPath: string) => void;
   // Native `title` tooltips render above everything (including the context
   // menu). Callers pass false while a menu is open so they don't cover it.
   showTooltips?: boolean;
@@ -127,6 +131,7 @@ export function FileTree({
         selected={selected}
         onSelect={onSelect}
         onContextMenu={onContextMenu}
+        onFolderContextMenu={onFolderContextMenu}
         showTooltips={showTooltips}
         hideRoot
       />
@@ -135,7 +140,7 @@ export function FileTree({
 }
 
 function TreeFolder({
-  node, depth, expanded, onToggle, selected, onSelect, onContextMenu, showTooltips, hideRoot,
+  node, depth, expanded, onToggle, selected, onSelect, onContextMenu, onFolderContextMenu, showTooltips, hideRoot,
 }: {
   node: TreeNode;
   depth: number;
@@ -144,6 +149,7 @@ function TreeFolder({
   selected: string | null;
   onSelect: (path: string) => void;
   onContextMenu?: (e: React.MouseEvent, path: string) => void;
+  onFolderContextMenu?: (e: React.MouseEvent, folderPath: string) => void;
   showTooltips: boolean;
   hideRoot?: boolean;
 }) {
@@ -155,6 +161,8 @@ function TreeFolder({
           className="file-tree-folder"
           style={{ paddingLeft: 10 + depth * 14 }}
           onClick={() => onToggle(node.path)}
+          onContextMenu={onFolderContextMenu ? (e) => onFolderContextMenu(e, node.path) : undefined}
+          title={showTooltips ? node.path : undefined}
         >
           <span className={`file-tree-caret${isOpen ? " file-tree-caret--open" : ""}`}>
             <IconChevronRight size={11} strokeWidth={1.75} />
@@ -178,6 +186,7 @@ function TreeFolder({
               selected={selected}
               onSelect={onSelect}
               onContextMenu={onContextMenu}
+              onFolderContextMenu={onFolderContextMenu}
               showTooltips={showTooltips}
             />
           ))}
